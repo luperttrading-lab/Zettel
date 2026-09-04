@@ -13,7 +13,8 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&display=swap">
+  <!-- Schrift nicht-blockierend laden: die App startet auch, wenn Google Fonts langsam oder offline ist -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&display=swap" media="print" onload="this.media='all'">
   <title>Zettel</title>
   <style>
     :root {
@@ -86,6 +87,7 @@
     .setup li { margin: 6px 0; }
     .setup strong { color: var(--fg); font-weight: 600; }
     .setup label { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+    .setup .version { margin-top: 14px; font-size: 12px; }
     .setup input {
       font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid #333;
       background: #1e1e21; color: var(--fg);
@@ -134,6 +136,7 @@
       <li>Voraussetzung: dein aktueller Hintergrund ist ein Foto (kein Foto-Shuffle) – das ist nach dem ersten manuellen Setzen der Fall.</li>
     </ol>
     <label>Name des Kurzbefehls <input id="shortcut" type="text" autocapitalize="words" spellcheck="false"></label>
+    <p class="version">Version <span id="version"></span> · aktualisiert sich beim Öffnen von selbst</p>
   </details>
 
   <div class="overlay" id="overlay" hidden>
@@ -144,6 +147,7 @@
 
   <script>
     'use strict';
+    const APP_VERSION = '2026-09-04.6'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -188,11 +192,12 @@
     applyColor();
     if (state.updated) savedEl.textContent = 'gespeichert ' + new Date(state.updated).toLocaleDateString('de-DE');
 
-    let t;
+    let t = null;
     textEl.addEventListener('input', () => {
       state.text = textEl.value;
-      clearTimeout(t); t = setTimeout(persist, 300);
+      clearTimeout(t); t = setTimeout(() => { t = null; persist(); }, 300);
     });
+    function flush() { if (t) { clearTimeout(t); t = null; persist(); } }
 
     $('clear').addEventListener('click', () => {
       if (state.text && !confirm('Zettel wirklich leeren?')) return;
@@ -359,8 +364,29 @@
     shortcutEl.value = state.shortcut;
     shortcutEl.addEventListener('input', () => { state.shortcut = shortcutEl.value.trim() || 'Zettel'; persist(); });
 
-    // ---------- Offline / Installierbar ----------
+    // ---------- Offline / Installierbar / Selbst-Aktualisierung ----------
+    $('version').textContent = APP_VERSION;
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+    // Bei jedem Öffnen bzw. Zurückholen der App: liegt auf dem Server eine neuere Version? Dann neu laden.
+    let checking = false;
+    async function checkForUpdate() {
+      if (checking || !navigator.onLine) return;
+      checking = true;
+      try {
+        const res = await fetch('index.html', { cache: 'no-store' });
+        if (!res.ok) return;
+        const m = (await res.text()).match(/APP_VERSION = '([^']+)'/);
+        if (m && m[1] !== APP_VERSION) {
+          flush();
+          statusEl.textContent = 'Neue Version ' + m[1] + ' – lade neu …';
+          setTimeout(() => location.reload(), 300);
+        }
+      } catch (_) { /* offline o.ä. – dann eben beim nächsten Mal */ }
+      finally { checking = false; }
+    }
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
+    window.addEventListener('pageshow', () => setTimeout(checkForUpdate, 800));
   </script>
 </body>
 </html>

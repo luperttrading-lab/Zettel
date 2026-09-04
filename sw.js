@@ -1,5 +1,6 @@
-// Offline-Cache für die App-Hülle. Versionsstring hochzählen, wenn sich Dateien ändern.
-const CACHE = 'zettel-v5';
+// Offline-Cache. Eigene Dateien: Netz zuerst (neue Versionen kommen sofort an), Cache nur offline.
+// Fremde Dateien (Schriften): Cache zuerst.
+const CACHE = 'zettel-app';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -12,16 +13,25 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
-// Cache first, Netz als Nachschub – Schriften von Google landen so ebenfalls im Cache.
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
-      if (res.ok || res.type === 'opaque') {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy));
-      }
-      return res;
-    }).catch(() => caches.match('./index.html')))
-  );
+  const req = e.request;
+  if (req.method !== 'GET') return;
+  const sameOrigin = new URL(req.url).origin === self.location.origin;
+
+  if (sameOrigin) {
+    // 'no-cache' = beim Server nachfragen, ob sich etwas geändert hat (umgeht den HTTP-Cache von GitHub Pages)
+    e.respondWith(
+      fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }).then(res => {
+        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
+        return res;
+      }).catch(() => caches.match(req).then(hit => hit || caches.match('./index.html')))
+    );
+  } else {
+    e.respondWith(
+      caches.match(req).then(hit => hit || fetch(req).then(res => {
+        if (res.ok || res.type === 'opaque') { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
+        return res;
+      }))
+    );
+  }
 });
