@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/zettel.js": {
-      "includeFiles": "fonts/**",
+      "includeFiles": "{fonts/**,node_modules/harfbuzzjs/**}",
       "memory": 1024,
       "maxDuration": 10
     }
