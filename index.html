@@ -42,13 +42,14 @@
     /* --- der Zettel --- */
     .note {
       width: min(86vw, 380px);
-      aspect-ratio: 1 / 1;
+      min-height: 60vw; /* wird per Skript auf die Form des Hintergrundbilds gesetzt */
       background: var(--paper);
       color: var(--ink);
       transform: rotate(-1.5deg);
       box-shadow: 0 18px 40px rgba(0,0,0,.55), 0 2px 4px rgba(0,0,0,.35);
       position: relative;
-      padding: 28px 24px 24px;
+      padding: 8%; /* gleiche Proportion wie im Bild (pad = 8 % der Zettelbreite) */
+      transition: height .15s ease;
     }
     .note::before { /* Klebestreifen */
       content: ""; position: absolute; left: 50%; top: -14px; width: 92px; height: 28px;
@@ -58,7 +59,8 @@
     .note textarea {
       width: 100%; height: 100%; resize: none; border: 0; outline: 0; background: transparent;
       color: inherit; font-family: var(--note-font); font-weight: 500;
-      font-size: clamp(26px, 8vw, 36px); line-height: 1.15;
+      font-size: clamp(26px, 8vw, 36px); line-height: 1.15; padding: 0; margin: 0; display: block;
+      overflow: hidden; overflow-wrap: break-word;
     }
     .note textarea::placeholder { color: rgba(42,42,46,.35); }
 
@@ -94,6 +96,17 @@
       font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid #333;
       background: #1e1e21; color: var(--fg);
     }
+
+    /* --- Banner „Angeheftet“ --- */
+    .toast {
+      position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.88);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+      text-align: center; padding: 24px;
+    }
+    .toast[hidden] { display: none; }
+    .toast .check { width: 96px; height: 96px; border-radius: 50%; background: #34c759; color: #fff; font-size: 60px; line-height: 96px; font-weight: 700; }
+    .toast h2 { margin: 6px 0 0; font-size: 34px; }
+    .toast p { margin: 0; color: var(--muted); font-size: 17px; }
 
     /* --- Vorschau, wenn Teilen nicht geht --- */
     .overlay {
@@ -143,6 +156,12 @@
     <p class="version">Version <span id="version"></span> · aktualisiert sich beim Öffnen von selbst</p>
   </details>
 
+  <div class="toast" id="toast" hidden>
+    <div class="check">✓</div>
+    <h2 id="toast-title">Angeheftet</h2>
+    <p id="toast-sub"></p>
+  </div>
+
   <div class="overlay" id="overlay" hidden>
     <img id="preview" alt="Dein Zettel als Hintergrundbild">
     <p>Bild lange drücken → <strong>Bild sichern</strong>. Dann in den Einstellungen als Sperrbildschirm setzen.</p>
@@ -151,7 +170,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-04.7'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-04.8'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -199,14 +218,25 @@
     let t = null;
     textEl.addEventListener('input', () => {
       state.text = textEl.value;
+      syncPreview();
       clearTimeout(t); t = setTimeout(() => { t = null; persist(); }, 300);
     });
     function flush() { if (t) { clearTimeout(t); t = null; persist(); } }
 
     $('clear').addEventListener('click', () => {
       if (state.text && !confirm('Zettel wirklich leeren?')) return;
-      state.text = ''; textEl.value = ''; persist(); textEl.focus();
+      state.text = ''; textEl.value = ''; persist(); syncPreview(); textEl.focus();
     });
+
+    // Banner „Angeheftet“ – groß, kurz, verschwindet von selbst
+    function showToast(title, sub) {
+      const el = $('toast');
+      $('toast-title').textContent = title; $('toast-sub').textContent = sub;
+      el.hidden = false;
+      clearTimeout(showToast.t);
+      showToast.t = setTimeout(() => { el.hidden = true; }, 2600);
+    }
+    $('toast').addEventListener('click', () => { $('toast').hidden = true; });
 
     $('close').addEventListener('click', () => { $('overlay').hidden = true; });
 
@@ -246,6 +276,54 @@
       tablet: (w, h) => ({ noteW: w * 0.60, maxNoteH: h * 0.42, cy: h * 0.61 }),
     };
 
+    // Zielgerät: Telefon (Verhältnis ≥ 1,6) = Hochformat in Display-Auflösung,
+    // Tablet = Quadrat mit der langen Kante (passt in beiden Ausrichtungen).
+    function targetCanvas() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 4);
+      const sw = Math.min(screen.width, screen.height), sh = Math.max(screen.width, screen.height);
+      const isTablet = sh / sw < 1.6;
+      return isTablet
+        ? { w: Math.round(sh * dpr), h: Math.round(sh * dpr), layout: 'tablet' }
+        : { w: Math.round(sw * dpr), h: Math.round(sh * dpr), layout: 'phone' };
+    }
+
+    const measureCtx = document.createElement('canvas').getContext('2d');
+    function noteText() { return state.text.replace(/\r/g, '').replace(/\s+$/, ''); }
+
+    // Gemeinsame Rechnung für Hintergrundbild UND Vorschau in der App:
+    // Schrift so groß wie möglich, der Zettel darf die Maximalhöhe des Layouts nicht sprengen.
+    function fitNote(w, h, layoutName, text) {
+      const layout = LAYOUTS[layoutName](w, h);
+      const noteW = Math.round(layout.noteW);
+      const pad = Math.round(noteW * 0.08);
+      const textW = noteW - 2 * pad;
+      const family = noteFont();
+      let fs = Math.round(noteW / 7), lines;
+      for (;;) {
+        measureCtx.font = `500 ${fs}px ${family}`;
+        lines = wrap(measureCtx, text, textW);
+        if (lines.length * fs * 1.15 + 2 * pad <= layout.maxNoteH || fs <= noteW / 28) break;
+        fs = Math.round(fs * 0.92);
+      }
+      const lh = fs * 1.15;
+      const noteH = Math.max(Math.round(lines.length * lh + 2 * pad), Math.round(noteW * 0.6));
+      return { layout, noteW, pad, textW, family, fs, lh, lines, noteH };
+    }
+
+    // Vorschau in der App: der Zettel wird proportional zum Hintergrundbild skaliert,
+    // Schriftgröße und Umbrüche sind dann identisch mit dem, was aufs Display kommt.
+    function syncPreview() {
+      const t = targetCanvas();
+      const f = fitNote(t.w, t.h, t.layout, noteText() || 'Was soll auf den Zettel?');
+      const scale = noteEl.clientWidth / f.noteW;
+      textEl.style.fontSize = (f.fs * scale) + 'px';
+      textEl.style.lineHeight = '1.15';
+      noteEl.style.height = Math.round(f.noteH * scale) + 'px';
+      // Vertikale Lage wie im Bild: Textblock im Zettel zentriert
+      const extra = Math.max(0, (f.noteH - 2 * f.pad - f.lines.length * f.lh) / 2) * scale;
+      textEl.style.paddingTop = Math.round(extra) + 'px';
+    }
+
     function renderWallpaper(w, h, layoutName) {
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
@@ -256,25 +334,8 @@
       g.addColorStop(0, '#1b1b1f'); g.addColorStop(1, '#09090b');
       ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
 
-      const layout = LAYOUTS[layoutName](w, h);
       const c = COLORS[state.color];
-      const noteW = Math.round(layout.noteW);
-      const pad = Math.round(noteW * 0.08);
-      const textW = noteW - 2 * pad;
-      const family = noteFont();
-      const text = state.text.trim() || '…';
-
-      // Schrift so groß wie möglich, aber der Zettel darf die Maximalhöhe des Layouts nicht sprengen
-      const maxNoteH = layout.maxNoteH;
-      let fs = Math.round(noteW / 7), lines;
-      for (;;) {
-        ctx.font = `500 ${fs}px ${family}`;
-        lines = wrap(ctx, text, textW);
-        if (lines.length * fs * 1.15 + 2 * pad <= maxNoteH || fs <= noteW / 28) break;
-        fs = Math.round(fs * 0.92);
-      }
-      const lh = fs * 1.15;
-      const noteH = Math.max(Math.round(lines.length * lh + 2 * pad), Math.round(noteW * 0.6));
+      const { layout, noteW, pad, family, fs, lh, lines, noteH } = fitNote(w, h, layoutName, noteText() || '…');
 
       // Position: Mitte leicht unterhalb der Bildmitte – oben bleibt Platz für die Uhr
       const cx = w / 2, cy = layout.cy;
@@ -302,14 +363,8 @@
 
     async function renderPng() {
       try { if (document.fonts) await document.fonts.ready; } catch (_) {}
-      // Display-Auflösung. Telefon (schmal, Verhältnis ≥ 1,6): Hochformat.
-      // Tablet (breiter): Quadrat mit Kantenlänge der langen Seite – passt in beiden Ausrichtungen.
-      const dpr = Math.min(window.devicePixelRatio || 1, 4);
-      const sw = Math.min(screen.width, screen.height), sh = Math.max(screen.width, screen.height);
-      const isTablet = sh / sw < 1.6;
-      const canvas = isTablet
-        ? renderWallpaper(Math.round(sh * dpr), Math.round(sh * dpr), 'tablet')
-        : renderWallpaper(Math.round(sw * dpr), Math.round(sh * dpr), 'phone');
+      const t = targetCanvas();
+      const canvas = renderWallpaper(t.w, t.h, t.layout);
       return new Promise(r => canvas.toBlob(r, 'image/png'));
     }
 
@@ -350,8 +405,9 @@
           statusEl.textContent = 'Kurzbefehl „' + state.shortcut + '“ läuft …';
           location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(state.shortcut) + '&input=clipboard';
         } else {
-          // Kurzbefehl nicht per URL starten: vom Home-Bildschirm-Icon gestartet öffnet er die Kurzbefehle-App nicht.
-          statusEl.textContent = 'Bild liegt in der Zwischenablage. Jetzt Home → Icon „' + state.shortcut + '“ tippen (oder Rückseite doppelt tippen).';
+          // Kurzbefehl nicht per URL starten: vom Icon/Kontrollzentrum gestartet öffnet er die Kurzbefehle-App nicht.
+          statusEl.textContent = 'Bild liegt in der Zwischenablage. Jetzt Kontrollzentrum oder Icon „' + state.shortcut + '“ (oder Rückseite doppelt tippen).';
+          showToast('Angeheftet', 'Jetzt Kontrollzentrum → „' + state.shortcut + '“');
         }
       }, async () => {
         statusEl.textContent = 'Zwischenablage verweigert – Teilen stattdessen.';
@@ -375,6 +431,11 @@
     const autoRunEl = $('autorun');
     autoRunEl.checked = state.autoRun !== false;
     autoRunEl.addEventListener('change', () => { state.autoRun = autoRunEl.checked; persist(); });
+
+    // ---------- Vorschau synchron halten ----------
+    syncPreview();
+    window.addEventListener('resize', syncPreview);
+    if (document.fonts) { document.fonts.ready.then(syncPreview).catch(() => {}); document.fonts.addEventListener && document.fonts.addEventListener('loadingdone', syncPreview); }
 
     // ---------- Offline / Installierbar / Selbst-Aktualisierung ----------
     $('version').textContent = APP_VERSION;
