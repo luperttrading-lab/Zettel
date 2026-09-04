@@ -1,0 +1,14 @@
+{
+  "name": "zettel",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Ein Zettel, den du aufs Display klebst.",
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "satori": "^0.33.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

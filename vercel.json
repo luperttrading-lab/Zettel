@@ -1,0 +1,9 @@
+{
+  "functions": {
+    "api/zettel.js": {
+      "includeFiles": "fonts/**",
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  }
+}
