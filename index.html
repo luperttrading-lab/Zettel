@@ -79,6 +79,18 @@
     .btn.ghost { background: transparent; color: var(--muted); font-weight: 500; padding: 8px; }
     .status { color: var(--muted); font-size: 13px; text-align: center; min-height: 1.4em; max-width: 380px; }
 
+    /* --- Einrichtung --- */
+    .setup { width: min(86vw, 380px); color: var(--muted); font-size: 14px; }
+    .setup summary { cursor: pointer; color: var(--fg); font-weight: 500; padding: 8px 0; }
+    .setup ol { padding-left: 20px; }
+    .setup li { margin: 6px 0; }
+    .setup strong { color: var(--fg); font-weight: 600; }
+    .setup label { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+    .setup input {
+      font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid #333;
+      background: #1e1e21; color: var(--fg);
+    }
+
     /* --- Vorschau, wenn Teilen nicht geht --- */
     .overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,.92); z-index: 10;
@@ -104,9 +116,24 @@
 
   <div class="actions">
     <button class="btn primary" id="stick">Aufs Display kleben</button>
+    <button class="btn ghost" id="share">Stattdessen teilen / sichern</button>
     <button class="btn ghost" id="clear">Zettel leeren</button>
   </div>
   <p class="status" id="status"></p>
+
+  <details class="setup">
+    <summary>Kurzbefehl einrichten (einmalig)</summary>
+    <p>„Aufs Display kleben“ kopiert das Bild in die Zwischenablage und startet einen Kurzbefehl, der es als Hintergrund setzt. Den Kurzbefehl legst du einmal an:</p>
+    <ol>
+      <li>App <strong>Kurzbefehle</strong> öffnen → oben rechts <strong>+</strong>.</li>
+      <li>Namen oben auf genau <strong>Zettel</strong> setzen (oder unten den Namen anpassen).</li>
+      <li><strong>Aktion hinzufügen</strong> → nach <strong>Hintergrund</strong> suchen → <strong>Hintergrundbild-Foto festlegen</strong> wählen (englisch: <em>Set Wallpaper Photo</em>).</li>
+      <li>Als Bild <strong>Kurzbefehl-Eingabe</strong> wählen (auf das Bild-Feld tippen → Variable → Kurzbefehl-Eingabe).</li>
+      <li>Pfeil an der Aktion aufklappen: <strong>Sperrbildschirm</strong> und/oder <strong>Home-Bildschirm</strong> anhaken, <strong>Vorschau anzeigen</strong> ausschalten.</li>
+      <li><strong>Fertig</strong>. Voraussetzung: dein aktueller Hintergrund ist ein Foto (kein Foto-Shuffle) – das ist nach dem ersten manuellen Setzen der Fall.</li>
+    </ol>
+    <label>Name des Kurzbefehls <input id="shortcut" type="text" autocapitalize="words" spellcheck="false"></label>
+  </details>
 
   <div class="overlay" id="overlay" hidden>
     <img id="preview" alt="Dein Zettel als Hintergrundbild">
@@ -128,12 +155,13 @@
     const noteEl = $('note'), textEl = $('text'), colorsEl = $('colors'), statusEl = $('status'), savedEl = $('saved');
 
     // ---------- Zustand ----------
-    let state = { text: '', color: 'yellow', updated: null };
+    let state = { text: '', color: 'yellow', shortcut: 'Zettel', updated: null };
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) state = { ...state, ...JSON.parse(raw) };
     } catch (_) { /* privater Modus o.ä. – dann eben nur flüchtig */ }
     if (!COLORS[state.color]) state.color = 'yellow';
+    if (typeof state.shortcut !== 'string' || !state.shortcut.trim()) state.shortcut = 'Zettel';
 
     function persist() {
       state.updated = Date.now();
@@ -262,11 +290,8 @@
       return canvas;
     }
 
-    async function stick() {
-      if (!state.text.trim()) { statusEl.textContent = 'Erst was draufschreiben.'; textEl.focus(); return; }
-      statusEl.textContent = 'Rendere …';
+    async function renderPng() {
       try { if (document.fonts) await document.fonts.ready; } catch (_) {}
-
       // Display-Auflösung. Telefon (schmal, Verhältnis ≥ 1,6): Hochformat.
       // Tablet (breiter): Quadrat mit Kantenlänge der langen Seite – passt in beiden Ausrichtungen.
       const dpr = Math.min(window.devicePixelRatio || 1, 4);
@@ -275,9 +300,11 @@
       const canvas = isTablet
         ? renderWallpaper(Math.round(sh * dpr), Math.round(sh * dpr), 'tablet')
         : renderWallpaper(Math.round(sw * dpr), Math.round(sh * dpr), 'phone');
-      const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-      const file = new File([blob], 'zettel.png', { type: 'image/png' });
+      return new Promise(r => canvas.toBlob(r, 'image/png'));
+    }
 
+    async function share(blob) {
+      const file = new File([blob], 'zettel.png', { type: 'image/png' });
       // Bevorzugt: System-Teilen-Dialog → „Bild sichern“ / Fotos
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
@@ -293,7 +320,43 @@
       $('overlay').hidden = false;
       statusEl.textContent = '';
     }
-    $('stick').addEventListener('click', () => stick().catch(e => { statusEl.textContent = 'Fehler: ' + e.message; }));
+
+    // Weg 1 (automatisch): Bild in die Zwischenablage, dann den Kurzbefehl starten,
+    // der es per „Hintergrundbild-Foto festlegen“ setzt. Safari erlaubt Clipboard-Schreiben nur
+    // synchron in der Tipp-Geste – deshalb bekommt ClipboardItem ein Promise, kein fertiges Blob.
+    function stickViaShortcut() {
+      if (!state.text.trim()) { statusEl.textContent = 'Erst was draufschreiben.'; textEl.focus(); return; }
+      statusEl.textContent = 'Rendere …';
+      const png = renderPng();
+      if (!(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem)) {
+        statusEl.textContent = 'Zwischenablage nicht verfügbar – Teilen stattdessen.';
+        png.then(share); return;
+      }
+      let write;
+      try { write = navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]); }
+      catch (e) { write = Promise.reject(e); }
+      write.then(() => {
+        statusEl.textContent = 'Kurzbefehl „' + state.shortcut + '“ läuft …';
+        location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(state.shortcut) + '&input=clipboard';
+      }, async () => {
+        statusEl.textContent = 'Zwischenablage verweigert – Teilen stattdessen.';
+        share(await png);
+      });
+    }
+
+    // Weg 2 (manuell): Teilen-Dialog → Bild sichern → Einstellungen.
+    async function stickViaShare() {
+      if (!state.text.trim()) { statusEl.textContent = 'Erst was draufschreiben.'; textEl.focus(); return; }
+      statusEl.textContent = 'Rendere …';
+      await share(await renderPng());
+    }
+
+    $('stick').addEventListener('click', () => { try { stickViaShortcut(); } catch (e) { statusEl.textContent = 'Fehler: ' + e.message; } });
+    $('share').addEventListener('click', () => stickViaShare().catch(e => { statusEl.textContent = 'Fehler: ' + e.message; }));
+
+    const shortcutEl = $('shortcut');
+    shortcutEl.value = state.shortcut;
+    shortcutEl.addEventListener('input', () => { state.shortcut = shortcutEl.value.trim() || 'Zettel'; persist(); });
 
     // ---------- Offline / Installierbar ----------
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
