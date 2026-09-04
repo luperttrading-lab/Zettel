@@ -2,10 +2,288 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#141416">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Zettel">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&display=swap">
   <title>Zettel</title>
+  <style>
+    :root {
+      --bg: #141416;
+      --fg: #f2f2f4;
+      --muted: #9a9aa3;
+      --paper: #fff59b;
+      --ink: #2a2a2e;
+      --note-font: 'Caveat', 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: max(env(safe-area-inset-top), 20px) 20px max(env(safe-area-inset-bottom), 20px);
+      display: flex; flex-direction: column; align-items: center; gap: 22px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    header { width: 100%; max-width: 420px; display: flex; justify-content: space-between; align-items: baseline; }
+    header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .02em; }
+    header span { font-size: 13px; color: var(--muted); }
+
+    /* --- der Zettel --- */
+    .note {
+      width: min(86vw, 380px);
+      aspect-ratio: 1 / 1;
+      background: var(--paper);
+      color: var(--ink);
+      transform: rotate(-1.5deg);
+      box-shadow: 0 18px 40px rgba(0,0,0,.55), 0 2px 4px rgba(0,0,0,.35);
+      position: relative;
+      padding: 28px 24px 24px;
+    }
+    .note::before { /* Klebestreifen */
+      content: ""; position: absolute; left: 50%; top: -14px; width: 92px; height: 28px;
+      transform: translateX(-50%) rotate(1deg);
+      background: rgba(255,255,255,.55); box-shadow: 0 1px 2px rgba(0,0,0,.15);
+    }
+    .note textarea {
+      width: 100%; height: 100%; resize: none; border: 0; outline: 0; background: transparent;
+      color: inherit; font-family: var(--note-font); font-weight: 500;
+      font-size: clamp(26px, 8vw, 36px); line-height: 1.15;
+    }
+    .note textarea::placeholder { color: rgba(42,42,46,.35); }
+
+    /* --- Farben --- */
+    .colors { display: flex; gap: 14px; }
+    .colors button {
+      width: 34px; height: 34px; border-radius: 50%; border: 3px solid transparent; cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,.5);
+    }
+    .colors button[aria-pressed="true"] { border-color: var(--fg); }
+
+    /* --- Aktionen --- */
+    .actions { display: flex; flex-direction: column; gap: 10px; width: min(86vw, 380px); }
+    .btn {
+      appearance: none; border: 0; border-radius: 14px; padding: 16px 20px; font-size: 17px; font-weight: 600;
+      cursor: pointer; width: 100%;
+    }
+    .btn.primary { background: var(--fg); color: var(--bg); }
+    .btn.ghost { background: transparent; color: var(--muted); font-weight: 500; padding: 8px; }
+    .status { color: var(--muted); font-size: 13px; text-align: center; min-height: 1.4em; max-width: 380px; }
+
+    /* --- Vorschau, wenn Teilen nicht geht --- */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.92); z-index: 10;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+      padding: max(env(safe-area-inset-top), 20px) 20px max(env(safe-area-inset-bottom), 20px);
+    }
+    .overlay[hidden] { display: none; }
+    .overlay img { max-height: 66vh; max-width: 90vw; border-radius: 22px; box-shadow: 0 10px 40px rgba(0,0,0,.7); }
+    .overlay p { margin: 0; color: var(--fg); text-align: center; font-size: 15px; max-width: 340px; }
+  </style>
 </head>
 <body>
-  <!-- Platzhalter – Inhalt folgt -->
+  <header>
+    <h1>Zettel</h1>
+    <span id="saved"></span>
+  </header>
+
+  <section class="note" id="note" aria-label="Zettel">
+    <textarea id="text" placeholder="Was soll auf den Zettel?" spellcheck="false" autocapitalize="sentences"></textarea>
+  </section>
+
+  <div class="colors" id="colors" role="radiogroup" aria-label="Zettelfarbe"></div>
+
+  <div class="actions">
+    <button class="btn primary" id="stick">Aufs Display kleben</button>
+    <button class="btn ghost" id="clear">Zettel leeren</button>
+  </div>
+  <p class="status" id="status"></p>
+
+  <div class="overlay" id="overlay" hidden>
+    <img id="preview" alt="Dein Zettel als Hintergrundbild">
+    <p>Bild lange drücken → <strong>Bild sichern</strong>. Dann in den Einstellungen als Sperrbildschirm setzen.</p>
+    <button class="btn ghost" id="close">Schließen</button>
+  </div>
+
+  <script>
+    'use strict';
+    const KEY = 'zettel.v1';
+    const COLORS = {
+      yellow: { paper: '#fff59b', ink: '#2a2a2e' },
+      pink:   { paper: '#ffc7dd', ink: '#3a1f2a' },
+      green:  { paper: '#c9f2c4', ink: '#1d3320' },
+      blue:   { paper: '#c5e4ff', ink: '#1a2a3d' },
+    };
+
+    const $ = id => document.getElementById(id);
+    const noteEl = $('note'), textEl = $('text'), colorsEl = $('colors'), statusEl = $('status'), savedEl = $('saved');
+
+    // ---------- Zustand ----------
+    let state = { text: '', color: 'yellow', updated: null };
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) state = { ...state, ...JSON.parse(raw) };
+    } catch (_) { /* privater Modus o.ä. – dann eben nur flüchtig */ }
+    if (!COLORS[state.color]) state.color = 'yellow';
+
+    function persist() {
+      state.updated = Date.now();
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {}
+      savedEl.textContent = 'gespeichert ' + new Date(state.updated).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function applyColor() {
+      const c = COLORS[state.color];
+      noteEl.style.setProperty('--paper', c.paper);
+      noteEl.style.setProperty('--ink', c.ink);
+      for (const b of colorsEl.children) b.setAttribute('aria-pressed', String(b.dataset.color === state.color));
+    }
+
+    // ---------- UI ----------
+    for (const [name, c] of Object.entries(COLORS)) {
+      const b = document.createElement('button');
+      b.dataset.color = name; b.style.background = c.paper; b.setAttribute('role', 'radio'); b.title = name;
+      b.addEventListener('click', () => { state.color = name; applyColor(); persist(); });
+      colorsEl.appendChild(b);
+    }
+    textEl.value = state.text;
+    applyColor();
+    if (state.updated) savedEl.textContent = 'gespeichert ' + new Date(state.updated).toLocaleDateString('de-DE');
+
+    let t;
+    textEl.addEventListener('input', () => {
+      state.text = textEl.value;
+      clearTimeout(t); t = setTimeout(persist, 300);
+    });
+
+    $('clear').addEventListener('click', () => {
+      if (state.text && !confirm('Zettel wirklich leeren?')) return;
+      state.text = ''; textEl.value = ''; persist(); textEl.focus();
+    });
+
+    $('close').addEventListener('click', () => { $('overlay').hidden = true; });
+
+    // ---------- Hintergrundbild rendern ----------
+    function noteFont() {
+      const ok = document.fonts && document.fonts.check('20px Caveat');
+      return ok ? 'Caveat' : '"Segoe Print", "Bradley Hand", "Comic Sans MS", cursive';
+    }
+
+    // Zeilenumbruch: Absätze respektieren, Wörter umbrechen, überlange Wörter hart trennen.
+    function wrap(ctx, text, maxW) {
+      const lines = [];
+      for (const para of text.replace(/\r/g, '').split('\n')) {
+        if (para.trim() === '') { lines.push(''); continue; }
+        let line = '';
+        for (const word of para.split(/\s+/)) {
+          const test = line ? line + ' ' + word : word;
+          if (ctx.measureText(test).width <= maxW) { line = test; continue; }
+          if (line) lines.push(line);
+          line = word;
+          while (ctx.measureText(line).width > maxW && line.length > 1) {
+            let cut = line.length - 1;
+            while (cut > 1 && ctx.measureText(line.slice(0, cut)).width > maxW) cut--;
+            lines.push(line.slice(0, cut)); line = line.slice(cut);
+          }
+        }
+        lines.push(line);
+      }
+      return lines;
+    }
+
+    function renderWallpaper(w, h) {
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+
+      // Hintergrund: dunkel, damit Uhr/Icons lesbar bleiben
+      const g = ctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, '#1b1b1f'); g.addColorStop(1, '#09090b');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+
+      const c = COLORS[state.color];
+      const noteW = Math.round(w * 0.80);
+      const pad = Math.round(noteW * 0.08);
+      const textW = noteW - 2 * pad;
+      const family = noteFont();
+      const text = state.text.trim() || '…';
+
+      // Schrift so groß wie möglich, aber der Zettel darf höchstens ~52 % der Höhe belegen
+      const maxNoteH = h * 0.52;
+      let fs = Math.round(noteW / 7), lines;
+      for (;;) {
+        ctx.font = `500 ${fs}px ${family}`;
+        lines = wrap(ctx, text, textW);
+        if (lines.length * fs * 1.15 + 2 * pad <= maxNoteH || fs <= noteW / 28) break;
+        fs = Math.round(fs * 0.92);
+      }
+      const lh = fs * 1.15;
+      const noteH = Math.max(Math.round(lines.length * lh + 2 * pad), Math.round(noteW * 0.6));
+
+      // Position: Mitte leicht unterhalb der Bildmitte – oben bleibt Platz für die Uhr
+      const cx = w / 2, cy = h * 0.56;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(-2.5 * Math.PI / 180);
+
+      ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = w * 0.06; ctx.shadowOffsetY = w * 0.02;
+      ctx.fillStyle = c.paper;
+      ctx.fillRect(-noteW / 2, -noteH / 2, noteW, noteH);
+      ctx.shadowColor = 'transparent';
+
+      // Klebestreifen
+      ctx.fillStyle = 'rgba(255,255,255,.55)';
+      ctx.fillRect(-noteW * 0.13, -noteH / 2 - pad * 0.45, noteW * 0.26, pad * 0.9);
+
+      ctx.fillStyle = c.ink;
+      ctx.font = `500 ${fs}px ${family}`;
+      ctx.textBaseline = 'top';
+      let y = -noteH / 2 + pad + (noteH - 2 * pad - lines.length * lh) / 2;
+      for (const line of lines) { ctx.fillText(line, -noteW / 2 + pad, y); y += lh; }
+      ctx.restore();
+      return canvas;
+    }
+
+    async function stick() {
+      if (!state.text.trim()) { statusEl.textContent = 'Erst was draufschreiben.'; textEl.focus(); return; }
+      statusEl.textContent = 'Rendere …';
+      try { if (document.fonts) await document.fonts.ready; } catch (_) {}
+
+      // Display-Auflösung, immer Hochformat
+      const dpr = Math.min(window.devicePixelRatio || 1, 4);
+      const sw = Math.min(screen.width, screen.height), sh = Math.max(screen.width, screen.height);
+      const canvas = renderWallpaper(Math.round(sw * dpr), Math.round(sh * dpr));
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+      const file = new File([blob], 'zettel.png', { type: 'image/png' });
+
+      // Bevorzugt: System-Teilen-Dialog → „Bild sichern“ / Fotos
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: 'Zettel' });
+          statusEl.textContent = 'Jetzt in den Einstellungen als Sperrbildschirm setzen.';
+          return;
+        } catch (e) {
+          if (e.name === 'AbortError') { statusEl.textContent = ''; return; }
+        }
+      }
+      // Fallback: Vorschau, zum Langdrücken
+      $('preview').src = URL.createObjectURL(blob);
+      $('overlay').hidden = false;
+      statusEl.textContent = '';
+    }
+    $('stick').addEventListener('click', () => stick().catch(e => { statusEl.textContent = 'Fehler: ' + e.message; }));
+
+    // ---------- Offline / Installierbar ----------
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  </script>
 </body>
 </html>
