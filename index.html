@@ -88,6 +88,8 @@
     .setup strong { color: var(--fg); font-weight: 600; }
     .setup label { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
     .setup .version { margin-top: 14px; font-size: 12px; }
+    .setup label.row { flex-direction: row; align-items: center; gap: 10px; color: var(--fg); margin-top: 14px; }
+    .setup label.row input { width: 22px; height: 22px; padding: 0; accent-color: var(--fg); }
     .setup input {
       font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid #333;
       background: #1e1e21; color: var(--fg);
@@ -136,6 +138,8 @@
       <li>Voraussetzung: dein aktueller Hintergrund ist ein Foto (kein Foto-Shuffle) – das ist nach dem ersten manuellen Setzen der Fall.</li>
     </ol>
     <label>Name des Kurzbefehls <input id="shortcut" type="text" autocapitalize="words" spellcheck="false"></label>
+    <label class="row"><input id="autorun" type="checkbox"> Kurzbefehl automatisch öffnen</label>
+    <p>Aus = das Bild wird nur in die Zwischenablage gelegt. Den Kurzbefehl startest du dann selbst über sein Icon auf dem Home-Bildschirm (Kurzbefehl-Details → „Zum Home-Bildschirm“) oder auf dem iPhone per Doppeltipp auf die Rückseite (Einstellungen → Bedienungshilfen → Tippen → Auf Rückseite tippen). So gestartet öffnet sich die Kurzbefehle-App nicht, und nach dem Entsperren landest du auf dem Home-Bildschirm.</p>
     <p class="version">Version <span id="version"></span> · aktualisiert sich beim Öffnen von selbst</p>
   </details>
 
@@ -147,7 +151,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-04.6'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-04.7'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -160,7 +164,7 @@
     const noteEl = $('note'), textEl = $('text'), colorsEl = $('colors'), statusEl = $('status'), savedEl = $('saved');
 
     // ---------- Zustand ----------
-    let state = { text: '', color: 'yellow', shortcut: 'Zettel', updated: null };
+    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: true, updated: null };
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) state = { ...state, ...JSON.parse(raw) };
@@ -342,8 +346,13 @@
       try { write = navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]); }
       catch (e) { write = Promise.reject(e); }
       write.then(() => {
-        statusEl.textContent = 'Kurzbefehl „' + state.shortcut + '“ läuft …';
-        location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(state.shortcut) + '&input=clipboard';
+        if (state.autoRun) {
+          statusEl.textContent = 'Kurzbefehl „' + state.shortcut + '“ läuft …';
+          location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(state.shortcut) + '&input=clipboard';
+        } else {
+          // Kurzbefehl nicht per URL starten: vom Home-Bildschirm-Icon gestartet öffnet er die Kurzbefehle-App nicht.
+          statusEl.textContent = 'Bild liegt in der Zwischenablage. Jetzt Home → Icon „' + state.shortcut + '“ tippen (oder Rückseite doppelt tippen).';
+        }
       }, async () => {
         statusEl.textContent = 'Zwischenablage verweigert – Teilen stattdessen.';
         share(await png);
@@ -363,6 +372,9 @@
     const shortcutEl = $('shortcut');
     shortcutEl.value = state.shortcut;
     shortcutEl.addEventListener('input', () => { state.shortcut = shortcutEl.value.trim() || 'Zettel'; persist(); });
+    const autoRunEl = $('autorun');
+    autoRunEl.checked = state.autoRun !== false;
+    autoRunEl.addEventListener('change', () => { state.autoRun = autoRunEl.checked; persist(); });
 
     // ---------- Offline / Installierbar / Selbst-Aktualisierung ----------
     $('version').textContent = APP_VERSION;
