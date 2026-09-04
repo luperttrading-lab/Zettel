@@ -35,17 +35,20 @@ Keine Web-App, kein Fensterwechsel.
 1. https://vercel.com → „Sign Up" → „Continue with GitHub".
 2. „Add New… → Project" → dieses Repository `Zettel` importieren → „Deploy". Keine Einstellungen nötig,
    `vercel.json` und `package.json` liegen bei.
-3. Nach ca. einer Minute steht die Adresse, z. B. `https://zettel-xyz.vercel.app`. Test im Browser:
+3. Nach ca. einer Minute steht die Adresse. Für dieses Projekt: `https://zettel-beta.vercel.app`. Test im Browser:
 
    ```
-   https://zettel-xyz.vercel.app/api/zettel?text=Milch%20kaufen&color=gelb
+   https://zettel-beta.vercel.app/api/zettel?text=Milch%20kaufen&color=gelb&device=iphone
    ```
 
    Es muss ein PNG mit gelbem Zettel erscheinen.
 
-Parameter: `text` (Pflicht), `color` (`gelb`, `rosa`, `gruen`, `blau`), `w`/`h` in Pixeln (Standard 2360×2360
-für iPad; für iPhone z. B. `w=1179&h=2556`). Bei quadratischem Bild wird das Tablet-Layout gewählt,
-sonst das Hochformat-Layout.
+Parameter: `text` (Pflicht), `color` (`gelb`, `rosa`, `gruen`, `blau`), `device` (`iphone` = Hochformat
+1179×2556, sonst iPad-Quadrat 2360×2360), optional `w`/`h` in Pixeln. Bei quadratischem Bild wird das
+Tablet-Layout gewählt, sonst das Hochformat-Layout.
+
+Hinweis für Vercel: `vercel.json` packt `fonts/**` und `node_modules/harfbuzzjs/**` mit ein; ohne Letzteres
+fehlt satori zur Laufzeit die Datei `hb.wasm`.
 
 ### Kurzbefehl „Zettel" anlegen
 
@@ -53,7 +56,7 @@ sonst das Hochformat-Layout.
 |---|---|---|
 | 1 | **Nach Eingabe fragen** | Typ Text, Frage „Was soll auf den Zettel?" |
 | 2 | **URL codieren** | Eingabe: „Bereitgestellte Eingabe" aus Aktion 1 |
-| 3 | **Inhalt der URL abrufen** | URL: `https://zettel-xyz.vercel.app/api/zettel?text=` + Variable „Codierte URL" + `&color=gelb` |
+| 3 | **Inhalt der URL abrufen** | URL: `https://zettel-beta.vercel.app/api/zettel?device=iphone&color=gelb&text=` + Variable „Codierte URL" (iPad: `device=ipad`) |
 | 4 | **Hintergrundbild-Foto festlegen** | Bild: „Inhalt der URL"; Sperrbildschirm anhaken; „Vorschau anzeigen" aus |
 | 5 | **Bildschirm sperren** | – |
 
