@@ -1,5 +1,5 @@
 // Offline-Cache für die App-Hülle. Versionsstring hochzählen, wenn sich Dateien ändern.
-const CACHE = 'zettel-v4';
+const CACHE = 'zettel-v5';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
