@@ -200,7 +200,15 @@
       return lines;
     }
 
-    function renderWallpaper(w, h) {
+    // Layouts: Telefon = Hochformat, Zettel unter der Uhr.
+    // Tablet = quadratisches Bild (iPad nutzt ein Bild für beide Ausrichtungen und schneidet zu);
+    // der Zettel liegt in der Zone, die in Hoch- UND Querformat sichtbar und unterhalb der Uhr ist.
+    const LAYOUTS = {
+      phone:  (w, h) => ({ noteW: w * 0.80, maxNoteH: h * 0.52, cy: h * 0.56 }),
+      tablet: (w, h) => ({ noteW: w * 0.60, maxNoteH: h * 0.42, cy: h * 0.61 }),
+    };
+
+    function renderWallpaper(w, h, layoutName) {
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
@@ -210,15 +218,16 @@
       g.addColorStop(0, '#1b1b1f'); g.addColorStop(1, '#09090b');
       ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
 
+      const layout = LAYOUTS[layoutName](w, h);
       const c = COLORS[state.color];
-      const noteW = Math.round(w * 0.80);
+      const noteW = Math.round(layout.noteW);
       const pad = Math.round(noteW * 0.08);
       const textW = noteW - 2 * pad;
       const family = noteFont();
       const text = state.text.trim() || '…';
 
-      // Schrift so groß wie möglich, aber der Zettel darf höchstens ~52 % der Höhe belegen
-      const maxNoteH = h * 0.52;
+      // Schrift so groß wie möglich, aber der Zettel darf die Maximalhöhe des Layouts nicht sprengen
+      const maxNoteH = layout.maxNoteH;
       let fs = Math.round(noteW / 7), lines;
       for (;;) {
         ctx.font = `500 ${fs}px ${family}`;
@@ -230,7 +239,7 @@
       const noteH = Math.max(Math.round(lines.length * lh + 2 * pad), Math.round(noteW * 0.6));
 
       // Position: Mitte leicht unterhalb der Bildmitte – oben bleibt Platz für die Uhr
-      const cx = w / 2, cy = h * 0.56;
+      const cx = w / 2, cy = layout.cy;
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(-2.5 * Math.PI / 180);
@@ -258,10 +267,14 @@
       statusEl.textContent = 'Rendere …';
       try { if (document.fonts) await document.fonts.ready; } catch (_) {}
 
-      // Display-Auflösung, immer Hochformat
+      // Display-Auflösung. Telefon (schmal, Verhältnis ≥ 1,6): Hochformat.
+      // Tablet (breiter): Quadrat mit Kantenlänge der langen Seite – passt in beiden Ausrichtungen.
       const dpr = Math.min(window.devicePixelRatio || 1, 4);
       const sw = Math.min(screen.width, screen.height), sh = Math.max(screen.width, screen.height);
-      const canvas = renderWallpaper(Math.round(sw * dpr), Math.round(sh * dpr));
+      const isTablet = sh / sw < 1.6;
+      const canvas = isTablet
+        ? renderWallpaper(Math.round(sh * dpr), Math.round(sh * dpr), 'tablet')
+        : renderWallpaper(Math.round(sw * dpr), Math.round(sh * dpr), 'phone');
       const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
       const file = new File([blob], 'zettel.png', { type: 'image/png' });
 
