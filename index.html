@@ -38,6 +38,14 @@
     header { width: 100%; max-width: 420px; display: flex; justify-content: space-between; align-items: baseline; }
     header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .02em; }
     header span { font-size: 13px; color: var(--muted); }
+    header span.ok { color: #34c759; font-weight: 600; }
+    header span.warn { color: #ff9f0a; font-weight: 600; }
+    .note .pin {
+      position: absolute; right: -6px; bottom: -12px; transform: rotate(1.5deg);
+      background: #34c759; color: #fff; font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 7px 11px; border-radius: 999px; box-shadow: 0 3px 8px rgba(0,0,0,.4); white-space: nowrap;
+    }
+    .note .pin[hidden] { display: none; }
 
     /* --- der Zettel --- */
     .note {
@@ -127,6 +135,7 @@
 
   <section class="note" id="note" aria-label="Zettel">
     <textarea id="text" placeholder="Was soll auf den Zettel?" spellcheck="false" autocapitalize="sentences"></textarea>
+    <span class="pin" id="pin" hidden></span>
   </section>
 
   <div class="colors" id="colors" role="radiogroup" aria-label="Zettelfarbe"></div>
@@ -170,7 +179,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.1'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.2'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -183,7 +192,7 @@
     const noteEl = $('note'), textEl = $('text'), colorsEl = $('colors'), statusEl = $('status'), savedEl = $('saved');
 
     // ---------- Zustand ----------
-    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: true, updated: null };
+    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: true, updated: null, pinned: null };
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) state = { ...state, ...JSON.parse(raw) };
@@ -194,7 +203,35 @@
     function persist() {
       state.updated = Date.now();
       try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {}
-      savedEl.textContent = 'gespeichert ' + new Date(state.updated).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+      updatePinBadge();
+    }
+
+    // Angeheftet-Status: Text und Farbe, die zuletzt aufs Display geklebt wurden.
+    // Solange der Zettel dem entspricht, bleibt die Markierung stehen; jede Änderung hebt sie auf.
+    function fmtTime(ts) { return new Date(ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); }
+    function isPinnedCurrent() {
+      return !!(state.pinned && state.pinned.text === state.text && state.pinned.color === state.color);
+    }
+    function updatePinBadge() {
+      const pin = $('pin');
+      if (isPinnedCurrent()) {
+        savedEl.textContent = 'angeheftet ' + fmtTime(state.pinned.at);
+        savedEl.className = 'ok';
+        pin.textContent = '✓ angeheftet ' + fmtTime(state.pinned.at);
+        pin.hidden = false;
+      } else if (state.pinned) {
+        savedEl.textContent = 'geändert · nicht angeheftet';
+        savedEl.className = 'warn';
+        pin.hidden = true;
+      } else {
+        savedEl.textContent = state.updated ? 'gespeichert ' + fmtTime(state.updated) : '';
+        savedEl.className = '';
+        pin.hidden = true;
+      }
+    }
+    function markPinned() {
+      state.pinned = { text: state.text, color: state.color, at: Date.now() };
+      persist();
     }
 
     function applyColor() {
@@ -202,6 +239,7 @@
       noteEl.style.setProperty('--paper', c.paper);
       noteEl.style.setProperty('--ink', c.ink);
       for (const b of colorsEl.children) b.setAttribute('aria-pressed', String(b.dataset.color === state.color));
+      updatePinBadge();
     }
 
     // ---------- UI ----------
@@ -213,12 +251,13 @@
     }
     textEl.value = state.text;
     applyColor();
-    if (state.updated) savedEl.textContent = 'gespeichert ' + new Date(state.updated).toLocaleDateString('de-DE');
+    updatePinBadge();
 
     let t = null;
     textEl.addEventListener('input', () => {
       state.text = textEl.value;
       syncPreview();
+      updatePinBadge();
       clearTimeout(t); t = setTimeout(() => { t = null; persist(); }, 300);
     });
     function flush() { if (t) { clearTimeout(t); t = null; persist(); } }
@@ -401,6 +440,7 @@
       try { write = navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]); }
       catch (e) { write = Promise.reject(e); }
       write.then(() => {
+        markPinned();
         if (state.autoRun) {
           statusEl.textContent = 'Kurzbefehl „' + state.shortcut + '“ läuft …';
           location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(state.shortcut) + '&input=clipboard';
