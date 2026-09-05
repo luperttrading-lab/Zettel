@@ -293,7 +293,7 @@
   <script src="lib/fasteners.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.22.5'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.22.6'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -591,11 +591,11 @@
       document.body.classList.toggle('picking', show);
       if (show) { buildPalette(); placePalette(); }
     }
-    // Karte mittig über den Befestigungs-Schieber legen (relativ zum sticky Kopfbereich)
+    // Karte direkt oberhalb des Befestigungs-Schiebers: Unterkante der Karte = Oberkante des Schiebers
     function placePalette() {
       const strip = $('strip-fastener').parentElement, top = document.querySelector('.top');
       const r = strip.getBoundingClientRect(), t = top.getBoundingClientRect();
-      const y = r.top - t.top + r.height / 2 - fcolorsEl.offsetHeight / 2;
+      const y = r.top - t.top - fcolorsEl.offsetHeight - 6;
       fcolorsEl.style.top = Math.max(t.height - 40, y) + 'px';   // nie höher als knapp unter den Zettel
     }
     $('fastener-preview').addEventListener('click', e => { e.preventDefault(); toggleFcolors(); });
