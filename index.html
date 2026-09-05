@@ -47,6 +47,7 @@
     }
     header { width: 100%; max-width: 420px; display: flex; justify-content: space-between; align-items: baseline; }
     header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .02em; }
+    header h1 small { font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 6px; letter-spacing: 0; }
     header span { font-size: 13px; color: var(--muted); }
     header span.ok { color: #34c759; font-weight: 600; }
     header span.warn { color: #ff9f0a; font-weight: 600; }
@@ -182,6 +183,15 @@
       background: #1e1e21; color: var(--fg);
     }
 
+    /* --- Hinweis „Neue Version“ --- */
+    .update {
+      position: fixed; left: 12px; right: 12px; top: max(env(safe-area-inset-top), 12px); z-index: 30;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      background: #34c759; color: #06240e; padding: 12px 14px; border-radius: 14px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.5);
+    }
+    .update[hidden] { display: none; }
+    .update .btn { width: auto; padding: 8px 14px; font-size: 15px; background: #06240e; color: #fff; }
+
     /* --- Banner „Angeheftet“ --- */
     .toast {
       position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.88);
@@ -207,7 +217,7 @@
 <body>
   <div class="top">
     <header>
-      <h1>Zettel</h1>
+      <h1>Zettel <small id="ver"></small></h1>
       <span id="saved"></span>
     </header>
 
@@ -262,6 +272,8 @@
     <p class="version">Version <span id="version"></span> · aktualisiert sich beim Öffnen von selbst</p>
   </details>
 
+  <div class="update" id="update" hidden><span id="update-text"></span><button class="btn" id="update-go">Jetzt laden</button></div>
+
   <div class="toast" id="toast" hidden>
     <div class="check">✓</div>
     <h2 id="toast-title">Angeheftet</h2>
@@ -277,7 +289,7 @@
   <script src="lib/fasteners.js"></script>
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.20'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '1.20.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -1051,28 +1063,35 @@
     if (document.fonts) { document.fonts.ready.then(syncPreview).catch(() => {}); document.fonts.addEventListener && document.fonts.addEventListener('loadingdone', syncPreview); }
 
     // ---------- Offline / Installierbar / Selbst-Aktualisierung ----------
-    $('version').textContent = APP_VERSION;
+    $('version').textContent = APP_VERSION; $('ver').textContent = 'v' + APP_VERSION;
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
-    // Bei jedem Öffnen bzw. Zurückholen der App: liegt auf dem Server eine neuere Version? Dann neu laden.
-    let checking = false;
+    // Neue Version auf dem Server? Geprüft beim Öffnen, beim Zurückholen in den Vordergrund und alle 60 s,
+    // solange die App sichtbar ist. Dann Banner oben; wird gerade nicht getippt, lädt die App nach 3 s selbst neu.
+    let checking = false, announced = null;
+    function announceUpdate(v) {
+      if (announced === v) return;
+      announced = v; flush();
+      const el = $('update'); $('update-text').textContent = 'Neue Version ' + v + ' ist da';
+      el.hidden = false;
+      const typing = document.activeElement === textEl.el;
+      if (!typing) setTimeout(() => location.reload(), 3000);
+    }
+    $('update-go').addEventListener('click', () => { flush(); location.reload(); });
     async function checkForUpdate() {
-      if (checking || !navigator.onLine) return;
+      if (checking || !navigator.onLine || document.visibilityState !== 'visible') return;
       checking = true;
       try {
         const res = await fetch('index.html', { cache: 'no-store' });
         if (!res.ok) return;
         const m = (await res.text()).match(/APP_VERSION = '([^']+)'/);
-        if (m && m[1] !== APP_VERSION) {
-          flush();
-          statusEl.textContent = 'Neue Version ' + m[1] + ' – lade neu …';
-          setTimeout(() => location.reload(), 300);
-        }
+        if (m && m[1] !== APP_VERSION) announceUpdate(m[1]);
       } catch (_) { /* offline o.ä. – dann eben beim nächsten Mal */ }
       finally { checking = false; }
     }
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
     window.addEventListener('pageshow', () => setTimeout(checkForUpdate, 800));
+    setInterval(checkForUpdate, 60000);
   </script>
 </body>
 </html>
