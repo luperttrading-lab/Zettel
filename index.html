@@ -11,12 +11,14 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-180.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- Schrift nicht-blockierend laden: die App startet auch, wenn Google Fonts langsam oder offline ist -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500&family=Patrick+Hand&family=Kalam&family=Permanent+Marker&display=swap" media="print" onload="this.media='all'">
   <title>Zettel</title>
   <style>
+    /* Schriften liegen im Repository (gleiche Dateien wie auf dem Server) – kein Google Fonts,
+       damit App-Vorschau und Bild garantiert mit derselben Schrift messen und zeichnen. */
+    @font-face { font-family: 'Caveat';           font-weight: 500; font-display: swap; src: url(fonts/Caveat-500.ttf) format('truetype'); }
+    @font-face { font-family: 'Patrick Hand';     font-weight: 400; font-display: swap; src: url(fonts/PatrickHand-400.ttf) format('truetype'); }
+    @font-face { font-family: 'Kalam';            font-weight: 400; font-display: swap; src: url(fonts/Kalam-400.ttf) format('truetype'); }
+    @font-face { font-family: 'Permanent Marker'; font-weight: 400; font-display: swap; src: url(fonts/PermanentMarker-400.ttf) format('truetype'); }
     :root {
       --bg: #141416;
       --fg: #f2f2f4;
@@ -217,7 +219,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.9'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.10'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -264,7 +266,7 @@
         <circle cx="0" cy="0.08" r="0.72" fill="#000" fill-opacity=".25"/><circle cx="0" cy="0" r="0.7" fill="#c8281f"/>
         <circle cx="0" cy="-0.04" r="0.62" fill="#ff3b30"/><circle cx="0" cy="-0.04" r="0.3" fill="#e0342b"/><ellipse cx="-0.2" cy="-0.28" rx="0.22" ry="0.12" fill="#ffa39d" fill-opacity=".8"/></g>`;
       switch (kind) {
-        case 'tape2':     return tape(0, 0, W * 0.26, p * 0.8, -45) + tape(W, 0, W * 0.26, p * 0.8, 45);
+        case 'tape2':     return tape(0, 0, W * 0.2, p * 0.55, -45) + tape(W, 0, W * 0.2, p * 0.55, 45);
         case 'thumbtack': return thumbtack(W / 2, p * 0.45, p * 1.05, -10);
         case 'pin':       return pin(W / 2 - p * 0.35, -p * 0.35, p * 1.25, -28, '#ff3b30', '#ffa39d');
         case 'pin2':      return pin(W * 0.14, -p * 0.25, p * 1.1, -35, '#ff3b30', '#ffa39d') + pin(W * 0.86, -p * 0.25, p * 1.1, 35, '#2f7cf6', '#9cc4ff');
@@ -368,9 +370,12 @@
     // Schrift ausdrücklich laden und danach neu rechnen – sonst misst die Automatik mit der Ersatzschrift
     // und wählt für breite Schriften (Marker) eine zu große Größe.
     function ensureFont() {
-      const f = FONTS[state.font] || FONTS.caveat;
+      const key = state.font, f = FONTS[key] || FONTS.caveat;
+      if (loadedFonts.has(key)) return Promise.resolve();
       if (!document.fonts || !document.fonts.load) return Promise.resolve();
-      return document.fonts.load(`${f.weight} 20px "${f.family}"`).then(() => syncPreview()).catch(() => {});
+      return document.fonts.load(`${f.weight} 20px "${f.family}"`)
+        .then(faces => { if (faces && faces.length) { loadedFonts.add(key); syncPreview(); } })
+        .catch(() => {});
     }
     function applyFont() {
       for (const b of fontsEl.children) b.setAttribute('aria-pressed', String(b.dataset.font === state.font));
@@ -484,12 +489,12 @@
     $('close').addEventListener('click', () => { $('overlay').hidden = true; });
 
     // ---------- Hintergrundbild rendern ----------
-    // Gewählte Schrift; solange sie nicht geladen ist, dieselbe Ersatzschrift in Vorschau und Bild.
+    // Gewählte Schrift; bis sie nachweislich geladen ist, dieselbe Ersatzschrift in Vorschau und Bild.
+    // (document.fonts.check() meldet auf iOS „geladen“, bevor es stimmt – deshalb eigene Buchführung.)
+    const loadedFonts = new Set();
     function noteFont() {
       const f = FONTS[state.font] || FONTS.caveat;
-      let ok = false;
-      try { ok = document.fonts && document.fonts.check(`${f.weight} 20px "${f.family}"`); } catch (_) {}
-      return { family: ok ? `"${f.family}"` : FALLBACK, weight: f.weight, lh: f.lh };
+      return { family: loadedFonts.has(state.font) ? `"${f.family}"` : FALLBACK, weight: f.weight, lh: f.lh };
     }
 
     // Zeilenumbruch: Absätze respektieren, Wörter umbrechen, überlange Wörter hart trennen.
@@ -587,6 +592,10 @@
       noteEl.style.height = Math.round(f.noteH * scale) + 'px';
       // Vertikale Lage wie im Bild: Textblock unter dem Einschub der Befestigung, zentriert
       textEl.style.paddingTop = Math.round((f.textTop - f.pad) * scale) + 'px';
+      // Sicherung: Die Vorschau darf nie abschneiden. Bricht der Browser anders um als gemessen,
+      // wächst der Zettel in der App, bis alles sichtbar ist.
+      const padPx = parseFloat(getComputedStyle(noteEl).paddingTop) || 0;
+      if (textEl.scrollHeight > textEl.clientHeight + 1) noteEl.style.height = Math.ceil(textEl.scrollHeight + 2 * padPx) + 'px';
       // Befestigung als Overlay, gleiche Zeichnung und Proportion wie im Bild
       const m = f.pad * 2.2, fp = $('fastener-preview');
       fp.style.left = (-m * scale) + 'px'; fp.style.top = (-m * scale) + 'px';
