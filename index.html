@@ -80,6 +80,14 @@
     }
     .colors button[aria-pressed="true"] { border-color: var(--fg); }
 
+    /* --- Schriftgröße --- */
+    .scale { width: min(86vw, 380px); display: flex; align-items: center; gap: 12px; color: var(--muted); }
+    .scale .a { font-family: var(--note-font); color: var(--fg); line-height: 1; }
+    .scale .a.small { font-size: 18px; }
+    .scale .a.big { font-size: 30px; }
+    .scale input { flex: 1; accent-color: var(--fg); height: 32px; }
+    .scale output { font-size: 13px; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+
     /* --- Aktionen --- */
     .actions { display: flex; flex-direction: column; gap: 10px; width: min(86vw, 380px); }
     .btn {
@@ -140,6 +148,13 @@
 
   <div class="colors" id="colors" role="radiogroup" aria-label="Zettelfarbe"></div>
 
+  <label class="scale" for="fontscale">
+    <span class="a small">A</span>
+    <input id="fontscale" type="range" min="60" max="140" step="5" value="100" aria-label="Schriftgröße">
+    <span class="a big">A</span>
+    <output id="fontscale-out">100 %</output>
+  </label>
+
   <div class="actions">
     <button class="btn primary" id="stick">Aufs Display kleben</button>
     <button class="btn ghost" id="share">Stattdessen teilen / sichern</button>
@@ -179,7 +194,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.4'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.5'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -193,13 +208,14 @@
 
     // ---------- Zustand ----------
     // autoRun standardmäßig aus: Start per URL bringt die Kurzbefehle-App in den Vordergrund.
-    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, updated: null, pinned: null };
+    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, updated: null, pinned: null };
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) state = { ...state, ...JSON.parse(raw) };
     } catch (_) { /* privater Modus o.ä. – dann eben nur flüchtig */ }
     if (!COLORS[state.color]) state.color = 'yellow';
     if (typeof state.shortcut !== 'string' || !state.shortcut.trim()) state.shortcut = 'Zettel';
+    if (typeof state.fontScale !== 'number' || state.fontScale < 60 || state.fontScale > 140) state.fontScale = 100;
     // Einmalige Umstellung (Sept. 2026): gespeicherte Installationen von „automatisch öffnen“ auf aus setzen
     if (!state.autoRunReset) { state.autoRun = false; state.autoRunReset = true; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {} }
 
@@ -213,7 +229,8 @@
     // Solange der Zettel dem entspricht, bleibt die Markierung stehen; jede Änderung hebt sie auf.
     function fmtTime(ts) { return new Date(ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); }
     function isPinnedCurrent() {
-      return !!(state.pinned && state.pinned.text === state.text && state.pinned.color === state.color);
+      return !!(state.pinned && state.pinned.text === state.text && state.pinned.color === state.color
+        && (state.pinned.fontScale || 100) === (state.fontScale || 100));
     }
     function updatePinBadge() {
       const pin = $('pin');
@@ -233,7 +250,7 @@
       }
     }
     function markPinned() {
-      state.pinned = { text: state.text, color: state.color, at: Date.now() };
+      state.pinned = { text: state.text, color: state.color, fontScale: state.fontScale, at: Date.now() };
       persist();
     }
 
@@ -340,13 +357,26 @@
       const pad = Math.round(noteW * 0.08);
       const textW = noteW - 2 * pad;
       const family = noteFont();
+      const paras = text.split('\n');
+      const longestWord = paras.flatMap(p => p.split(/\s+/)).reduce((a, b) => (b.length > a.length ? b : a), '');
+      const minFs = noteW / 28;           // absolute Untergrenze
+      const paraFloor = noteW / 16;       // bis hierhin darf die Schrift schrumpfen, damit Absätze einzeilig bleiben
+      const measure = f => { measureCtx.font = `500 ${f}px ${family}`; return wrap(measureCtx, text, textW); };
+      const wordFits = f => { measureCtx.font = `500 ${f}px ${family}`; return measureCtx.measureText(longestWord).width <= textW; };
+      const fitsHeight = (f, ls) => ls.length * f * 1.15 + 2 * pad <= layout.maxNoteH;
+
       let fs = Math.round(noteW / 7), lines;
-      for (;;) {
-        measureCtx.font = `500 ${fs}px ${family}`;
-        lines = wrap(measureCtx, text, textW);
-        if (lines.length * fs * 1.15 + 2 * pad <= layout.maxNoteH || fs <= noteW / 28) break;
-        fs = Math.round(fs * 0.92);
-      }
+      // 1) Kein Wort wird hart getrennt: Schrift so weit verkleinern, bis das längste Wort in eine Zeile passt.
+      while (!wordFits(fs) && fs > minFs) fs = Math.round(fs * 0.94);
+      // 2) Jeder Absatz möglichst auf einer Zeile, aber nicht unter paraFloor.
+      lines = measure(fs);
+      while (lines.length > paras.length && fs > paraFloor) { fs = Math.round(fs * 0.95); lines = measure(fs); }
+      // 3) Nutzer-Regler (Prozent der Automatik), danach erneut: kein hartes Trennen.
+      fs = Math.round(fs * ((state.fontScale || 100) / 100));
+      while (!wordFits(fs) && fs > minFs) fs = Math.round(fs * 0.94);
+      // 4) Höhe des Layouts einhalten.
+      lines = measure(fs);
+      while (!fitsHeight(fs, lines) && fs > minFs) { fs = Math.round(fs * 0.92); lines = measure(fs); }
       const lh = fs * 1.15;
       const noteH = Math.max(Math.round(lines.length * lh + 2 * pad), Math.round(noteW * 0.6));
       return { layout, noteW, pad, textW, family, fs, lh, lines, noteH };
@@ -471,6 +501,13 @@
     const shortcutEl = $('shortcut');
     shortcutEl.value = state.shortcut;
     shortcutEl.addEventListener('input', () => { state.shortcut = shortcutEl.value.trim() || 'Zettel'; persist(); });
+    const scaleEl = $('fontscale'), scaleOut = $('fontscale-out');
+    scaleEl.value = state.fontScale; scaleOut.value = state.fontScale + ' %';
+    scaleEl.addEventListener('input', () => {
+      state.fontScale = Number(scaleEl.value); scaleOut.value = state.fontScale + ' %';
+      syncPreview(); updatePinBadge();
+      clearTimeout(t); t = setTimeout(() => { t = null; persist(); }, 300);
+    });
     const autoRunEl = $('autorun');
     autoRunEl.checked = state.autoRun === true;
     autoRunEl.addEventListener('change', () => { state.autoRun = autoRunEl.checked; persist(); });
