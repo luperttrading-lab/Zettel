@@ -65,13 +65,15 @@
     .note {
       width: min(78vw, 340px);
       min-height: 60vw; /* wird per Skript auf die Form des Hintergrundbilds gesetzt (feste Zettelgröße) */
-      background: var(--paper);
       color: var(--ink);
       transform: rotate(-1.5deg);
-      box-shadow: 0 14px 32px rgba(0,0,0,.55), 0 2px 4px rgba(0,0,0,.35);
       position: relative;
       padding: 8%; /* gleiche Proportion wie im Bild (pad = 8 % der Zettelbreite) */
     }
+    /* Papier-Ebene: Schatten per Filter auf der Hülle, damit er der abgerissenen Kante folgt (box-shadow würde vom clip-path abgeschnitten) */
+    .note .paper { position: absolute; inset: 0; z-index: 0; pointer-events: none; filter: drop-shadow(0 14px 16px rgba(0,0,0,.55)) drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
+    .note .paper-in { position: absolute; inset: 0; background-color: var(--paper); image-rendering: pixelated; }
+    .note .editor { position: relative; z-index: 1; }
     .note .fastener { position: absolute; pointer-events: none; z-index: 2; }
     .note .fastener svg { display: block; width: 100%; height: 100%; overflow: visible; }
     .note .fastener svg * { pointer-events: visiblePainted; cursor: pointer; } /* Tipp auf die Befestigung öffnet die Farbwahl */
@@ -234,6 +236,8 @@
     </header>
 
     <section class="note" id="note" aria-label="Zettel">
+      <!-- Papier als eigene Ebene: Schatten außen (Filter), Form innen (clip-path bei abgerissener Kante), Linien + Körnung als Hintergrundbilder -->
+      <div class="paper" aria-hidden="true"><div class="paper-in" id="paper"></div></div>
       <div class="editor" id="text" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Zettel-Text" spellcheck="false" autocapitalize="sentences" enterkeyhint="enter"></div>
       <div class="fastener" id="fastener-preview" aria-hidden="true"></div>
       <span class="pin" id="pin" hidden></span>
@@ -300,9 +304,10 @@
 
   <script src="lib/fasteners.js" charset="utf-8"></script>
   <script src="lib/motifs.js" charset="utf-8"></script>
+  <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.28.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.29.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -313,6 +318,9 @@
 
     // Papier: glatt, liniert (Zeilenabstand = Schriftzeile), kariert (Kästchen = Zeilenhöhe). Stift: Schwarz = Tinte der Papierfarbe.
     const PAPERS = { plain: 'Glatt', lined: 'Liniert', grid: 'Kariert' };
+    const TEXTURES = { smooth: 'Glatt', grain: 'Körnig' };        // Papierstruktur
+    const EDGES = { straight: 'Gerade', torn: 'Abgerissen' };      // obere Kante
+    const GRAIN_PX = 450;   // Körnung: ein Korn = Zettelbreite / 450 (Bild und Vorschau gleich)
     const PENS = { black: { label: 'Schwarz', ink: null }, blue: { label: 'Blau', ink: '#1b3f9c' }, red: { label: 'Rot', ink: '#c0392b' }, green: { label: 'Grün', ink: '#1e6b3a' } };
     const LINE_COLOR = 'rgba(0,0,0,.14)';
     // Schriften (alle frei lizenziert, liegen auch auf dem Server). lh = Zeilenhöhe relativ zur Schriftgröße.
@@ -449,6 +457,21 @@
       }
     }
     const noteEl = $('note'), textEl = new Editor($('text')), colorsEl = $('colors'), statusEl = $('status'), savedEl = $('saved');
+    const paperEl = $('paper');
+    // Körnung: eine Kachel aus zufälligen hellen und dunklen Körnern (meist schwach), einmal erzeugt, als Muster wiederholt
+    const GRAIN_TILE = 96;
+    let grainCv = null, grainUrl = '';
+    function grainCanvas() {
+      if (grainCv) return grainCv;
+      const cv = document.createElement('canvas'); cv.width = cv.height = GRAIN_TILE;
+      const cx = cv.getContext('2d'), id = cx.createImageData(GRAIN_TILE, GRAIN_TILE), px = id.data;
+      let s = 7;
+      const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+      for (let i = 0; i < px.length; i += 4) { const v = rnd() < 0.5 ? 0 : 255, a = rnd(); px[i] = px[i + 1] = px[i + 2] = v; px[i + 3] = Math.round(a * a * 26); }
+      cx.putImageData(id, 0, 0);
+      return (grainCv = cv);
+    }
+    function grainTile() { return grainUrl || (grainUrl = grainCanvas().toDataURL('image/png')); }
 
     // ---------- Zustand ----------
     // autoRun standardmäßig aus: Start per URL bringt die Kurzbefehle-App in den Vordergrund.
@@ -478,6 +501,8 @@
     if (!['none', 'num', 'dot', 'square', 'dash', 'check'].includes(state.list)) state.list = 'none';
     if (!PAPERS[state.paper]) state.paper = 'plain';
     if (!PENS[state.pen]) state.pen = 'black';
+    if (!TEXTURES[state.texture]) state.texture = 'smooth';
+    if (!EDGES[state.edge]) state.edge = 'straight';
     function inkColor() { return PENS[state.pen].ink || COLORS[state.color].ink; }
     // Einmalige Umstellung (Sept. 2026): gespeicherte Installationen von „automatisch öffnen“ auf aus setzen
     if (!state.autoRunReset) { state.autoRun = false; state.autoRunReset = true; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {} }
@@ -496,7 +521,8 @@
         && (state.pinned.fontScale || 100) === (state.fontScale || 100)
         && (state.pinned.fastener || 'tape') === state.fastener && (state.pinned.font || 'caveat') === state.font
         && (state.pinned.fastenerLook || lookKey(fastenerLook())) === lookKey(fastenerLook())
-        && (state.pinned.paper || 'plain') === state.paper && (state.pinned.pen || 'black') === state.pen);
+        && (state.pinned.paper || 'plain') === state.paper && (state.pinned.pen || 'black') === state.pen
+        && (state.pinned.texture || 'smooth') === state.texture && (state.pinned.edge || 'straight') === state.edge);
     }
     // Hinweis „Bild liegt bereit …“ gilt nur, solange der Zettel dem angehefteten Stand entspricht
     const READY_HINT = 'Bild liegt bereit. Jetzt den Kurzbefehl „%s“ starten: Icon neben der App, Kontrollzentrum oder Rückseite doppelt tippen.';
@@ -519,7 +545,7 @@
       }
     }
     function markPinned() {
-      state.pinned = { text: state.text, color: state.color, fontScale: state.fontScale, fastener: state.fastener, fastenerLook: lookKey(fastenerLook()), paper: state.paper, pen: state.pen, font: state.font, at: Date.now() };
+      state.pinned = { text: state.text, color: state.color, fontScale: state.fontScale, fastener: state.fastener, fastenerLook: lookKey(fastenerLook()), paper: state.paper, pen: state.pen, texture: state.texture, edge: state.edge, font: state.font, at: Date.now() };
       persist();
     }
 
@@ -603,6 +629,19 @@
         return `<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="2" y="2" width="56" height="36" fill="${paper}"/>${lines}</svg>`;
       };
       for (const [key, label] of Object.entries(PAPERS)) chip(r2, 'icon', paperIcon(key), state.paper === key, label, () => { state.paper = key; syncPreview(); updatePinBadge(); persist(); buildPaperCard(); });
+      // Struktur (glatt / körnig) und Kante (gerade / abgerissen)
+      const paper = COLORS[state.color].paper;
+      const grainIcon = () => { let d = ''; let s = 11; const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+        for (let i = 0; i < 90; i++) d += `<rect x="${(3 + rnd() * 54).toFixed(1)}" y="${(3 + rnd() * 34).toFixed(1)}" width="1.2" height="1.2" fill="rgba(0,0,0,${(0.15 + rnd() * 0.3).toFixed(2)})"/>`;
+        return `<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="2" y="2" width="56" height="36" fill="${paper}"/>${d}</svg>`; };
+      const edgeIcon = torn => { const top = torn ? 'M2 6' + ZettelPaper.edge.map(([x, y]) => `L${(2 + x * 56).toFixed(1)} ${(2 + y / ZettelPaper.AMP * 5).toFixed(1)}`).join('') : 'M2 2L58 2';
+        return `<svg viewBox="0 0 60 40" aria-hidden="true"><path d="${top}L58 38L2 38Z" fill="${paper}"/></svg>`; };
+      const r4 = row('Struktur');
+      chip(r4, 'icon', paperIcon('plain'), state.texture === 'smooth', TEXTURES.smooth, () => { state.texture = 'smooth'; syncPreview(); updatePinBadge(); persist(); buildPaperCard(); });
+      chip(r4, 'icon', grainIcon(), state.texture === 'grain', TEXTURES.grain, () => { state.texture = 'grain'; syncPreview(); updatePinBadge(); persist(); buildPaperCard(); });
+      const r5 = row('Kante');
+      chip(r5, 'icon', edgeIcon(false), state.edge === 'straight', EDGES.straight, () => { state.edge = 'straight'; syncPreview(); updatePinBadge(); persist(); buildPaperCard(); });
+      chip(r5, 'icon', edgeIcon(true), state.edge === 'torn', EDGES.torn, () => { state.edge = 'torn'; syncPreview(); updatePinBadge(); persist(); buildPaperCard(); });
       const r3 = row('Stift');
       for (const [key, pen] of Object.entries(PENS)) chip(r3, 'color pen', '', state.pen === key, pen.label, () => { state.pen = key; applyColor(); syncPreview(); persist(); buildPaperCard(); }).style.background = pen.ink || COLORS[state.color].ink;
       if (!fcolorsEl.hidden) placePalette();   // nach jedem Neuaufbau wieder auf die Farbpunkte legen
@@ -973,13 +1012,15 @@
       noteEl.style.padding = (f.pad * scale) + 'px';
       // Linien/Karos: Abstand = Zeilenhöhe, Linie knapp unter der Grundlinie jeder Textzeile
       const lhS = f.lh * scale, y0 = (f.textTop + 0.95 * f.lh) * scale, x0 = f.pad * scale;
-      if (state.paper === 'plain') { noteEl.style.backgroundImage = ''; }
-      else {
-        const h = `repeating-linear-gradient(to bottom, transparent 0, transparent ${lhS - 1}px, ${LINE_COLOR} ${lhS - 1}px, ${LINE_COLOR} ${lhS}px)`;
-        const v = `repeating-linear-gradient(to right, transparent 0, transparent ${lhS - 1}px, ${LINE_COLOR} ${lhS - 1}px, ${LINE_COLOR} ${lhS}px)`;
-        noteEl.style.backgroundImage = state.paper === 'grid' ? `${h}, ${v}` : h;
-        noteEl.style.backgroundPosition = state.paper === 'grid' ? `0 ${y0 % lhS}px, ${(x0 + 1) % lhS}px 0` : `0 ${y0 % lhS}px`;
+      // Hintergrundebenen (oben zuerst): Körnung, waagerechte Linien, senkrechte Linien
+      const imgs = [], sizes = [], poss = [];
+      if (state.texture === 'grain') { const gs = GRAIN_TILE * (f.noteW / GRAIN_PX) * scale; imgs.push(`url(${grainTile()})`); sizes.push(`${gs}px ${gs}px`); poss.push('0 0'); }
+      if (state.paper !== 'plain') {
+        imgs.push(`repeating-linear-gradient(to bottom, transparent 0, transparent ${lhS - 1}px, ${LINE_COLOR} ${lhS - 1}px, ${LINE_COLOR} ${lhS}px)`); sizes.push('auto'); poss.push(`0 ${y0 % lhS}px`);
+        if (state.paper === 'grid') { imgs.push(`repeating-linear-gradient(to right, transparent 0, transparent ${lhS - 1}px, ${LINE_COLOR} ${lhS - 1}px, ${LINE_COLOR} ${lhS}px)`); sizes.push('auto'); poss.push(`${(x0 + 1) % lhS}px 0`); }
       }
+      paperEl.style.backgroundImage = imgs.join(', '); paperEl.style.backgroundSize = sizes.join(', '); paperEl.style.backgroundPosition = poss.join(', ');
+      paperEl.style.clipPath = state.edge === 'torn' ? ZettelPaper.clipCssFor(f.noteW, f.noteH) : '';
       textEl.style.fontFamily = f.family; textEl.style.fontWeight = f.weight;
       textEl.style.fontSize = (f.fs * scale) + 'px';
       textEl.style.lineHeight = String(f.LH);
@@ -1043,10 +1084,15 @@
       ctx.translate(cx, cy);
       ctx.rotate(-2.5 * Math.PI / 180);
 
+      // Papierform: Rechteck oder oben abgerissen – Schatten, Linien und Körnung folgen der Form
+      const shape = new Path2D();
+      if (state.edge === 'torn') { const pts = ZettelPaper.outline(noteW, noteH, -noteW / 2, -noteH / 2); shape.moveTo(pts[0][0], pts[0][1]); for (const [x, y] of pts.slice(1)) shape.lineTo(x, y); shape.closePath(); }
+      else shape.rect(-noteW / 2, -noteH / 2, noteW, noteH);
       ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = w * 0.06; ctx.shadowOffsetY = w * 0.02;
       ctx.fillStyle = c.paper;
-      ctx.fillRect(-noteW / 2, -noteH / 2, noteW, noteH);
+      ctx.fill(shape);
       ctx.shadowColor = 'transparent';
+      ctx.save(); ctx.clip(shape);
       if (state.paper !== 'plain') {
         ctx.strokeStyle = LINE_COLOR; ctx.lineWidth = Math.max(1, Math.round(noteW / 470)); ctx.beginPath();
         const y0 = textTop + 0.95 * lh;
@@ -1054,7 +1100,15 @@
         if (state.paper === 'grid') for (let x = pad - Math.floor(pad / lh) * lh; x < noteW; x += lh) { ctx.moveTo(-noteW / 2 + x, -noteH / 2); ctx.lineTo(-noteW / 2 + x, noteH / 2); }
         ctx.stroke();
       }
-      ctx.shadowColor = 'transparent';
+      if (state.texture === 'grain') {
+        // Körnung: Kachel im Maßstab „ein Korn = Zettelbreite / GRAIN_PX“, ohne Glättung
+        const G = noteW / GRAIN_PX;
+        ctx.save(); ctx.scale(G, G); ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = ctx.createPattern(grainCanvas(), 'repeat');
+        ctx.fillRect(-noteW / 2 / G, -noteH / 2 / G, noteW / G, noteH / G);
+        ctx.restore();
+      }
+      ctx.restore();
 
       ctx.fillStyle = inkColor();
       ctx.font = `${weight} ${fs}px ${family}`;

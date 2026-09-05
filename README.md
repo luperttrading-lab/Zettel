@@ -50,7 +50,8 @@ Parameter: `text` (Pflicht), `color` (`gelb`, `rosa`, `gruen`, `blau`), `device`
 `gelb`, `silber`, `schwarz`; Standard: Streifen und Klammer silber, Nadeln rot), `fpattern` (Muster: `streifen`,
 `punkte`, `karo`; Klammer nur Streifen/Punkte), `fdesign` (Motiv auf dem Magneten: `smiley`, `herz`, `stern`, `pfote`,
 `blume`, `sonne`, eigene Bild-Motive aus `lib/motifs.js` wie `zwinker`; beim Bildmagneten `fuchs`, `eule`, `panda`; Muster und Motiv schließen sich aus, bei beiden gilt das Motiv), `paper` (`glatt`, `liniert`, `kariert`),
-`pen` (Stiftfarbe: `schwarz`, `blau`, `rot`, `gruen`), `scale` (Schriftgröße 60–140 %), `list` (`num`, `dot`, `square`, `dash`,
+`pen` (Stiftfarbe: `schwarz`, `blau`, `rot`, `gruen`), `texture` (Papierstruktur: `glatt`, `koernig`), `edge` (obere Kante: `gerade`,
+`abgerissen`), `scale` (Schriftgröße 60–140 %), `list` (`num`, `dot`, `square`, `dash`,
 `check`: jede Zeile bekommt eine Nummer bzw. ein Zeichen), optional `w`/`h` in Pixeln. Bei
 quadratischem Bild wird das Tablet-Layout gewählt, sonst das Hochformat-Layout.
 
