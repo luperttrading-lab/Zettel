@@ -80,16 +80,28 @@
     .note textarea::placeholder { color: rgba(42,42,46,.35); }
 
     /* --- Befestigung & Schrift --- */
-    .chips { width: min(86vw, 380px); display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px; scrollbar-width: none; }
-    .chips::-webkit-scrollbar { display: none; }
-    .chips button {
-      flex: 0 0 auto; height: 44px; min-width: 44px; padding: 0 12px; border-radius: 12px; border: 2px solid transparent;
-      background: #1e1e21; color: var(--fg); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
-      font: 500 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    .wheels { width: min(86vw, 380px); display: flex; gap: 8px; }
+    .wheel-wrap { flex: 1; min-width: 0; position: relative; background: #1e1e21; border-radius: 14px; }
+    .wheel-wrap::before { /* Markierung der Mitte */
+      content: ""; position: absolute; left: 6px; right: 6px; top: 44px; height: 44px; pointer-events: none;
+      border-top: 1px solid #3f3f46; border-bottom: 1px solid #3f3f46;
     }
-    .chips button[aria-pressed="true"] { border-color: var(--fg); background: #2a2a2e; }
-    .chips button svg { width: 34px; height: 34px; overflow: visible; }
-    .chips.fonts button { font-size: 20px; padding: 0 14px; }
+    .wheel {
+      height: 132px; overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior: contain; touch-action: pan-y;
+      scrollbar-width: none; border-radius: 14px;
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 30%, #000 70%, transparent 100%);
+              mask-image: linear-gradient(to bottom, transparent 0, #000 30%, #000 70%, transparent 100%);
+    }
+    .wheel::-webkit-scrollbar { display: none; }
+    .wheel-inner { padding: 44px 0; }
+    .wheel .item {
+      height: 44px; scroll-snap-align: center; display: flex; align-items: center; justify-content: center; gap: 6px;
+      color: var(--muted); opacity: .55; font: 500 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      cursor: pointer; white-space: nowrap; padding: 0 6px;
+    }
+    .wheel .item.active { color: var(--fg); opacity: 1; font-weight: 600; }
+    .wheel .item svg { width: 26px; height: 22px; overflow: visible; flex: 0 0 auto; }
+    .wheel .item.font { font-size: 19px; }
 
     /* --- Farben --- */
     .colors { display: flex; gap: 14px; }
@@ -169,9 +181,12 @@
   </div>
 
   <div class="colors" id="colors" role="radiogroup" aria-label="Zettelfarbe"></div>
-  <div class="chips" id="fasteners" role="radiogroup" aria-label="Befestigung"></div>
-  <div class="chips fonts" id="fonts" role="radiogroup" aria-label="Schriftart"></div>
-  <div class="chips" id="lists" role="radiogroup" aria-label="Liste"></div>
+  <!-- Drei Auswahlräder: Befestigung · Schrift · Liste. Aktives Element in der Mitte, Nachbarn gedimmt. -->
+  <div class="wheels">
+    <div class="wheel-wrap"><div class="wheel" id="wheel-fastener" aria-label="Befestigung"></div></div>
+    <div class="wheel-wrap"><div class="wheel" id="wheel-font" aria-label="Schriftart"></div></div>
+    <div class="wheel-wrap"><div class="wheel" id="wheel-list" aria-label="Liste"></div></div>
+  </div>
 
   <label class="scale" for="fontscale">
     <span class="a small">A</span>
@@ -219,7 +234,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.12'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.13'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -346,25 +361,40 @@
       updatePinBadge();
     }
 
-    // ---------- UI ----------
-    const fastenersEl = $('fasteners'), fontsEl = $('fonts');
-    for (const [name, f] of Object.entries(FASTENERS)) {
-      const b = document.createElement('button');
-      b.dataset.fastener = name; b.setAttribute('role', 'radio'); b.title = f.label; b.setAttribute('aria-label', f.label);
-      // Miniatur: kleiner Zettel mit der Befestigung
-      b.innerHTML = `<svg viewBox="-14 -14 128 108"><rect x="0" y="0" width="100" height="80" fill="#fff59b"/>${fastenerShapes(name, 100, 80, 12)}</svg>`;
-      b.addEventListener('click', () => { state.fastener = name; applyFastener(); persist(); });
-      fastenersEl.appendChild(b);
+    // ---------- UI: Auswahlräder ----------
+    const ITEM_H = 44;
+    // Ein Rad: native Scroll-Liste mit Einrasten; das Element in der Mitte ist die Auswahl.
+    function makeWheel(el, items, onSelect) {
+      const inner = document.createElement('div'); inner.className = 'wheel-inner';
+      for (const it of items) {
+        const d = document.createElement('div'); d.className = 'item' + (it.cls ? ' ' + it.cls : ''); d.dataset.value = it.value;
+        d.innerHTML = it.html; if (it.style) d.style.cssText += it.style;
+        d.addEventListener('click', () => scrollToValue(it.value, true));
+        inner.appendChild(d);
+      }
+      el.appendChild(inner);
+      let timer = null, current = null;
+      const indexAt = () => Math.max(0, Math.min(items.length - 1, Math.round(el.scrollTop / ITEM_H)));
+      const highlight = () => { const i = indexAt(); [...inner.children].forEach((d, k) => d.classList.toggle('active', k === i)); };
+      const commit = () => { const v = items[indexAt()].value; highlight(); if (v !== current) { current = v; onSelect(v); } };
+      el.addEventListener('scroll', () => { highlight(); clearTimeout(timer); timer = setTimeout(commit, 120); }, { passive: true });
+      if ('onscrollend' in el) el.addEventListener('scrollend', () => { clearTimeout(timer); commit(); });
+      function scrollToValue(v, smooth) {
+        const i = items.findIndex(it => it.value === v); if (i < 0) return;
+        el.scrollTo({ top: i * ITEM_H, behavior: smooth ? 'smooth' : 'auto' }); highlight();
+      }
+      return { set(v) { const i = items.findIndex(it => it.value === v); if (i < 0) return; current = v; el.scrollTop = i * ITEM_H; highlight(); } };
     }
-    for (const [name, f] of Object.entries(FONTS)) {
-      const b = document.createElement('button');
-      b.dataset.font = name; b.setAttribute('role', 'radio'); b.textContent = f.label;
-      b.style.fontFamily = `"${f.family}", ${FALLBACK}`; b.style.fontWeight = f.weight;
-      b.addEventListener('click', () => { state.font = name; applyFont(); persist(); });
-      fontsEl.appendChild(b);
-    }
+    const FASTENER_SHORT = { tape: 'Streifen', tape2: 'Ecken', thumbtack: 'Zwecke', pin: 'Nadel', pin2: '2 Nadeln', clip: 'Klammer', magnet: 'Magnet' };
+    const wheelFastener = makeWheel($('wheel-fastener'), Object.keys(FASTENERS).map(name => ({
+      value: name,
+      html: `<svg viewBox="-14 -14 128 108"><rect x="0" y="0" width="100" height="80" fill="#fff59b"/>${fastenerShapes(name, 100, 80, 12)}</svg><span>${FASTENER_SHORT[name]}</span>`,
+    })), v => { state.fastener = v; applyFastener(); persist(); });
+    const wheelFont = makeWheel($('wheel-font'), Object.entries(FONTS).map(([name, f]) => ({
+      value: name, html: f.label, cls: 'font', style: `font-family:"${f.family}",${FALLBACK};font-weight:${f.weight}`,
+    })), v => { state.font = v; applyFont(); persist(); });
     function applyFastener() {
-      for (const b of fastenersEl.children) b.setAttribute('aria-pressed', String(b.dataset.fastener === state.fastener));
+      wheelFastener.set(state.fastener);
       syncPreview(); updatePinBadge();
     }
     // Schrift ausdrücklich laden und danach neu rechnen – sonst misst die Automatik mit der Ersatzschrift
@@ -378,7 +408,7 @@
         .catch(() => {});
     }
     function applyFont() {
-      for (const b of fontsEl.children) b.setAttribute('aria-pressed', String(b.dataset.font === state.font));
+      wheelFont.set(state.font);
       syncPreview(); updatePinBadge(); ensureFont();
     }
     for (const [name, c] of Object.entries(COLORS)) {
@@ -389,8 +419,8 @@
     }
     textEl.value = state.text;
     applyColor();
-    for (const b of fastenersEl.children) b.setAttribute('aria-pressed', String(b.dataset.fastener === state.fastener));
-    for (const b of fontsEl.children) b.setAttribute('aria-pressed', String(b.dataset.font === state.font));
+    wheelFastener.set(state.fastener);
+    wheelFont.set(state.font);
     updatePinBadge();
 
     let t = null;
@@ -424,23 +454,15 @@
         return LISTS[mode].mark(n++) + bare;           // markierte, noch leere Zeile behält ihre Markierung
       }).join('\n');
     }
-    const listsEl = $('lists');
-    for (const [name, l] of Object.entries(LISTS)) {
-      const b = document.createElement('button');
-      b.dataset.list = name; b.setAttribute('role', 'radio'); b.textContent = l.label;
-      b.addEventListener('click', () => {
-        state.list = name;
-        let v = relist(textEl.value, name);
-        if (name !== 'none' && v.trim() === '') v = LISTS[name].mark(0);  // leerer Zettel: erste Markierung setzen
-        textEl.value = v;
-        applyList(); onTextChanged(); flush(); textEl.focus();
-        textEl.selectionStart = textEl.selectionEnd = textEl.value.length;
-      });
-      listsEl.appendChild(b);
-    }
-    function applyList() {
-      for (const b of listsEl.children) b.setAttribute('aria-pressed', String(b.dataset.list === state.list));
-    }
+    const wheelList = makeWheel($('wheel-list'), Object.entries(LISTS).map(([name, l]) => ({ value: name, html: l.label })), name => {
+      state.list = name;
+      let v = relist(textEl.value, name);
+      if (name !== 'none' && v.trim() === '') v = LISTS[name].mark(0);  // leerer Zettel: erste Markierung setzen
+      textEl.value = v;
+      onTextChanged(); flush();
+      textEl.selectionStart = textEl.selectionEnd = textEl.value.length;
+    });
+    function applyList() { wheelList.set(state.list); }
     applyList();
     textEl.addEventListener('keydown', e => {
       if (e.key !== 'Enter' || state.list === 'none' || e.isComposing) return;
