@@ -106,7 +106,7 @@
     .toast[hidden] { display: none; }
     .toast .check { width: 96px; height: 96px; border-radius: 50%; background: #34c759; color: #fff; font-size: 60px; line-height: 96px; font-weight: 700; }
     .toast h2 { margin: 6px 0 0; font-size: 34px; }
-    .toast p { margin: 0; color: var(--muted); font-size: 17px; }
+    .toast p { margin: 0; color: var(--muted); font-size: 17px; white-space: pre-line; line-height: 1.5; }
 
     /* --- Vorschau, wenn Teilen nicht geht --- */
     .overlay {
@@ -170,7 +170,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-04.8'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.1'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -406,8 +406,8 @@
           location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(state.shortcut) + '&input=clipboard';
         } else {
           // Kurzbefehl nicht per URL starten: vom Icon/Kontrollzentrum gestartet öffnet er die Kurzbefehle-App nicht.
-          statusEl.textContent = 'Bild liegt in der Zwischenablage. Jetzt Kontrollzentrum oder Icon „' + state.shortcut + '“ (oder Rückseite doppelt tippen).';
-          showToast('Angeheftet', 'Jetzt Kontrollzentrum → „' + state.shortcut + '“');
+          statusEl.textContent = 'Bild liegt bereit. Jetzt den Kurzbefehl „' + state.shortcut + '“ starten: Icon neben der App, Kontrollzentrum oder Rückseite doppelt tippen.';
+          showToast('Angeheftet', 'Jetzt „' + state.shortcut + '“ starten:\nIcon neben der App · Kontrollzentrum · Rückseite doppelt tippen');
         }
       }, async () => {
         statusEl.textContent = 'Zwischenablage verweigert – Teilen stattdessen.';
