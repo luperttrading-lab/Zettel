@@ -44,7 +44,7 @@ Keine Web-App, kein Fensterwechsel.
    Es muss ein PNG mit gelbem Zettel erscheinen.
 
 Parameter: `text` (Pflicht), `color` (`gelb`, `rosa`, `gruen`, `blau`), `device` (`iphone` = Hochformat
-1179×2556, sonst iPad-Quadrat 2360×2360), `font` (`caveat`, `patrick`, `kalam`, `marker`), `fastener`
+1179×2556, sonst iPad-Quadrat 2360×2360), `font` (`caveat`, `patrick`, `kalam`, `marker`, `indie`, `shadows`, `gloria`), `fastener`
 (`tape`, `tape2`, `thumbtack`, `pushpin`, `pin`, `pin2`, `clip`, `magnet`; deutsch auch `klebestreifen`, `ecken`,
 `reisszwecke`, `pinnadel`, `nadel`, `nadeln`, `klammer`), `fcolor` (Farbe der Befestigung: `rot`, `blau`, `gruen`,
 `gelb`, `silber`, `schwarz`; Standard: Streifen und Klammer silber, Nadeln rot), `fpattern` (Muster: `streifen`,

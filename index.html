@@ -19,6 +19,9 @@
     @font-face { font-family: 'Patrick Hand';     font-weight: 400; font-display: swap; src: url(fonts/PatrickHand-400.ttf) format('truetype'); }
     @font-face { font-family: 'Kalam';            font-weight: 400; font-display: swap; src: url(fonts/Kalam-400.ttf) format('truetype'); }
     @font-face { font-family: 'Permanent Marker'; font-weight: 400; font-display: swap; src: url(fonts/PermanentMarker-400.ttf) format('truetype'); }
+    @font-face { font-family: 'Indie Flower';      font-weight: 400; font-display: swap; src: url(fonts/IndieFlower-400.ttf) format('truetype'); }
+    @font-face { font-family: 'Shadows Into Light'; font-weight: 400; font-display: swap; src: url(fonts/ShadowsIntoLight-400.ttf) format('truetype'); }
+    @font-face { font-family: 'Gloria Hallelujah'; font-weight: 400; font-display: swap; src: url(fonts/GloriaHallelujah-400.ttf) format('truetype'); }
     :root {
       --bg: #141416;
       --fg: #f2f2f4;
@@ -293,7 +296,7 @@
   <script src="lib/fasteners.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.22.11'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.23.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -308,6 +311,9 @@
       patrick: { label: 'Patrick', family: 'Patrick Hand',     weight: 400, lh: 1.20 },
       kalam:   { label: 'Kalam',   family: 'Kalam',            weight: 400, lh: 1.30 },
       marker:  { label: 'Marker',  family: 'Permanent Marker', weight: 400, lh: 1.25 },
+      indie:   { label: 'Indie',   family: 'Indie Flower',      weight: 400, lh: 1.25 },
+      shadows: { label: 'Shadows', family: 'Shadows Into Light', weight: 400, lh: 1.30 },
+      gloria:  { label: 'Gloria',  family: 'Gloria Hallelujah', weight: 400, lh: 1.35 },
     };
     const FALLBACK = '"Segoe Print", "Bradley Hand", "Comic Sans MS", cursive';
 
