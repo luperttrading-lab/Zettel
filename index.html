@@ -104,7 +104,7 @@
     .scale .a { font-family: var(--note-font); color: var(--fg); line-height: 1; }
     .scale .a.small { font-size: 18px; }
     .scale .a.big { font-size: 30px; }
-    .scale input { flex: 1; accent-color: var(--fg); height: 32px; }
+    .scale input { flex: 1; accent-color: var(--fg); height: 44px; touch-action: none; /* Wischen bewegt den Regler, nicht die Seite */ }
     .scale output { font-size: 13px; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
 
     /* --- Aktionen --- */
@@ -219,7 +219,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.11'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.12'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -451,11 +451,15 @@
       const line = v.slice(lineStart, lineEnd);
       const lineIdx = v.slice(0, lineStart).split('\n').length - 1;
       let next, caretLine, caretInLine;
-      if (line.replace(PREFIX_RE, '').trim() === '') {
+      const hasMark = PREFIX_RE.test(line);
+      if (hasMark && line.replace(PREFIX_RE, '').trim() === '') {
         // Enter auf leerem Listenpunkt: Markierung entfernen, Liste an dieser Stelle beenden
         next = v.slice(0, lineStart) + v.slice(lineEnd);
         caretLine = lineIdx; caretInLine = 0;
-        if (lineStart === next.length) { next += '\n'; }
+      } else if (!hasMark && line.trim() === '') {
+        // Leere Zeile ohne Markierung: normaler Zeilenumbruch, keine neue Markierung
+        next = v.slice(0, pos) + '\n' + v.slice(end);
+        caretLine = lineIdx + 1; caretInLine = 0;
       } else {
         next = v.slice(0, pos) + '\n' + LISTS[state.list].mark(0) + v.slice(end);
         caretLine = lineIdx + 1; caretInLine = -1; // hinter die Markierung
@@ -544,11 +548,16 @@
 
     // Gemeinsame Rechnung für Hintergrundbild UND Vorschau in der App:
     // Schrift so groß wie möglich, der Zettel darf die Maximalhöhe des Layouts nicht sprengen.
-    function fitNote(w, h, layoutName, text) {
+    // slack: Sicherheitsfaktor für die Umbruchbreite. Das Textfeld setzt dieselbe Schrift auf iOS minimal
+    // breiter als die Zeichenfläche misst; syncPreview prüft den Umbruch im echten Textfeld nach und
+    // senkt den Faktor, bis Vorschau und Bild dieselben Zeilen haben.
+    let widthSlack = 1;
+    function fitNote(w, h, layoutName, text, slack = widthSlack) {
       const layout = LAYOUTS[layoutName](w, h);
       const noteW = Math.round(layout.noteW);
       const pad = Math.round(noteW * 0.08);
       const textW = noteW - 2 * pad;
+      const wrapW = textW * slack;
       const font = noteFont();
       const family = font.family, weight = font.weight, LH = font.lh;
       const paras = text.split('\n');
@@ -556,8 +565,8 @@
       const longestWord = paras.flatMap(p => p.split(/\s+/)).reduce((a, b) => (measureCtx.measureText(b).width > measureCtx.measureText(a).width ? b : a), '');
       const minFs = noteW / 28;           // absolute Untergrenze
       const paraFloor = noteW / 16;       // bis hierhin darf die Schrift schrumpfen, damit Absätze einzeilig bleiben
-      const measure = f => { measureCtx.font = `${weight} ${f}px ${family}`; return wrap(measureCtx, text, textW); };
-      const wordFits = f => { measureCtx.font = `${weight} ${f}px ${family}`; return measureCtx.measureText(longestWord).width <= textW; };
+      const measure = f => { measureCtx.font = `${weight} ${f}px ${family}`; return wrap(measureCtx, text, wrapW); };
+      const wordFits = f => { measureCtx.font = `${weight} ${f}px ${family}`; return measureCtx.measureText(longestWord).width <= wrapW; };
       const inset = Math.round(pad * (FASTENER_INSET[state.fastener] || 0));
       const fitsHeight = (f, ls) => ls.length * f * LH + 2 * pad + inset <= layout.maxNoteH;
 
@@ -582,9 +591,31 @@
 
     // Vorschau in der App: der Zettel wird proportional zum Hintergrundbild skaliert,
     // Schriftgröße und Umbrüche sind dann identisch mit dem, was aufs Display kommt.
+    // Spiegel des Textfelds (gleiche Schrift, Breite, Umbruchregeln): liefert die echte Zeilenzahl des Browsers
+    const mirrorEl = document.createElement('div');
+    mirrorEl.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;white-space:pre-wrap;overflow-wrap:break-word;padding:0;margin:0;border:0';
+    document.body.appendChild(mirrorEl);
+    function domLines(f, scale, text) {
+      mirrorEl.style.width = (f.textW * scale) + 'px';
+      mirrorEl.style.fontFamily = f.family; mirrorEl.style.fontWeight = f.weight;
+      mirrorEl.style.fontSize = (f.fs * scale) + 'px'; mirrorEl.style.lineHeight = String(f.LH);
+      mirrorEl.textContent = text;
+      return Math.round(mirrorEl.offsetHeight / (f.fs * scale * f.LH));
+    }
+
     function syncPreview() {
       const t = targetCanvas();
-      const f = fitNote(t.w, t.h, t.layout, noteText() || 'Was soll auf den Zettel?');
+      const text = noteText() || 'Was soll auf den Zettel?';
+      const scale0 = noteEl.clientWidth / LAYOUTS[t.layout](t.w, t.h).noteW;
+      // Umbruch im echten Textfeld nachprüfen: Sicherheitsfaktor jedes Mal neu bestimmen, bis der Browser
+      // nicht mehr Zeilen braucht als gemessen. Der Faktor gilt danach auch fürs Bild.
+      let f = null;
+      widthSlack = 1;
+      for (const s of [1, 0.98, 0.96, 0.94, 0.92, 0.9]) {
+        widthSlack = s;
+        f = fitNote(t.w, t.h, t.layout, text, s);
+        if (domLines(f, scale0, text) <= f.lines.length) break;
+      }
       const scale = noteEl.clientWidth / f.noteW;
       textEl.style.fontFamily = f.family; textEl.style.fontWeight = f.weight;
       textEl.style.fontSize = (f.fs * scale) + 'px';
