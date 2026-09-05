@@ -137,7 +137,7 @@
     .fcolors .chip.icon svg { width: 52px; height: 36px; overflow: visible; display: block; }
     .fcolors .chip[aria-pressed="true"] { border-color: var(--fg); }
     .fcolors .chip.pen { width: 30px; height: 30px; }
-    body.picking-paper .colors button[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--fg); }
+    body.picking-paper .colors button.edit { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--fg); }
     /* Solange die Leiste offen ist: Befestigung pulsiert mit dunklem Rand und hellem Schein, der Rest tritt zurück */
     @keyframes pickpulse {
       from { filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 4px #fff); }
@@ -155,6 +155,9 @@
       box-shadow: 0 2px 6px rgba(0,0,0,.5);
     }
     .colors button[aria-pressed="true"] { border-color: var(--fg); }
+    /* Fünfter Kreis: öffnet die Karte Papier / Linien / Stift */
+    .colors button.edit { background: #2d2d33; border-color: #55555e; display: flex; align-items: center; justify-content: center; padding: 0; }
+    .colors button.edit svg { width: 18px; height: 18px; display: block; }
 
     /* --- Schriftgröße --- */
     .scale { width: min(86vw, 380px); display: flex; align-items: center; gap: 12px; color: var(--muted); }
@@ -299,7 +302,7 @@
   <script src="lib/motifs.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.27.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.28.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -524,7 +527,7 @@
       const c = COLORS[state.color];
       noteEl.style.setProperty('--paper', c.paper);
       noteEl.style.setProperty('--ink', inkColor());
-      for (const b of colorsEl.children) b.setAttribute('aria-pressed', String(b.dataset.color === state.color));
+      for (const b of colorsEl.children) if (b.dataset.color) b.setAttribute('aria-pressed', String(b.dataset.color === state.color));
       updatePinBadge();
     }
 
@@ -649,7 +652,7 @@
     $('fastener-preview').addEventListener('click', e => { e.preventDefault(); toggleFcolors(); });
     document.addEventListener('pointerdown', e => {
       if (fcolorsEl.hidden) return;
-      if (e.target.closest && e.target.closest('#fcolors, #fastener-preview, #strip-fastener .item.active, #colors button[aria-pressed="true"]')) return;
+      if (e.target.closest && e.target.closest('#fcolors, #fastener-preview, #strip-fastener .item.active, #colors button[aria-pressed="true"], #colors button.edit')) return;
       toggleFcolors(false);
     }, true);
     const stripFont = makeStrip($('strip-font'), Object.entries(FONTS).map(([name, f]) => ({
@@ -679,6 +682,13 @@
       const b = document.createElement('button');
       b.dataset.color = name; b.style.background = c.paper; b.setAttribute('role', 'radio'); b.title = name;
       b.addEventListener('click', () => { if (state.color === name) { openCard('paper'); return; } state.color = name; applyColor(); persist(); });
+      colorsEl.appendChild(b);
+    }
+    {  // Fünfter Kreis: Papier, Linien, Stift (der erneute Tipp auf die gewählte Farbe bleibt als Abkürzung)
+      const b = document.createElement('button');
+      b.className = 'edit'; b.type = 'button'; b.title = 'Papier, Linien, Stift'; b.setAttribute('aria-label', 'Papier, Linien, Stift');
+      b.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M3 5h12M3 9h12M3 13h8"/></svg>';
+      b.addEventListener('click', () => { if (!fcolorsEl.hidden && cardMode === 'paper') toggleFcolors(false); else openCard('paper'); });
       colorsEl.appendChild(b);
     }
     textEl.value = state.text;
