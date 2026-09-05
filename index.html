@@ -293,7 +293,7 @@
   <script src="lib/fasteners.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.22.9'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.22.10'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -595,7 +595,7 @@
     function placePalette() {
       const strip = $('strip-fastener').parentElement, top = document.querySelector('.top');
       const r = strip.getBoundingClientRect(), t = top.getBoundingClientRect();
-      const y = r.top - t.top - fcolorsEl.offsetHeight - 24;
+      const y = r.top - t.top - fcolorsEl.offsetHeight - 8;   // Papierfarben darunter bleiben verdeckt, Schieber frei
       fcolorsEl.style.top = Math.max(t.height * 0.35, y) + 'px';   // darf über den Zettel ragen, nur nicht über dessen obere Hälfte
     }
     $('fastener-preview').addEventListener('click', e => { e.preventDefault(); toggleFcolors(); });
