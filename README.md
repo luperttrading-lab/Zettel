@@ -49,7 +49,7 @@ Parameter: `text` (Pflicht), `color` (`gelb`, `rosa`, `gruen`, `blau`), `device`
 `reisszwecke`, `pinnadel`, `nadel`, `nadeln`, `klammer`), `fcolor` (Farbe der Befestigung: `rot`, `blau`, `gruen`,
 `gelb`, `silber`, `schwarz`; Standard: Streifen und Klammer silber, Nadeln rot), `fpattern` (Muster: `streifen`,
 `punkte`, `karo`; Klammer nur Streifen/Punkte), `fdesign` (Motiv auf dem Magneten: `smiley`, `herz`, `stern`, `pfote`,
-`blume`, `sonne`; Muster und Motiv schließen sich aus, bei beiden gilt das Motiv), `paper` (`glatt`, `liniert`, `kariert`),
+`blume`, `sonne`, eigene Bild-Motive aus `lib/motifs.js` wie `zwinker`; Muster und Motiv schließen sich aus, bei beiden gilt das Motiv), `paper` (`glatt`, `liniert`, `kariert`),
 `pen` (Stiftfarbe: `schwarz`, `blau`, `rot`, `gruen`), `scale` (Schriftgröße 60–140 %), `list` (`num`, `dot`, `square`, `dash`,
 `check`: jede Zeile bekommt eine Nummer bzw. ein Zeichen), optional `w`/`h` in Pixeln. Bei
 quadratischem Bild wird das Tablet-Layout gewählt, sonst das Hochformat-Layout.
@@ -84,5 +84,7 @@ Hinweis: Der Text wird bei jedem Aufruf als URL an Vercel geschickt und kann dor
 | `icon-*.png` | App-Icons |
 | `api/zettel.js` | Vercel-Funktion: Zettel als PNG per URL |
 | `lib/render.js` | Serverseitiges Rendering (satori + resvg), gleiche Layout-Logik wie die Web-App |
+| `lib/fasteners.js` | Befestigungen: Zeichnung, Farben, Muster, Motive – gemeinsame Datei für App und Server |
+| `lib/motifs.js` | Eigene Magnet-Motive als Bild (512 px, Data-URI), erzeugt aus quadratischen Vorlagen |
 | `fonts/Caveat-500.ttf` | Handschrift für den Server (SIL Open Font License, siehe `fonts/OFL-Caveat.txt`) |
 | `vercel.json` | Vercel-Konfiguration (Schrift wird mitgepackt) |
