@@ -45,8 +45,8 @@ Keine Web-App, kein Fensterwechsel.
 
 Parameter: `text` (Pflicht), `color` (`gelb`, `rosa`, `gruen`, `blau`), `device` (`iphone` = Hochformat
 1179×2556, sonst iPad-Quadrat 2360×2360), `font` (`caveat`, `patrick`, `kalam`, `marker`, `indie`, `shadows`, `gloria`), `fastener`
-(`tape`, `tape2`, `thumbtack`, `pushpin`, `pin`, `pin2`, `clip`, `magnet`; deutsch auch `klebestreifen`, `ecken`,
-`reisszwecke`, `pinnadel`, `nadel`, `nadeln`, `klammer`), `fcolor` (Farbe der Befestigung: `rot`, `blau`, `gruen`,
+(`tape`, `tape2`, `thumbtack`, `pushpin`, `pin`, `pin2`, `clip`, `magnet`, `photo`; deutsch auch `klebestreifen`, `ecken`,
+`reisszwecke`, `pinnadel`, `nadel`, `nadeln`, `klammer`, `bildmagnet`), `fcolor` (Farbe der Befestigung: `rot`, `blau`, `gruen`,
 `gelb`, `silber`, `schwarz`; Standard: Streifen und Klammer silber, Nadeln rot), `fpattern` (Muster: `streifen`,
 `punkte`, `karo`; Klammer nur Streifen/Punkte), `fdesign` (Motiv auf dem Magneten: `smiley`, `herz`, `stern`, `pfote`,
 `blume`, `sonne`, eigene Bild-Motive aus `lib/motifs.js` wie `zwinker`; Muster und Motiv schließen sich aus, bei beiden gilt das Motiv), `paper` (`glatt`, `liniert`, `kariert`),
@@ -85,6 +85,8 @@ Hinweis: Der Text wird bei jedem Aufruf als URL an Vercel geschickt und kann dor
 | `api/zettel.js` | Vercel-Funktion: Zettel als PNG per URL |
 | `lib/render.js` | Serverseitiges Rendering (satori + resvg), gleiche Layout-Logik wie die Web-App |
 | `lib/fasteners.js` | Befestigungen: Zeichnung, Farben, Muster, Motive – gemeinsame Datei für App und Server |
-| `lib/motifs.js` | Eigene Magnet-Motive als Bild (512 px, Data-URI), erzeugt aus quadratischen Vorlagen |
+| `lib/motifs.js` | Eigene Magnet-Motive als Bild (Data-URI): runde Motive (JPEG) und Bildmagnete (WebP, freigestellt) |
+| `lib/motifs/*.png` | Bildmagnete als PNG für den Server (resvg kann kein WebP) |
+| `lib/prep_motif.mjs`, `lib/prep_photo.mjs` | Vorbereitung neuer Motive bzw. Bildmagnete aus Vorlagen |
 | `fonts/Caveat-500.ttf` | Handschrift für den Server (SIL Open Font License, siehe `fonts/OFL-Caveat.txt`) |
 | `vercel.json` | Vercel-Konfiguration (Schrift wird mitgepackt) |

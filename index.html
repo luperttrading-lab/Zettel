@@ -299,7 +299,7 @@
   <script src="lib/motifs.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.25.3'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.26.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -325,7 +325,7 @@
     const FALLBACK = '"Segoe Print", "Bradley Hand", "Comic Sans MS", cursive';
 
     // Befestigungen (Zeichnung, Farben, Muster, Motive) kommen aus lib/fasteners.js – dieselbe Datei nutzt der Server.
-    const { FASTENERS, FASTENER_INSET, FCOLORS, DECOR_LABEL, decorsFor, normalizeLook, lookKey, fastenerIcon, fastenerSvg } = ZettelFasteners;
+    const { FASTENERS, FASTENER_INSET, FCOLORS, DECOR_LABEL, decorsFor, normalizeLook, lookKey, fastenerIcon, fastenerSvg, hasColor } = ZettelFasteners;
     if (window.ZettelMotifs) ZettelFasteners.setMotifs(ZettelMotifs);   // eigene Magnet-Motive
 
     const $ = id => document.getElementById(id);
@@ -614,13 +614,15 @@
         b.setAttribute('role', 'radio'); b.setAttribute('aria-pressed', String(pressed)); b.title = title; b.setAttribute('aria-label', title);
         b.addEventListener('click', onPick); parent.appendChild(b); return b;
       };
-      // Zeile 1: Farben (passen ohne Scrollen)
-      const r1 = row('Farbe');
-      for (const [key, c] of Object.entries(FCOLORS)) chip(r1, 'color', '', look.color === key, c.label, () => setFastenerLook({ color: key })).style.background = c.main;
+      // Zeile 1: Farben (passen ohne Scrollen) – entfällt beim Bildmagneten
+      if (hasColor(kind)) {
+        const r1 = row('Farbe');
+        for (const [key, c] of Object.entries(FCOLORS)) chip(r1, 'color', '', look.color === key, c.label, () => setFastenerLook({ color: key })).style.background = c.main;
+      }
       // Zeile 2: Muster bzw. Motiv – genau eine Wahl, wischbar
       const decors = decorsFor(kind);
-      if (decors.length > 1) {
-        const r2 = row(kind === 'magnet' ? 'Motiv' : 'Muster');
+      if (decors.length > (kind === 'photo' ? 0 : 1)) {
+        const r2 = row(kind === 'magnet' ? 'Motiv' : kind === 'photo' ? 'Bild' : 'Muster');
         for (const key of decors) chip(r2, 'icon', fastenerIcon(kind, { ...look, decor: key }), look.decor === key, DECOR_LABEL[key], () => setFastenerLook({ decor: key }));
         const active = r2.querySelector('.chip[aria-pressed="true"]');
         if (active && active.offsetLeft + active.offsetWidth > r2.clientWidth) r2.scrollLeft = active.offsetLeft - 70;
