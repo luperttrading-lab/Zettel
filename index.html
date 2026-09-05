@@ -34,16 +34,16 @@
       color: var(--fg);
       font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       padding: max(env(safe-area-inset-top), 20px) 20px max(env(safe-area-inset-bottom), 20px);
-      display: flex; flex-direction: column; align-items: center; gap: 22px;
+      display: flex; flex-direction: column; align-items: center; gap: 14px;
       -webkit-tap-highlight-color: transparent;
     }
     /* Kopf + Zettel bleiben oben stehen, die Einstellungen scrollen darunter durch */
     .top {
       position: sticky; top: 0; z-index: 5; width: 100%;
-      display: flex; flex-direction: column; align-items: center; gap: 22px;
+      display: flex; flex-direction: column; align-items: center; gap: 14px;
       background: var(--bg);
       margin-top: calc(-1 * max(env(safe-area-inset-top), 20px));
-      padding: max(env(safe-area-inset-top), 20px) 0 18px;
+      padding: max(env(safe-area-inset-top), 16px) 0 14px;
     }
     header { width: 100%; max-width: 420px; display: flex; justify-content: space-between; align-items: baseline; }
     header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .02em; }
@@ -59,15 +59,14 @@
 
     /* --- der Zettel --- */
     .note {
-      width: min(86vw, 380px);
-      min-height: 60vw; /* wird per Skript auf die Form des Hintergrundbilds gesetzt */
+      width: min(78vw, 340px);
+      min-height: 60vw; /* wird per Skript auf die Form des Hintergrundbilds gesetzt (feste Zettelgröße) */
       background: var(--paper);
       color: var(--ink);
       transform: rotate(-1.5deg);
-      box-shadow: 0 18px 40px rgba(0,0,0,.55), 0 2px 4px rgba(0,0,0,.35);
+      box-shadow: 0 14px 32px rgba(0,0,0,.55), 0 2px 4px rgba(0,0,0,.35);
       position: relative;
       padding: 8%; /* gleiche Proportion wie im Bild (pad = 8 % der Zettelbreite) */
-      transition: height .15s ease;
     }
     .note .fastener { position: absolute; pointer-events: none; z-index: 2; }
     .note .fastener svg { display: block; width: 100%; height: 100%; overflow: visible; }
@@ -79,29 +78,36 @@
     }
     .note textarea::placeholder { color: rgba(42,42,46,.35); }
 
-    /* --- Befestigung & Schrift --- */
-    .wheels { width: min(86vw, 380px); display: flex; gap: 8px; }
-    .wheel-wrap { flex: 1; min-width: 0; position: relative; background: #1e1e21; border-radius: 14px; }
-    .wheel-wrap::before { /* Markierung der Mitte */
-      content: ""; position: absolute; left: 6px; right: 6px; top: 44px; height: 44px; pointer-events: none;
-      border-top: 1px solid #3f3f46; border-bottom: 1px solid #3f3f46;
+    /* --- Auswahl-Schieber: Befestigung · Schrift · Liste ---
+       Eine Reihe pro Einstellung, nach links/rechts wischen; das Element in der Mitte ist die Auswahl,
+       die Nachbarn sind gedimmt sichtbar. --iw = Breite eines Elements. */
+    .strips { width: min(86vw, 380px); display: flex; flex-direction: column; gap: 8px; }
+    .strip-wrap { position: relative; background: #1e1e21; border-radius: 14px; --iw: 96px; }
+    .strip-wrap::before { /* Markierung der Mitte */
+      content: ""; position: absolute; top: 4px; bottom: 4px; left: 50%; width: var(--iw); margin-left: calc(var(--iw) / -2);
+      border-radius: 11px; background: #2d2d33; pointer-events: none;
     }
-    .wheel {
-      height: 132px; overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior: contain; touch-action: pan-y;
-      scrollbar-width: none; border-radius: 14px;
-      -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 30%, #000 70%, transparent 100%);
-              mask-image: linear-gradient(to bottom, transparent 0, #000 30%, #000 70%, transparent 100%);
+    .strip {
+      overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; touch-action: pan-x;
+      scrollbar-width: none; border-radius: 14px; display: flex; position: relative;
+      -webkit-mask-image: linear-gradient(to right, transparent 0, #000 18%, #000 82%, transparent 100%);
+              mask-image: linear-gradient(to right, transparent 0, #000 18%, #000 82%, transparent 100%);
     }
-    .wheel::-webkit-scrollbar { display: none; }
-    .wheel-inner { padding: 44px 0; }
-    .wheel .item {
-      height: 44px; scroll-snap-align: center; display: flex; align-items: center; justify-content: center; gap: 6px;
-      color: var(--muted); opacity: .55; font: 500 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      cursor: pointer; white-space: nowrap; padding: 0 6px;
+    .strip::-webkit-scrollbar { display: none; }
+    .strip-inner { display: flex; flex: 0 0 auto; padding: 0 calc(50% - var(--iw) / 2); }
+    .strip .item {
+      flex: 0 0 var(--iw); width: var(--iw); scroll-snap-align: center; scroll-snap-stop: always;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+      color: var(--muted); opacity: .5; transform: scale(.86); transition: opacity .15s, transform .15s;
+      font: 500 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      cursor: pointer; white-space: nowrap;
     }
-    .wheel .item.active { color: var(--fg); opacity: 1; font-weight: 600; }
-    .wheel .item svg { width: 26px; height: 22px; overflow: visible; flex: 0 0 auto; }
-    .wheel .item.font { font-size: 19px; }
+    .strip .item.active { color: var(--fg); opacity: 1; transform: none; }
+    .strip .item.active span { font-weight: 600; }
+    .strip .item svg { width: 60px; height: 40px; overflow: visible; display: block; }
+    .strip-fastener { --iw: 92px; } .strip-fastener .item { height: 62px; }
+    .strip-font { --iw: 112px; } .strip-font .item { height: 46px; font-size: 24px; }
+    .strip-list { --iw: 104px; } .strip-list .item { height: 40px; font-size: 15px; }
 
     /* --- Farben --- */
     .colors { display: flex; gap: 14px; }
@@ -120,7 +126,8 @@
     .scale output { font-size: 13px; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
 
     /* --- Aktionen --- */
-    .actions { display: flex; flex-direction: column; gap: 10px; width: min(86vw, 380px); }
+    .actions { display: flex; flex-direction: column; gap: 4px; width: min(86vw, 380px); }
+    .actions .row { display: flex; gap: 10px; }
     .btn {
       appearance: none; border: 0; border-radius: 14px; padding: 16px 20px; font-size: 17px; font-weight: 600;
       cursor: pointer; width: 100%;
@@ -181,11 +188,11 @@
   </div>
 
   <div class="colors" id="colors" role="radiogroup" aria-label="Zettelfarbe"></div>
-  <!-- Drei Auswahlräder: Befestigung · Schrift · Liste. Aktives Element in der Mitte, Nachbarn gedimmt. -->
-  <div class="wheels">
-    <div class="wheel-wrap"><div class="wheel" id="wheel-fastener" aria-label="Befestigung"></div></div>
-    <div class="wheel-wrap"><div class="wheel" id="wheel-font" aria-label="Schriftart"></div></div>
-    <div class="wheel-wrap"><div class="wheel" id="wheel-list" aria-label="Liste"></div></div>
+  <!-- Drei Schieber: Befestigung · Schrift · Liste. Nach links/rechts wischen, Auswahl in der Mitte. -->
+  <div class="strips">
+    <div class="strip-wrap strip-fastener"><div class="strip" id="strip-fastener" aria-label="Befestigung"></div></div>
+    <div class="strip-wrap strip-font"><div class="strip" id="strip-font" aria-label="Schriftart"></div></div>
+    <div class="strip-wrap strip-list"><div class="strip" id="strip-list" aria-label="Liste"></div></div>
   </div>
 
   <label class="scale" for="fontscale">
@@ -197,8 +204,10 @@
 
   <div class="actions">
     <button class="btn primary" id="stick">Aufs Display kleben</button>
-    <button class="btn ghost" id="share">Stattdessen teilen / sichern</button>
-    <button class="btn ghost" id="clear">Zettel leeren</button>
+    <div class="row">
+      <button class="btn ghost" id="share">Teilen / sichern</button>
+      <button class="btn ghost" id="clear">Zettel leeren</button>
+    </div>
   </div>
   <p class="status" id="status"></p>
 
@@ -234,7 +243,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.13'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.14'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -263,23 +272,42 @@
       clip:      { label: 'Büroklammer' },
       magnet:    { label: 'Magnet' },
     };
-    function fastenerShapes(kind, W, H, p) {
-      const tape = (cx, cy, w, h, deg) => `<g transform="rotate(${deg} ${cx} ${cy})"><rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" fill="#fff" fill-opacity=".55"/><rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h * 0.12}" fill="#fff" fill-opacity=".25"/></g>`;
-      const thumbtack = (cx, cy, s, deg) => `<g transform="translate(${cx} ${cy}) rotate(${deg}) scale(${s})">
+    // Grundformen (Einheit = Vielfaches von s, Ursprung im Kopf der Befestigung)
+    const SHAPE = {
+      tape: (cx, cy, w, h, deg) => `<g transform="rotate(${deg} ${cx} ${cy})"><rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" fill="#fff" fill-opacity=".55"/><rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h * 0.12}" fill="#fff" fill-opacity=".25"/></g>`,
+      thumbtack: (cx, cy, s, deg) => `<g transform="translate(${cx} ${cy}) rotate(${deg}) scale(${s})">
         <rect x="-0.06" y="0.55" width="0.12" height="0.7" rx="0.06" fill="#d0d0d6"/><rect x="-0.06" y="0.55" width="0.05" height="0.7" fill="#9a9aa2"/>
         <rect x="-0.24" y="0.18" width="0.48" height="0.42" rx="0.08" fill="#c8281f"/>
         <ellipse cx="0" cy="0.12" rx="0.72" ry="0.44" fill="#c8281f"/><ellipse cx="0" cy="0" rx="0.72" ry="0.44" fill="#ff3b30"/>
-        <ellipse cx="0" cy="-0.04" rx="0.6" ry="0.32" fill="#ff5147"/><ellipse cx="-0.22" cy="-0.16" rx="0.24" ry="0.12" fill="#ffa39d" fill-opacity=".75"/></g>`;
-      const pin = (cx, cy, s, deg, color, hi) => `<g transform="translate(${cx} ${cy}) rotate(${deg}) scale(${s})">
+        <ellipse cx="0" cy="-0.04" rx="0.6" ry="0.32" fill="#ff5147"/><ellipse cx="-0.22" cy="-0.16" rx="0.24" ry="0.12" fill="#ffa39d" fill-opacity=".75"/></g>`,
+      pin: (cx, cy, s, deg, color, hi) => `<g transform="translate(${cx} ${cy}) rotate(${deg}) scale(${s})">
         <rect x="-0.05" y="0.3" width="0.1" height="1.5" rx="0.05" fill="#d8d8de"/><rect x="-0.05" y="0.3" width="0.04" height="1.5" fill="#9a9aa2"/>
         <circle cx="0" cy="0" r="0.5" fill="${color}"/><circle cx="-0.16" cy="-0.18" r="0.16" fill="${hi}" fill-opacity=".8"/>
-        <ellipse cx="0.1" cy="0.32" rx="0.34" ry="0.14" fill="#000" fill-opacity=".18"/></g>`;
-      const clip = (cx, cy, s, deg) => `<g transform="translate(${cx} ${cy}) rotate(${deg}) scale(${s})" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <ellipse cx="0.1" cy="0.32" rx="0.34" ry="0.14" fill="#000" fill-opacity=".18"/></g>`,
+      clip: (cx, cy, s, deg) => `<g transform="translate(${cx} ${cy}) rotate(${deg}) scale(${s})" fill="none" stroke-linecap="round" stroke-linejoin="round">
         <path d="M-0.3,1.5 V-0.9 a0.3,0.3 0 0 1 0.6,0 V1.6 a0.45,0.45 0 0 1 -0.9,0 V-0.4" stroke="#7a7a82" stroke-width="0.13"/>
-        <path d="M-0.3,1.5 V-0.9 a0.3,0.3 0 0 1 0.6,0 V1.6 a0.45,0.45 0 0 1 -0.9,0 V-0.4" stroke="#d8d8de" stroke-width="0.08"/></g>`;
-      const magnet = (cx, cy, s) => `<g transform="translate(${cx} ${cy}) scale(${s})">
+        <path d="M-0.3,1.5 V-0.9 a0.3,0.3 0 0 1 0.6,0 V1.6 a0.45,0.45 0 0 1 -0.9,0 V-0.4" stroke="#d8d8de" stroke-width="0.08"/></g>`,
+      magnet: (cx, cy, s) => `<g transform="translate(${cx} ${cy}) scale(${s})">
         <circle cx="0" cy="0.08" r="0.72" fill="#000" fill-opacity=".25"/><circle cx="0" cy="0" r="0.7" fill="#c8281f"/>
-        <circle cx="0" cy="-0.04" r="0.62" fill="#ff3b30"/><circle cx="0" cy="-0.04" r="0.3" fill="#e0342b"/><ellipse cx="-0.2" cy="-0.28" rx="0.22" ry="0.12" fill="#ffa39d" fill-opacity=".8"/></g>`;
+        <circle cx="0" cy="-0.04" r="0.62" fill="#ff3b30"/><circle cx="0" cy="-0.04" r="0.3" fill="#e0342b"/><ellipse cx="-0.2" cy="-0.28" rx="0.22" ry="0.12" fill="#ffa39d" fill-opacity=".8"/></g>`,
+    };
+    // Symbol für die Auswahl: nur die Befestigung, groß, ohne Papier (Zeichenfläche 60×40)
+    function fastenerIcon(kind) {
+      const { tape, thumbtack, pin, clip, magnet } = SHAPE;
+      let s;
+      switch (kind) {
+        case 'tape2':     s = tape(17, 20, 28, 9, -45) + tape(43, 20, 28, 9, 45); break;
+        case 'thumbtack': s = thumbtack(30, 11, 15, -10); break;
+        case 'pin':       s = pin(30, 11, 13, -28, '#ff3b30', '#ffa39d'); break;
+        case 'pin2':      s = pin(19, 11, 12, -35, '#ff3b30', '#ffa39d') + pin(41, 11, 12, 35, '#2f7cf6', '#9cc4ff'); break;
+        case 'clip':      s = clip(30, 14, 11, -8); break;
+        case 'magnet':    s = magnet(30, 20, 15); break;
+        default:          s = tape(30, 20, 46, 14, -3);
+      }
+      return `<svg viewBox="0 0 60 40" aria-hidden="true">${s}</svg>`;
+    }
+    function fastenerShapes(kind, W, H, p) {
+      const { tape, thumbtack, pin, clip, magnet } = SHAPE;
       switch (kind) {
         case 'tape2':     return tape(0, 0, W * 0.2, p * 0.55, -45) + tape(W, 0, W * 0.2, p * 0.55, 45);
         case 'thumbtack': return thumbtack(W / 2, p * 0.45, p * 1.05, -10);
@@ -361,40 +389,40 @@
       updatePinBadge();
     }
 
-    // ---------- UI: Auswahlräder ----------
-    const ITEM_H = 44;
-    // Ein Rad: native Scroll-Liste mit Einrasten; das Element in der Mitte ist die Auswahl.
-    function makeWheel(el, items, onSelect) {
-      const inner = document.createElement('div'); inner.className = 'wheel-inner';
+    // ---------- UI: Auswahl-Schieber ----------
+    // Ein Schieber: waagerechte Scroll-Reihe mit Einrasten; das Element in der Mitte ist die Auswahl.
+    // Tippen auf einen Nachbarn wählt ihn ebenfalls.
+    function makeStrip(el, items, onSelect) {
+      const inner = document.createElement('div'); inner.className = 'strip-inner';
       for (const it of items) {
-        const d = document.createElement('div'); d.className = 'item' + (it.cls ? ' ' + it.cls : ''); d.dataset.value = it.value;
+        const d = document.createElement('div'); d.className = 'item'; d.dataset.value = it.value;
         d.innerHTML = it.html; if (it.style) d.style.cssText += it.style;
         d.addEventListener('click', () => scrollToValue(it.value, true));
         inner.appendChild(d);
       }
       el.appendChild(inner);
       let timer = null, current = null;
-      const indexAt = () => Math.max(0, Math.min(items.length - 1, Math.round(el.scrollTop / ITEM_H)));
+      const itemW = () => inner.children[0].offsetWidth || 1;
+      const indexAt = () => Math.max(0, Math.min(items.length - 1, Math.round(el.scrollLeft / itemW())));
       const highlight = () => { const i = indexAt(); [...inner.children].forEach((d, k) => d.classList.toggle('active', k === i)); };
       const commit = () => { const v = items[indexAt()].value; highlight(); if (v !== current) { current = v; onSelect(v); } };
       el.addEventListener('scroll', () => { highlight(); clearTimeout(timer); timer = setTimeout(commit, 120); }, { passive: true });
       if ('onscrollend' in el) el.addEventListener('scrollend', () => { clearTimeout(timer); commit(); });
       function scrollToValue(v, smooth) {
         const i = items.findIndex(it => it.value === v); if (i < 0) return;
-        el.scrollTo({ top: i * ITEM_H, behavior: smooth ? 'smooth' : 'auto' }); highlight();
+        el.scrollTo({ left: i * itemW(), behavior: smooth ? 'smooth' : 'auto' }); highlight();
       }
-      return { set(v) { const i = items.findIndex(it => it.value === v); if (i < 0) return; current = v; el.scrollTop = i * ITEM_H; highlight(); } };
+      return { set(v) { const i = items.findIndex(it => it.value === v); if (i < 0) return; current = v; el.scrollLeft = i * itemW(); highlight(); } };
     }
     const FASTENER_SHORT = { tape: 'Streifen', tape2: 'Ecken', thumbtack: 'Zwecke', pin: 'Nadel', pin2: '2 Nadeln', clip: 'Klammer', magnet: 'Magnet' };
-    const wheelFastener = makeWheel($('wheel-fastener'), Object.keys(FASTENERS).map(name => ({
-      value: name,
-      html: `<svg viewBox="-14 -14 128 108"><rect x="0" y="0" width="100" height="80" fill="#fff59b"/>${fastenerShapes(name, 100, 80, 12)}</svg><span>${FASTENER_SHORT[name]}</span>`,
+    const stripFastener = makeStrip($('strip-fastener'), Object.keys(FASTENERS).map(name => ({
+      value: name, html: fastenerIcon(name) + `<span>${FASTENER_SHORT[name]}</span>`,
     })), v => { state.fastener = v; applyFastener(); persist(); });
-    const wheelFont = makeWheel($('wheel-font'), Object.entries(FONTS).map(([name, f]) => ({
-      value: name, html: f.label, cls: 'font', style: `font-family:"${f.family}",${FALLBACK};font-weight:${f.weight}`,
+    const stripFont = makeStrip($('strip-font'), Object.entries(FONTS).map(([name, f]) => ({
+      value: name, html: f.label, style: `font-family:"${f.family}",${FALLBACK};font-weight:${f.weight}`,
     })), v => { state.font = v; applyFont(); persist(); });
     function applyFastener() {
-      wheelFastener.set(state.fastener);
+      stripFastener.set(state.fastener);
       syncPreview(); updatePinBadge();
     }
     // Schrift ausdrücklich laden und danach neu rechnen – sonst misst die Automatik mit der Ersatzschrift
@@ -408,7 +436,7 @@
         .catch(() => {});
     }
     function applyFont() {
-      wheelFont.set(state.font);
+      stripFont.set(state.font);
       syncPreview(); updatePinBadge(); ensureFont();
     }
     for (const [name, c] of Object.entries(COLORS)) {
@@ -419,8 +447,8 @@
     }
     textEl.value = state.text;
     applyColor();
-    wheelFastener.set(state.fastener);
-    wheelFont.set(state.font);
+    stripFastener.set(state.fastener);
+    stripFont.set(state.font);
     updatePinBadge();
 
     let t = null;
@@ -435,13 +463,16 @@
     // ---------- Listen ----------
     // Die Markierung steht als echter Text in der Zeile (so bleibt die Vorschau exakt).
     // Enter setzt die nächste Markierung, Zahlen werden fortlaufend neu vergeben.
+    // Hinter der Markierung steht ein geschütztes Leerzeichen (U+00A0): Textfeld, Zeichenfläche und
+    // Server brechen dort nie um – eine Zahl bleibt also nie allein am Zeilenende stehen.
+    const NB = ' ';
     const LISTS = {
       none:   { label: 'Ohne',      mark: () => '' },
-      num:    { label: '1. 2. 3.',  mark: i => (i + 1) + '. ' },
-      dot:    { label: '• Punkte',  mark: () => '• ' },
-      square: { label: '▪ Eckig',   mark: () => '▪ ' },
-      dash:   { label: '– Striche', mark: () => '– ' },
-      check:  { label: '☐ Kästchen', mark: () => '☐ ' },
+      num:    { label: '1. 2. 3.',  mark: i => (i + 1) + '.' + NB },
+      dot:    { label: '• Punkte',  mark: () => '•' + NB },
+      square: { label: '▪ Eckig',   mark: () => '▪' + NB },
+      dash:   { label: '– Striche', mark: () => '–' + NB },
+      check:  { label: '☐ Kästchen', mark: () => '☐' + NB },
     };
     const PREFIX_RE = /^(\d+\.|•|▪|–|☐|☑)\s+/;
     function relist(text, mode) {
@@ -454,7 +485,7 @@
         return LISTS[mode].mark(n++) + bare;           // markierte, noch leere Zeile behält ihre Markierung
       }).join('\n');
     }
-    const wheelList = makeWheel($('wheel-list'), Object.entries(LISTS).map(([name, l]) => ({ value: name, html: l.label })), name => {
+    const stripList = makeStrip($('strip-list'), Object.entries(LISTS).map(([name, l]) => ({ value: name, html: l.label })), name => {
       state.list = name;
       let v = relist(textEl.value, name);
       if (name !== 'none' && v.trim() === '') v = LISTS[name].mark(0);  // leerer Zettel: erste Markierung setzen
@@ -462,8 +493,10 @@
       onTextChanged(); flush();
       textEl.selectionStart = textEl.selectionEnd = textEl.value.length;
     });
-    function applyList() { wheelList.set(state.list); }
+    function applyList() { stripList.set(state.list); }
     applyList();
+    // Ältere Zettel: Markierungen auf geschütztes Leerzeichen umstellen
+    if (state.list !== 'none') { const v = relist(state.text, state.list); if (v !== state.text) { state.text = v; textEl.value = v; persist(); } }
     textEl.addEventListener('keydown', e => {
       if (e.key !== 'Enter' || state.list === 'none' || e.isComposing) return;
       e.preventDefault();
@@ -523,13 +556,15 @@
       return { family: loadedFonts.has(state.font) ? `"${f.family}"` : FALLBACK, weight: f.weight, lh: f.lh };
     }
 
+    // Wortgrenzen: nur gewöhnliche Leerzeichen/Tabs – das geschützte Leerzeichen (Listenmarke) hält zusammen.
+    const WORD_SEP = /[ \t]+/;
     // Zeilenumbruch: Absätze respektieren, Wörter umbrechen, überlange Wörter hart trennen.
     function wrap(ctx, text, maxW) {
       const lines = [];
       for (const para of text.replace(/\r/g, '').split('\n')) {
         if (para.trim() === '') { lines.push(''); continue; }
         let line = '';
-        for (const word of para.split(/\s+/)) {
+        for (const word of para.split(WORD_SEP)) {
           const test = line ? line + ' ' + word : word;
           if (ctx.measureText(test).width <= maxW) { line = test; continue; }
           if (line) lines.push(line);
@@ -584,13 +619,16 @@
       const family = font.family, weight = font.weight, LH = font.lh;
       const paras = text.split('\n');
       measureCtx.font = `${weight} 100px ${family}`;
-      const longestWord = paras.flatMap(p => p.split(/\s+/)).reduce((a, b) => (measureCtx.measureText(b).width > measureCtx.measureText(a).width ? b : a), '');
+      const longestWord = paras.flatMap(p => p.split(WORD_SEP)).reduce((a, b) => (measureCtx.measureText(b).width > measureCtx.measureText(a).width ? b : a), '');
       const minFs = noteW / 28;           // absolute Untergrenze
       const paraFloor = noteW / 16;       // bis hierhin darf die Schrift schrumpfen, damit Absätze einzeilig bleiben
       const measure = f => { measureCtx.font = `${weight} ${f}px ${family}`; return wrap(measureCtx, text, wrapW); };
       const wordFits = f => { measureCtx.font = `${weight} ${f}px ${family}`; return measureCtx.measureText(longestWord).width <= wrapW; };
       const inset = Math.round(pad * (FASTENER_INSET[state.fastener] || 0));
-      const fitsHeight = (f, ls) => ls.length * f * LH + 2 * pad + inset <= layout.maxNoteH;
+      // Feste Zettelgröße wie ein echter Haftzettel: quadratisch, höchstens so hoch wie das Layout erlaubt.
+      // Die Größe hängt nicht vom Text ab – nur die Schrift passt sich an.
+      const noteH = Math.round(Math.min(noteW, layout.maxNoteH));
+      const fitsHeight = (f, ls) => ls.length * f * LH + 2 * pad + inset <= noteH;
 
       let fs = Math.round(noteW / 7), lines;
       // 1) Kein Wort wird hart getrennt: Schrift so weit verkleinern, bis das längste Wort in eine Zeile passt.
@@ -605,9 +643,8 @@
       lines = measure(fs);
       while (!fitsHeight(fs, lines) && fs > minFs) { fs = Math.round(fs * 0.92); lines = measure(fs); }
       const lh = fs * LH;
-      const noteH = Math.max(Math.round(lines.length * lh + 2 * pad + inset), Math.round(noteW * 0.6));
-      // Textblock: unterhalb des Einschubs vertikal zentriert
-      const textTop = pad + inset + Math.max(0, (noteH - 2 * pad - inset - lines.length * lh) / 2);
+      // Textblock: oben beginnen, unterhalb des Einschubs der Befestigung (wie von Hand geschrieben)
+      const textTop = pad + inset;
       return { layout, noteW, pad, textW, family, weight, LH, fs, lh, lines, noteH, inset, textTop };
     }
 
