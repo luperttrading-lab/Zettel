@@ -247,7 +247,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.15'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.16'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -314,7 +314,7 @@
       const { tape, thumbtack, pin, clip, magnet } = SHAPE;
       switch (kind) {
         case 'tape2':     return tape(0, 0, W * 0.2, p * 0.55, -45) + tape(W, 0, W * 0.2, p * 0.55, 45);
-        case 'thumbtack': return thumbtack(W / 2, p * 0.45, p * 1.05, -10);
+        case 'thumbtack': return thumbtack(W / 2, -p * 0.12, p * 1.05, -10); // Kopf ragt über die Oberkante
         case 'pin':       return pin(W / 2 - p * 0.35, -p * 0.35, p * 1.25, -28, '#ff3b30', '#ffa39d');
         case 'pin2':      return pin(W * 0.14, -p * 0.25, p * 1.1, -35, '#ff3b30', '#ffa39d') + pin(W * 0.86, -p * 0.25, p * 1.1, 35, '#2f7cf6', '#9cc4ff');
         case 'clip':      return clip(W * 0.86, p * 0.15, p * 0.95, -8);
@@ -323,7 +323,7 @@
       }
     }
     // Wie weit die Befestigung ins Papier ragt (Vielfaches von p): darunter beginnt erst der Text
-    const FASTENER_INSET = { tape: 0, tape2: 0, thumbtack: 0.9, pin: 0.7, pin2: 0.7, clip: 0, magnet: 0.9 };
+    const FASTENER_INSET = { tape: 0, tape2: 0, thumbtack: 0.6, pin: 0.7, pin2: 0.7, clip: 0, magnet: 0.9 };
     // Overlay-SVG: deckt den Zettel plus Rand m ab, damit überstehende Teile (Nadelkopf, Klammer) Platz haben
     function fastenerSvg(kind, W, H, p) {
       const m = p * 2.2;
@@ -508,18 +508,36 @@
         inner.appendChild(d);
       }
       el.appendChild(inner);
-      let timer = null, current = null;
+      let timer = null, current = null, target = null, targetTimer = null;
       const itemW = () => inner.children[0].offsetWidth || 1;
       const indexAt = () => Math.max(0, Math.min(items.length - 1, Math.round(el.scrollLeft / itemW())));
-      const highlight = () => { const i = indexAt(); [...inner.children].forEach((d, k) => d.classList.toggle('active', k === i)); };
-      const commit = () => { const v = items[indexAt()].value; highlight(); if (v !== current) { current = v; onSelect(v); } };
-      el.addEventListener('scroll', () => { highlight(); clearTimeout(timer); timer = setTimeout(commit, 120); }, { passive: true });
+      const highlight = (i = indexAt()) => { [...inner.children].forEach((d, k) => d.classList.toggle('active', k === i)); };
+      const choose = v => { if (v !== current) { current = v; onSelect(v); } };
+      // Auswahl nach dem Wischen: das Element, das in der Mitte liegt. Läuft gerade eine Tipp-Animation
+      // zu einem Ziel, zählen Zwischenstände nicht.
+      const commit = () => {
+        const i = indexAt();
+        if (target !== null) { if (i !== target) return; target = null; clearTimeout(targetTimer); }
+        highlight(i); choose(items[i].value);
+      };
+      el.addEventListener('scroll', () => { if (target === null) highlight(); clearTimeout(timer); timer = setTimeout(commit, 120); }, { passive: true });
       if ('onscrollend' in el) el.addEventListener('scrollend', () => { clearTimeout(timer); commit(); });
+      // Tipp auf ein Element: sofort auswählen, dann weich hinscrollen; bleibt die Animation hängen, hart setzen
       function scrollToValue(v, smooth) {
         const i = items.findIndex(it => it.value === v); if (i < 0) return;
-        el.scrollTo({ left: i * itemW(), behavior: smooth ? 'smooth' : 'auto' }); highlight();
+        target = i; clearTimeout(targetTimer);
+        targetTimer = setTimeout(() => { if (target !== null) { target = null; el.scrollLeft = i * itemW(); highlight(i); } }, 900);
+        el.scrollTo({ left: i * itemW(), behavior: smooth ? 'smooth' : 'auto' });
+        highlight(i); choose(v);
       }
-      return { set(v) { const i = items.findIndex(it => it.value === v); if (i < 0) return; current = v; el.scrollLeft = i * itemW(); highlight(); } };
+      return { set(v) {
+        const i = items.findIndex(it => it.value === v); if (i < 0) return;
+        current = v;
+        if (target === i) { highlight(i); return; }   // Animation dorthin läuft bereits
+        target = null; clearTimeout(targetTimer);
+        if (indexAt() !== i) el.scrollLeft = i * itemW();
+        highlight(i);
+      } };
     }
     const FASTENER_SHORT = { tape: 'Streifen', tape2: 'Ecken', thumbtack: 'Zwecke', pin: 'Nadel', pin2: '2 Nadeln', clip: 'Klammer', magnet: 'Magnet' };
     const stripFastener = makeStrip($('strip-fastener'), Object.keys(FASTENERS).map(name => ({
