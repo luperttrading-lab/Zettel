@@ -117,8 +117,13 @@
     .strip-font { --iw: 112px; } .strip-font .item { height: 46px; font-size: 24px; }
     .strip-list { --iw: 104px; } .strip-list .item { height: 40px; font-size: 15px; }
 
-    /* Aussehen der Befestigung: zwei Zeilen direkt unter dem Zettel – Farbe, darunter Muster/Motiv (wischbar) */
-    .fcolors { width: min(94vw, 420px); display: flex; flex-direction: column; gap: 6px; padding: 8px 0 8px 12px; border-radius: 16px; background: #1e1e21; }
+    /* Aussehen der Befestigung: zwei Zeilen, schwebend direkt unter dem Zettel über dem (abgedunkelten) Inhalt –
+       nichts auf der Seite verschiebt sich. Farbe, darunter Muster/Motiv (wischbar). */
+    .fcolors {
+      position: absolute; left: 50%; top: calc(100% - 8px); transform: translateX(-50%); z-index: 6;
+      width: min(94vw, 420px); display: flex; flex-direction: column; gap: 6px; padding: 8px 0 8px 12px;
+      border-radius: 16px; background: #1e1e21; box-shadow: 0 10px 30px rgba(0,0,0,.6); border: 1px solid #2d2d33;
+    }
     .fcolors[hidden] { display: none; }
     .fcolors .row { display: flex; align-items: center; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-right: 12px; }
     .fcolors .row::-webkit-scrollbar { display: none; }
@@ -288,7 +293,7 @@
   <script src="lib/fasteners.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.22.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.22.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
