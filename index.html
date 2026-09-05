@@ -70,13 +70,17 @@
     }
     .note .fastener { position: absolute; pointer-events: none; z-index: 2; }
     .note .fastener svg { display: block; width: 100%; height: 100%; overflow: visible; }
-    .note textarea {
-      width: 100%; height: 100%; resize: none; border: 0; outline: 0; background: transparent;
+    /* Eingabefeld: ein Block pro Zeile, damit Listenpunkte einen hängenden Einzug bekommen
+       (Folgezeilen beginnen unter dem ersten Wort, nicht unter der Zahl). */
+    .note .editor {
+      width: 100%; height: 100%; border: 0; outline: 0; background: transparent;
       color: inherit; font-family: var(--note-font); font-weight: 500;
       font-size: clamp(26px, 8vw, 36px); line-height: 1.15; padding: 0; margin: 0; display: block;
-      overflow: hidden; overflow-wrap: break-word;
+      overflow: hidden; overflow-wrap: break-word; white-space: pre-wrap; caret-color: currentColor;
+      -webkit-user-select: text; user-select: text;
     }
-    .note textarea::placeholder { color: rgba(42,42,46,.35); }
+    .note .editor .ln { min-height: 1em; }
+    .note .editor.empty .ln:first-child::before { content: "Was soll auf den Zettel?"; color: rgba(42,42,46,.35); }
 
     /* --- Auswahl-Schieber: Befestigung · Schrift · Liste ---
        Eine Reihe pro Einstellung, nach links/rechts wischen; das Element in der Mitte ist die Auswahl,
@@ -181,7 +185,7 @@
     </header>
 
     <section class="note" id="note" aria-label="Zettel">
-      <textarea id="text" placeholder="Was soll auf den Zettel?" spellcheck="false" autocapitalize="sentences"></textarea>
+      <div class="editor" id="text" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Zettel-Text" spellcheck="false" autocapitalize="sentences" enterkeyhint="enter"></div>
       <div class="fastener" id="fastener-preview" aria-hidden="true"></div>
       <span class="pin" id="pin" hidden></span>
     </section>
@@ -243,7 +247,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.14'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.15'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -327,7 +331,110 @@
     }
 
     const $ = id => document.getElementById(id);
-    const noteEl = $('note'), textEl = $('text'), colorsEl = $('colors'), statusEl = $('status'), savedEl = $('saved');
+    // ---------- Eingabefeld ----------
+    // Editierbarer Bereich mit einem <div class="ln"> pro Zeile. Nach außen verhält er sich wie ein
+    // Textfeld (value, selectionStart/End, focus). Jede Zeile bekommt ihren Einzug per indentFn(zeile) in px.
+    class Editor {
+      constructor(el) {
+        this.el = el; this._value = ''; this.indentFn = () => 0; this._composing = false;
+        el.addEventListener('compositionstart', () => { this._composing = true; });
+        el.addEventListener('compositionend', () => { this._composing = false; this._afterInput(); });
+        el.addEventListener('input', () => { if (!this._composing) this._afterInput(); });
+        el.addEventListener('paste', e => {
+          e.preventDefault();
+          const s = (e.clipboardData || window.clipboardData).getData('text/plain');
+          if (s) this.insertText(s.replace(/\r/g, ''));
+        });
+        this.render('');
+      }
+      addEventListener(...a) { this.el.addEventListener(...a); }
+      focus() { this.el.focus(); }
+      get style() { return this.el.style; }
+      get scrollHeight() { return this.el.scrollHeight; }
+      get clientHeight() { return this.el.clientHeight; }
+      get value() { return this._value; }
+      set value(v) { this.render(String(v)); }
+      get selectionStart() { return this._caretOffsets()[0]; }
+      get selectionEnd() { return this._caretOffsets()[1]; }
+      set selectionStart(v) { this.setCaret(v); }
+      set selectionEnd(v) { this.setCaret(v); }
+      // Text der Zeilen aus dem DOM lesen: Blöcke und <br> sind Zeilenumbrüche, alles andere Text
+      static linesOf(root) {
+        const lines = []; let cur = null;
+        const open = () => { if (cur === null) cur = ''; };
+        const close = () => { if (cur !== null) { lines.push(cur); cur = null; } };
+        const walk = node => {
+          for (const n of node.childNodes) {
+            if (n.nodeType === 3) {
+              const parts = n.nodeValue.split('\n');
+              parts.forEach((p, i) => { if (i) close(); open(); cur += p; });
+            } else if (n.nodeName === 'BR') { open(); close(); }
+            else if (/^(DIV|P|LI)$/.test(n.nodeName)) {
+              close(); const before = lines.length; walk(n); close();
+              if (lines.length === before) lines.push('');
+            } else walk(n);
+          }
+        };
+        walk(root); close();
+        return lines.length ? lines : [''];
+      }
+      _isCanonical() {
+        for (const c of this.el.childNodes) {
+          if (c.nodeType !== 1 || c.nodeName !== 'DIV' || !c.classList.contains('ln')) return false;
+          for (const g of c.childNodes) if (!(g.nodeType === 3 || g.nodeName === 'BR')) return false;
+        }
+        return this.el.childNodes.length > 0;
+      }
+      render(text) {
+        this._value = text;
+        const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        this.el.innerHTML = text.split('\n').map(l => `<div class="ln">${l ? esc(l) : '<br>'}</div>`).join('');
+        this.applyIndents();
+      }
+      applyIndents() {
+        const lines = this._value.split('\n');
+        [...this.el.children].forEach((d, i) => {
+          const ind = Math.round(this.indentFn(lines[i] || '') * 100) / 100;
+          d.style.paddingLeft = ind ? ind + 'px' : ''; d.style.textIndent = ind ? (-ind) + 'px' : '';
+        });
+        this.el.classList.toggle('empty', this._value === '');
+      }
+      _afterInput() {
+        const text = Editor.linesOf(this.el).join('\n');
+        if (this._isCanonical()) { this._value = text; this.applyIndents(); }
+        else { const c = this._caretOffsets()[0]; this.render(text); this.setCaret(c); }
+      }
+      _offsetAt(container, offset) {
+        const r = document.createRange(); r.selectNodeContents(this.el);
+        try { r.setEnd(container, offset); } catch (_) { return this._value.length; }
+        return Editor.linesOf(r.cloneContents()).join('\n').length;
+      }
+      _caretOffsets() {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount || !this.el.contains(sel.anchorNode)) return [this._value.length, this._value.length];
+        const r = sel.getRangeAt(0);
+        return [this._offsetAt(r.startContainer, r.startOffset), this._offsetAt(r.endContainer, r.endOffset)];
+      }
+      setCaret(offset) {
+        offset = Math.max(0, Math.min(offset, this._value.length));
+        const lines = this._value.split('\n');
+        let li = 0, col = offset;
+        while (li < lines.length - 1 && col > lines[li].length) { col -= lines[li].length + 1; li++; }
+        const d = this.el.children[li]; if (!d) return;
+        const r = document.createRange();
+        const tn = [...d.childNodes].find(n => n.nodeType === 3);
+        if (tn) r.setStart(tn, Math.min(col, tn.nodeValue.length)); else r.setStart(d, 0);
+        r.collapse(true);
+        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      }
+      insertText(s) {
+        const [a, b] = this._caretOffsets();
+        const v = this._value.slice(0, a) + s + this._value.slice(b);
+        this.render(v); this.setCaret(a + s.length);
+        this.el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+    const noteEl = $('note'), textEl = new Editor($('text')), colorsEl = $('colors'), statusEl = $('status'), savedEl = $('saved');
 
     // ---------- Zustand ----------
     // autoRun standardmäßig aus: Start per URL bringt die Kurzbefehle-App in den Vordergrund.
@@ -498,8 +605,9 @@
     // Ältere Zettel: Markierungen auf geschütztes Leerzeichen umstellen
     if (state.list !== 'none') { const v = relist(state.text, state.list); if (v !== state.text) { state.text = v; textEl.value = v; persist(); } }
     textEl.addEventListener('keydown', e => {
-      if (e.key !== 'Enter' || state.list === 'none' || e.isComposing) return;
+      if (e.key !== 'Enter' || e.isComposing) return;
       e.preventDefault();
+      if (state.list === 'none') { textEl.insertText('\n'); return; }
       const v = textEl.value, pos = textEl.selectionStart, end = textEl.selectionEnd;
       const lineStart = v.lastIndexOf('\n', pos - 1) + 1;
       const lineEnd = v.indexOf('\n', end) === -1 ? v.length : v.indexOf('\n', end);
@@ -558,24 +666,43 @@
 
     // Wortgrenzen: nur gewöhnliche Leerzeichen/Tabs – das geschützte Leerzeichen (Listenmarke) hält zusammen.
     const WORD_SEP = /[ \t]+/;
+    // Umbruchstücke eines Absatzes: Wörter, und wie der Browser zusätzlich hinter einem Bindestrich
+    // (vor einem Buchstaben). sep = was vor dem Stück steht: ' ' oder '' (nach Bindestrich).
+    function chunksOf(para) {
+      const out = [];
+      for (const word of para.split(WORD_SEP)) {
+        let start = 0;
+        for (let i = 0; i < word.length - 1; i++) {
+          if (word[i] === '-' && /[^\d\s-]/.test(word[i + 1]) && i > start) { out.push({ s: word.slice(start, i + 1), sep: start ? '' : ' ' }); start = i + 1; }
+        }
+        out.push({ s: word.slice(start), sep: start ? '' : ' ' });
+      }
+      return out;
+    }
     // Zeilenumbruch: Absätze respektieren, Wörter umbrechen, überlange Wörter hart trennen.
+    // Listenpunkte: Folgezeilen um die Breite der Markierung eingerückt (hängender Einzug).
+    // Ergebnis: [{ t: Text, x: Einzug in px }]
     function wrap(ctx, text, maxW) {
       const lines = [];
       for (const para of text.replace(/\r/g, '').split('\n')) {
-        if (para.trim() === '') { lines.push(''); continue; }
-        let line = '';
-        for (const word of para.split(WORD_SEP)) {
-          const test = line ? line + ' ' + word : word;
-          if (ctx.measureText(test).width <= maxW) { line = test; continue; }
-          if (line) lines.push(line);
-          line = word;
-          while (ctx.measureText(line).width > maxW && line.length > 1) {
+        if (para.trim() === '') { lines.push({ t: '', x: 0 }); continue; }
+        const m = para.match(PREFIX_RE);
+        const indent = m ? ctx.measureText(m[0]).width : 0;
+        let line = '', first = true;
+        const push = t => { lines.push({ t, x: first ? 0 : indent }); first = false; };
+        const limit = () => (first ? maxW : maxW - indent);
+        for (const c of chunksOf(para)) {
+          const test = line ? line + c.sep + c.s : c.s;
+          if (ctx.measureText(test).width <= limit()) { line = test; continue; }
+          if (line) push(line);
+          line = c.s;
+          while (ctx.measureText(line).width > limit() && line.length > 1) {
             let cut = line.length - 1;
-            while (cut > 1 && ctx.measureText(line.slice(0, cut)).width > maxW) cut--;
-            lines.push(line.slice(0, cut)); line = line.slice(cut);
+            while (cut > 1 && ctx.measureText(line.slice(0, cut)).width > limit()) cut--;
+            push(line.slice(0, cut)); line = line.slice(cut);
           }
         }
-        lines.push(line);
+        push(line);
       }
       return lines;
     }
@@ -619,7 +746,7 @@
       const family = font.family, weight = font.weight, LH = font.lh;
       const paras = text.split('\n');
       measureCtx.font = `${weight} 100px ${family}`;
-      const longestWord = paras.flatMap(p => p.split(WORD_SEP)).reduce((a, b) => (measureCtx.measureText(b).width > measureCtx.measureText(a).width ? b : a), '');
+      const longestWord = paras.flatMap(p => chunksOf(p).map(c => c.s)).reduce((a, b) => (measureCtx.measureText(b).width > measureCtx.measureText(a).width ? b : a), '');
       const minFs = noteW / 28;           // absolute Untergrenze
       const paraFloor = noteW / 16;       // bis hierhin darf die Schrift schrumpfen, damit Absätze einzeilig bleiben
       const measure = f => { measureCtx.font = `${weight} ${f}px ${family}`; return wrap(measureCtx, text, wrapW); };
@@ -654,12 +781,23 @@
     const mirrorEl = document.createElement('div');
     mirrorEl.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;white-space:pre-wrap;overflow-wrap:break-word;padding:0;margin:0;border:0';
     document.body.appendChild(mirrorEl);
+    // Einzug einer Zeile in px (Breite der Listenmarkierung samt geschütztem Leerzeichen) bei gegebener Schrift
+    function lineIndent(line, family, weight, px) {
+      const m = line.match(PREFIX_RE); if (!m) return 0;
+      measureCtx.font = `${weight} ${px}px ${family}`;
+      return measureCtx.measureText(m[0]).width;
+    }
     function domLines(f, scale, text) {
+      const px = f.fs * scale;
       mirrorEl.style.width = (f.textW * scale) + 'px';
       mirrorEl.style.fontFamily = f.family; mirrorEl.style.fontWeight = f.weight;
-      mirrorEl.style.fontSize = (f.fs * scale) + 'px'; mirrorEl.style.lineHeight = String(f.LH);
-      mirrorEl.textContent = text;
-      return Math.round(mirrorEl.offsetHeight / (f.fs * scale * f.LH));
+      mirrorEl.style.fontSize = px + 'px'; mirrorEl.style.lineHeight = String(f.LH);
+      const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      mirrorEl.innerHTML = text.split('\n').map(l => {
+        const ind = Math.round(lineIndent(l, f.family, f.weight, px) * 100) / 100;
+        return `<div style="min-height:1em;padding-left:${ind}px;text-indent:${-ind}px">${l ? esc(l) : '<br>'}</div>`;
+      }).join('');
+      return Math.round(mirrorEl.offsetHeight / (px * f.LH));
     }
 
     function syncPreview() {
@@ -676,9 +814,14 @@
         if (domLines(f, scale0, text) <= f.lines.length) break;
       }
       const scale = noteEl.clientWidth / f.noteW;
+      // Innenabstand exakt wie im Bild (CSS-Prozent-Padding bezöge sich auf die Breite des Elternelements)
+      noteEl.style.padding = (f.pad * scale) + 'px';
       textEl.style.fontFamily = f.family; textEl.style.fontWeight = f.weight;
       textEl.style.fontSize = (f.fs * scale) + 'px';
       textEl.style.lineHeight = String(f.LH);
+      // Hängender Einzug pro Zeile, gleiche Messung wie fürs Bild
+      textEl.indentFn = line => lineIndent(line, f.family, f.weight, f.fs * scale);
+      textEl.applyIndents();
       noteEl.style.height = Math.round(f.noteH * scale) + 'px';
       // Vertikale Lage wie im Bild: Textblock unter dem Einschub der Befestigung, zentriert
       textEl.style.paddingTop = Math.round((f.textTop - f.pad) * scale) + 'px';
@@ -733,7 +876,7 @@
       ctx.font = `${weight} ${fs}px ${family}`;
       ctx.textBaseline = 'top';
       let y = -noteH / 2 + textTop;
-      for (const line of lines) { ctx.fillText(line, -noteW / 2 + pad, y); y += lh; }
+      for (const line of lines) { ctx.fillText(line.t, -noteW / 2 + pad + line.x, y); y += lh; }
 
       // Befestigung zuletzt, liegt über Papier und Text
       if (fastener) ctx.drawImage(fastener, -noteW / 2 - m, -noteH / 2 - m, noteW + 2 * m, noteH + 2 * m);
