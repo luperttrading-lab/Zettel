@@ -117,17 +117,14 @@
     .strip-font { --iw: 112px; } .strip-font .item { height: 46px; font-size: 24px; }
     .strip-list { --iw: 104px; } .strip-list .item { height: 40px; font-size: 15px; }
 
-    /* Aussehen der Befestigung: Leiste direkt unter dem Zettel, waagerecht scrollbar */
-    .fcolors {
-      width: min(94vw, 420px); display: flex; align-items: center; gap: 10px;
-      overflow-x: auto; scrollbar-width: none; padding: 10px 14px; border-radius: 16px; background: #1e1e21;
-      -webkit-mask-image: linear-gradient(to right, #000 88%, transparent 100%); mask-image: linear-gradient(to right, #000 88%, transparent 100%);
-    }
-    .fcolors::-webkit-scrollbar { display: none; }
+    /* Aussehen der Befestigung: zwei Zeilen direkt unter dem Zettel – Farbe, darunter Muster/Motiv (wischbar) */
+    .fcolors { width: min(94vw, 420px); display: flex; flex-direction: column; gap: 6px; padding: 8px 0 8px 12px; border-radius: 16px; background: #1e1e21; }
     .fcolors[hidden] { display: none; }
-    .fcolors .sep { flex: 0 0 auto; font-size: 12px; color: var(--muted); padding-left: 10px; border-left: 1px solid #3a3a42; margin-left: 4px; }
+    .fcolors .row { display: flex; align-items: center; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-right: 12px; }
+    .fcolors .row::-webkit-scrollbar { display: none; }
+    .fcolors .lab { flex: 0 0 46px; font-size: 12px; color: var(--muted); }
     .fcolors .chip { flex: 0 0 auto; appearance: none; border: 3px solid transparent; cursor: pointer; padding: 0; background: transparent; }
-    .fcolors .chip.color { width: 40px; height: 40px; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+    .fcolors .chip.color { width: 38px; height: 38px; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
     .fcolors .chip.icon { width: 62px; height: 46px; border-radius: 12px; background: #2d2d33; display: flex; align-items: center; justify-content: center; }
     .fcolors .chip.icon svg { width: 52px; height: 36px; overflow: visible; display: block; }
     .fcolors .chip[aria-pressed="true"] { border-color: var(--fg); }
@@ -291,7 +288,7 @@
   <script src="lib/fasteners.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.21.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.22.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -310,8 +307,7 @@
     const FALLBACK = '"Segoe Print", "Bradley Hand", "Comic Sans MS", cursive';
 
     // Befestigungen (Zeichnung, Farben, Muster, Motive) kommen aus lib/fasteners.js – dieselbe Datei nutzt der Server.
-    const { FASTENERS, FASTENER_INSET, FCOLORS, PATTERNS, PATTERN_SUPPORT, DESIGNS, DESIGN_SUPPORT,
-      normalizeLook, lookKey, fastenerIcon, fastenerSvg } = ZettelFasteners;
+    const { FASTENERS, FASTENER_INSET, FCOLORS, DECOR_LABEL, decorsFor, normalizeLook, lookKey, fastenerIcon, fastenerSvg } = ZettelFasteners;
 
     const $ = id => document.getElementById(id);
     // Listenmarkierungen: „1.“, „•“ … am Zeilenanfang, dahinter ein geschütztes Leerzeichen (U+00A0),
@@ -452,7 +448,8 @@
     // Aussehen der Befestigung (Farbe, Muster, Motiv), je Befestigung gemerkt, sonst Standard
     function fastenerLook(kind = state.fastener) { return normalizeLook(kind, state.fastenerLook[kind]); }
     function setFastenerLook(patch) {
-      state.fastenerLook[state.fastener] = { ...fastenerLook(), ...patch };
+      const cur = fastenerLook();
+      state.fastenerLook[state.fastener] = { color: cur.color, decor: cur.decor, ...patch };
       applyFastener(); persist();
     }
     if (!FONTS[state.font]) state.font = 'caveat';
@@ -475,8 +472,11 @@
         && (state.pinned.fastener || 'tape') === state.fastener && (state.pinned.font || 'caveat') === state.font
         && (state.pinned.fastenerLook || lookKey(fastenerLook())) === lookKey(fastenerLook()));
     }
+    // Hinweis „Bild liegt bereit …“ gilt nur, solange der Zettel dem angehefteten Stand entspricht
+    const READY_HINT = 'Bild liegt bereit. Jetzt den Kurzbefehl „%s“ starten: Icon neben der App, Kontrollzentrum oder Rückseite doppelt tippen.';
     function updatePinBadge() {
       const pin = $('pin');
+      if (!isPinnedCurrent() && statusEl.textContent.startsWith('Bild liegt bereit')) statusEl.textContent = '';
       if (isPinnedCurrent()) {
         savedEl.textContent = 'angeheftet ' + fmtTime(state.pinned.at);
         savedEl.className = 'ok';
@@ -560,29 +560,23 @@
     function buildPalette() {
       const kind = state.fastener, look = fastenerLook(kind);
       fcolorsEl.innerHTML = '';
-      const chip = (cls, html, pressed, title, onPick) => {
+      const row = label => { const r = document.createElement('div'); r.className = 'row'; const l = document.createElement('span'); l.className = 'lab'; l.textContent = label; r.appendChild(l); fcolorsEl.appendChild(r); return r; };
+      const chip = (parent, cls, html, pressed, title, onPick) => {
         const b = document.createElement('button'); b.className = 'chip ' + cls; b.innerHTML = html;
         b.setAttribute('role', 'radio'); b.setAttribute('aria-pressed', String(pressed)); b.title = title; b.setAttribute('aria-label', title);
-        b.addEventListener('click', onPick); fcolorsEl.appendChild(b); return b;
+        b.addEventListener('click', onPick); parent.appendChild(b); return b;
       };
-      const sep = label => { const d = document.createElement('span'); d.className = 'sep'; d.textContent = label; fcolorsEl.appendChild(d); };
-      for (const [key, c] of Object.entries(FCOLORS)) {
-        const b = chip('color', '', look.color === key, c.label, () => setFastenerLook({ color: key }));
-        b.style.background = c.main;
+      // Zeile 1: Farben (passen ohne Scrollen)
+      const r1 = row('Farbe');
+      for (const [key, c] of Object.entries(FCOLORS)) chip(r1, 'color', '', look.color === key, c.label, () => setFastenerLook({ color: key })).style.background = c.main;
+      // Zeile 2: Muster bzw. Motiv – genau eine Wahl, wischbar
+      const decors = decorsFor(kind);
+      if (decors.length > 1) {
+        const r2 = row(kind === 'magnet' ? 'Motiv' : 'Muster');
+        for (const key of decors) chip(r2, 'icon', fastenerIcon(kind, { ...look, decor: key }), look.decor === key, DECOR_LABEL[key], () => setFastenerLook({ decor: key }));
+        const active = r2.querySelector('.chip[aria-pressed="true"]');
+        if (active && active.offsetLeft + active.offsetWidth > r2.clientWidth) r2.scrollLeft = active.offsetLeft - 70;
       }
-      const pats = PATTERN_SUPPORT[kind] || [];
-      if (pats.length) {
-        sep('Muster');
-        for (const key of ['none', ...pats]) chip('icon', fastenerIcon(kind, { ...look, pattern: key }), look.pattern === key, PATTERNS[key], () => setFastenerLook({ pattern: key }));
-      }
-      const des = DESIGN_SUPPORT[kind] || [];
-      if (des.length) {
-        sep('Motiv');
-        for (const key of ['none', ...des]) chip('icon', fastenerIcon(kind, { ...look, design: key }), look.design === key, DESIGNS[key], () => setFastenerLook({ design: key }));
-      }
-      // Gewähltes Element in Sicht halten
-      const active = fcolorsEl.querySelector('.chip[aria-pressed="true"]');
-      if (active && active.offsetLeft + active.offsetWidth > fcolorsEl.clientWidth) fcolorsEl.scrollLeft = active.offsetLeft - 40;
     }
     // Leiste unter dem Zettel einblenden; die angetippte Befestigung pulsiert, der Rest tritt zurück.
     // Tipp irgendwo anders (Zettel, Schieber, Hintergrund) schließt.
@@ -925,6 +919,8 @@
           hit.setAttribute('x', bb.x - g); hit.setAttribute('y', bb.y - g); hit.setAttribute('width', bb.width + 2 * g); hit.setAttribute('height', bb.height + 2 * g);
           hit.setAttribute('fill', 'transparent'); hit.setAttribute('class', 'hit'); hit.style.pointerEvents = 'all';
           svg.insertBefore(hit, svg.firstChild);
+          // So viel Abstand nach oben, wie die Befestigung über den Zettel ragt (sonst überdeckt sie die Kopfzeile)
+          noteEl.style.marginTop = Math.max(0, Math.ceil(-bb.y * scale) - 6) + 'px';
         } catch (_) {}
       }
     }
@@ -1025,7 +1021,7 @@
           location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(state.shortcut) + '&input=clipboard';
         } else {
           // Kurzbefehl nicht per URL starten: vom Icon/Kontrollzentrum gestartet öffnet er die Kurzbefehle-App nicht.
-          statusEl.textContent = 'Bild liegt bereit. Jetzt den Kurzbefehl „' + state.shortcut + '“ starten: Icon neben der App, Kontrollzentrum oder Rückseite doppelt tippen.';
+          statusEl.textContent = READY_HINT.replace('%s', state.shortcut);
           showToast('Angeheftet', 'Jetzt „' + state.shortcut + '“ starten:\nIcon neben der App · Kontrollzentrum · Rückseite doppelt tippen');
         }
       }, async () => {

@@ -49,7 +49,7 @@ Parameter: `text` (Pflicht), `color` (`gelb`, `rosa`, `gruen`, `blau`), `device`
 `reisszwecke`, `pinnadel`, `nadel`, `nadeln`, `klammer`), `fcolor` (Farbe der Befestigung: `rot`, `blau`, `gruen`,
 `gelb`, `silber`, `schwarz`; Standard: Streifen und Klammer silber, Nadeln rot), `fpattern` (Muster: `streifen`,
 `punkte`, `karo`; Klammer nur Streifen/Punkte), `fdesign` (Motiv auf dem Magneten: `smiley`, `herz`, `stern`, `pfote`,
-`blume`, `sonne`), `scale` (Schriftgröße 60–140 %), `list` (`num`, `dot`, `square`, `dash`,
+`blume`, `sonne`; Muster und Motiv schließen sich aus, bei beiden gilt das Motiv), `scale` (Schriftgröße 60–140 %), `list` (`num`, `dot`, `square`, `dash`,
 `check`: jede Zeile bekommt eine Nummer bzw. ein Zeichen), optional `w`/`h` in Pixeln. Bei
 quadratischem Bild wird das Tablet-Layout gewählt, sonst das Hochformat-Layout.
 
