@@ -247,7 +247,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.16'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.17'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -271,6 +271,7 @@
       tape:      { label: 'Klebestreifen' },
       tape2:     { label: 'Zwei Streifen' },
       thumbtack: { label: 'Reißzwecke' },
+      pushpin:   { label: 'Pinnadel' },
       pin:       { label: 'Nadel' },
       pin2:      { label: 'Zwei Nadeln' },
       clip:      { label: 'Büroklammer' },
@@ -294,14 +295,23 @@
       magnet: (cx, cy, s) => `<g transform="translate(${cx} ${cy}) scale(${s})">
         <circle cx="0" cy="0.08" r="0.72" fill="#000" fill-opacity=".25"/><circle cx="0" cy="0" r="0.7" fill="#c8281f"/>
         <circle cx="0" cy="-0.04" r="0.62" fill="#ff3b30"/><circle cx="0" cy="-0.04" r="0.3" fill="#e0342b"/><ellipse cx="-0.2" cy="-0.28" rx="0.22" ry="0.12" fill="#ffa39d" fill-opacity=".8"/></g>`,
+      // Pinnadel: flache Kappe, Schaft, breiter Fuß, Nadel (Ursprung = Mitte der Kappenoberseite)
+      pushpin: (cx, cy, s, deg) => `<g transform="translate(${cx} ${cy}) rotate(${deg}) scale(${s})">
+        <ellipse cx="0.12" cy="1.0" rx="0.64" ry="0.17" fill="#000" fill-opacity=".18"/>
+        <rect x="-0.04" y="0.9" width="0.08" height="0.5" rx="0.04" fill="#d8d8de"/><rect x="-0.04" y="0.9" width="0.03" height="0.5" fill="#9a9aa2"/>
+        <ellipse cx="0" cy="0.93" rx="0.56" ry="0.2" fill="#9c1e17"/><rect x="-0.56" y="0.85" width="1.12" height="0.08" fill="#9c1e17"/><ellipse cx="0" cy="0.85" rx="0.56" ry="0.2" fill="#e0342b"/>
+        <rect x="-0.2" y="0.1" width="0.4" height="0.78" fill="#c8281f"/><rect x="-0.2" y="0.1" width="0.13" height="0.78" fill="#ff5147" fill-opacity=".55"/>
+        <ellipse cx="0" cy="0.14" rx="0.5" ry="0.25" fill="#a8201a"/><rect x="-0.5" y="0" width="1" height="0.14" fill="#c8281f"/><ellipse cx="0" cy="0" rx="0.5" ry="0.25" fill="#ff3b30"/>
+        <ellipse cx="-0.16" cy="-0.07" rx="0.17" ry="0.08" fill="#ffa39d" fill-opacity=".8"/></g>`,
     };
     // Symbol für die Auswahl: nur die Befestigung, groß, ohne Papier (Zeichenfläche 60×40)
     function fastenerIcon(kind) {
-      const { tape, thumbtack, pin, clip, magnet } = SHAPE;
+      const { tape, thumbtack, pin, clip, magnet, pushpin } = SHAPE;
       let s;
       switch (kind) {
-        case 'tape2':     s = tape(17, 20, 28, 9, -45) + tape(43, 20, 28, 9, 45); break;
+        case 'tape2':     s = tape(17, 20, 28, 11, -45) + tape(43, 20, 28, 11, 45); break;
         case 'thumbtack': s = thumbtack(30, 11, 15, -10); break;
+        case 'pushpin':   s = pushpin(30, 6, 14, -12); break;
         case 'pin':       s = pin(30, 11, 13, -28, '#ff3b30', '#ffa39d'); break;
         case 'pin2':      s = pin(19, 11, 12, -35, '#ff3b30', '#ffa39d') + pin(41, 11, 12, 35, '#2f7cf6', '#9cc4ff'); break;
         case 'clip':      s = clip(30, 14, 11, -8); break;
@@ -311,10 +321,11 @@
       return `<svg viewBox="0 0 60 40" aria-hidden="true">${s}</svg>`;
     }
     function fastenerShapes(kind, W, H, p) {
-      const { tape, thumbtack, pin, clip, magnet } = SHAPE;
+      const { tape, thumbtack, pin, clip, magnet, pushpin } = SHAPE;
       switch (kind) {
-        case 'tape2':     return tape(0, 0, W * 0.2, p * 0.55, -45) + tape(W, 0, W * 0.2, p * 0.55, 45);
+        case 'tape2':     return tape(p * 0.7, p * 0.7, W * 0.24, p * 0.8, -45) + tape(W - p * 0.7, p * 0.7, W * 0.24, p * 0.8, 45); // über die Ecken, etwas ins Papier
         case 'thumbtack': return thumbtack(W / 2, -p * 0.12, p * 1.05, -10); // Kopf ragt über die Oberkante
+        case 'pushpin':   return pushpin(W / 2, -p * 0.75, p * 1.7, -12);
         case 'pin':       return pin(W / 2 - p * 0.35, -p * 0.35, p * 1.25, -28, '#ff3b30', '#ffa39d');
         case 'pin2':      return pin(W * 0.14, -p * 0.25, p * 1.1, -35, '#ff3b30', '#ffa39d') + pin(W * 0.86, -p * 0.25, p * 1.1, 35, '#2f7cf6', '#9cc4ff');
         case 'clip':      return clip(W * 0.86, p * 0.15, p * 0.95, -8);
@@ -323,7 +334,7 @@
       }
     }
     // Wie weit die Befestigung ins Papier ragt (Vielfaches von p): darunter beginnt erst der Text
-    const FASTENER_INSET = { tape: 0, tape2: 0, thumbtack: 0.6, pin: 0.7, pin2: 0.7, clip: 0, magnet: 0.9 };
+    const FASTENER_INSET = { tape: 0, tape2: 0, thumbtack: 0.6, pushpin: 0.9, pin: 0.7, pin2: 0.7, clip: 0, magnet: 0.9 };
     // Overlay-SVG: deckt den Zettel plus Rand m ab, damit überstehende Teile (Nadelkopf, Klammer) Platz haben
     function fastenerSvg(kind, W, H, p) {
       const m = p * 2.2;
@@ -539,7 +550,7 @@
         highlight(i);
       } };
     }
-    const FASTENER_SHORT = { tape: 'Streifen', tape2: 'Ecken', thumbtack: 'Zwecke', pin: 'Nadel', pin2: '2 Nadeln', clip: 'Klammer', magnet: 'Magnet' };
+    const FASTENER_SHORT = { tape: 'Streifen', tape2: 'Ecken', thumbtack: 'Zwecke', pushpin: 'Pinnadel', pin: 'Nadel', pin2: '2 Nadeln', clip: 'Klammer', magnet: 'Magnet' };
     const stripFastener = makeStrip($('strip-fastener'), Object.keys(FASTENERS).map(name => ({
       value: name, html: fastenerIcon(name) + `<span>${FASTENER_SHORT[name]}</span>`,
     })), v => { state.fastener = v; applyFastener(); persist(); });

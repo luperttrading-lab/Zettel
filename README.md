@@ -45,8 +45,8 @@ Keine Web-App, kein Fensterwechsel.
 
 Parameter: `text` (Pflicht), `color` (`gelb`, `rosa`, `gruen`, `blau`), `device` (`iphone` = Hochformat
 1179×2556, sonst iPad-Quadrat 2360×2360), `font` (`caveat`, `patrick`, `kalam`, `marker`), `fastener`
-(`tape`, `tape2`, `thumbtack`, `pin`, `pin2`, `clip`, `magnet`; deutsch auch `klebestreifen`, `reisszwecke`,
-`nadel`, `nadeln`, `klammer`), `scale` (Schriftgröße 60–140 %), `list` (`num`, `dot`, `square`, `dash`,
+(`tape`, `tape2`, `thumbtack`, `pushpin`, `pin`, `pin2`, `clip`, `magnet`; deutsch auch `klebestreifen`, `ecken`,
+`reisszwecke`, `pinnadel`, `nadel`, `nadeln`, `klammer`), `scale` (Schriftgröße 60–140 %), `list` (`num`, `dot`, `square`, `dash`,
 `check`: jede Zeile bekommt eine Nummer bzw. ein Zeichen), optional `w`/`h` in Pixeln. Bei
 quadratischem Bild wird das Tablet-Layout gewählt, sonst das Hochformat-Layout.
 
