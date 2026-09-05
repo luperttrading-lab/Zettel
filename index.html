@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Schrift nicht-blockierend laden: die App startet auch, wenn Google Fonts langsam oder offline ist -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&display=swap" media="print" onload="this.media='all'">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500&family=Patrick+Hand&family=Kalam&family=Permanent+Marker&display=swap" media="print" onload="this.media='all'">
   <title>Zettel</title>
   <style>
     :root {
@@ -59,11 +59,8 @@
       padding: 8%; /* gleiche Proportion wie im Bild (pad = 8 % der Zettelbreite) */
       transition: height .15s ease;
     }
-    .note::before { /* Klebestreifen */
-      content: ""; position: absolute; left: 50%; top: -14px; width: 92px; height: 28px;
-      transform: translateX(-50%) rotate(1deg);
-      background: rgba(255,255,255,.55); box-shadow: 0 1px 2px rgba(0,0,0,.15);
-    }
+    .note .fastener { position: absolute; pointer-events: none; z-index: 2; }
+    .note .fastener svg { display: block; width: 100%; height: 100%; overflow: visible; }
     .note textarea {
       width: 100%; height: 100%; resize: none; border: 0; outline: 0; background: transparent;
       color: inherit; font-family: var(--note-font); font-weight: 500;
@@ -71,6 +68,18 @@
       overflow: hidden; overflow-wrap: break-word;
     }
     .note textarea::placeholder { color: rgba(42,42,46,.35); }
+
+    /* --- Befestigung & Schrift --- */
+    .chips { width: min(86vw, 380px); display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px; scrollbar-width: none; }
+    .chips::-webkit-scrollbar { display: none; }
+    .chips button {
+      flex: 0 0 auto; height: 44px; min-width: 44px; padding: 0 12px; border-radius: 12px; border: 2px solid transparent;
+      background: #1e1e21; color: var(--fg); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+      font: 500 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .chips button[aria-pressed="true"] { border-color: var(--fg); background: #2a2a2e; }
+    .chips button svg { width: 34px; height: 34px; overflow: visible; }
+    .chips.fonts button { font-size: 20px; padding: 0 14px; }
 
     /* --- Farben --- */
     .colors { display: flex; gap: 14px; }
@@ -143,10 +152,13 @@
 
   <section class="note" id="note" aria-label="Zettel">
     <textarea id="text" placeholder="Was soll auf den Zettel?" spellcheck="false" autocapitalize="sentences"></textarea>
+    <div class="fastener" id="fastener-preview" aria-hidden="true"></div>
     <span class="pin" id="pin" hidden></span>
   </section>
 
   <div class="colors" id="colors" role="radiogroup" aria-label="Zettelfarbe"></div>
+  <div class="chips" id="fasteners" role="radiogroup" aria-label="Befestigung"></div>
+  <div class="chips fonts" id="fonts" role="radiogroup" aria-label="Schriftart"></div>
 
   <label class="scale" for="fontscale">
     <span class="a small">A</span>
@@ -194,7 +206,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.5'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.6'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -203,12 +215,65 @@
       blue:   { paper: '#c5e4ff', ink: '#1a2a3d' },
     };
 
+    // Schriften (alle frei lizenziert, liegen auch auf dem Server). lh = Zeilenhöhe relativ zur Schriftgröße.
+    const FONTS = {
+      caveat:  { label: 'Caveat',  family: 'Caveat',           weight: 500, lh: 1.15 },
+      patrick: { label: 'Patrick', family: 'Patrick Hand',     weight: 400, lh: 1.20 },
+      kalam:   { label: 'Kalam',   family: 'Kalam',            weight: 400, lh: 1.30 },
+      marker:  { label: 'Marker',  family: 'Permanent Marker', weight: 400, lh: 1.25 },
+    };
+    const FALLBACK = '"Segoe Print", "Bradley Hand", "Comic Sans MS", cursive';
+
+    // Befestigungen: Zeichnung als SVG in Zettel-Koordinaten (0/0 = linke obere Ecke, p = Innenabstand).
+    // Dieselbe Zeichnung landet als Overlay auf der App-Vorschau und im Hintergrundbild.
+    const FASTENERS = {
+      tape:      { label: 'Klebestreifen' },
+      tape2:     { label: 'Zwei Streifen' },
+      thumbtack: { label: 'Reißzwecke' },
+      pin:       { label: 'Nadel' },
+      pin2:      { label: 'Zwei Nadeln' },
+      clip:      { label: 'Büroklammer' },
+      magnet:    { label: 'Magnet' },
+    };
+    function fastenerShapes(kind, W, H, p) {
+      const tape = (cx, cy, w, h, deg) => `<g transform="rotate(${deg} ${cx} ${cy})"><rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" fill="#fff" fill-opacity=".55"/><rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h * 0.12}" fill="#fff" fill-opacity=".25"/></g>`;
+      const thumbtack = (cx, cy, s, deg) => `<g transform="translate(${cx} ${cy}) rotate(${deg}) scale(${s})">
+        <rect x="-0.06" y="0.55" width="0.12" height="0.7" rx="0.06" fill="#d0d0d6"/><rect x="-0.06" y="0.55" width="0.05" height="0.7" fill="#9a9aa2"/>
+        <rect x="-0.24" y="0.18" width="0.48" height="0.42" rx="0.08" fill="#c8281f"/>
+        <ellipse cx="0" cy="0.12" rx="0.72" ry="0.44" fill="#c8281f"/><ellipse cx="0" cy="0" rx="0.72" ry="0.44" fill="#ff3b30"/>
+        <ellipse cx="0" cy="-0.04" rx="0.6" ry="0.32" fill="#ff5147"/><ellipse cx="-0.22" cy="-0.16" rx="0.24" ry="0.12" fill="#ffa39d" fill-opacity=".75"/></g>`;
+      const pin = (cx, cy, s, deg, color, hi) => `<g transform="translate(${cx} ${cy}) rotate(${deg}) scale(${s})">
+        <rect x="-0.05" y="0.3" width="0.1" height="1.5" rx="0.05" fill="#d8d8de"/><rect x="-0.05" y="0.3" width="0.04" height="1.5" fill="#9a9aa2"/>
+        <circle cx="0" cy="0" r="0.5" fill="${color}"/><circle cx="-0.16" cy="-0.18" r="0.16" fill="${hi}" fill-opacity=".8"/>
+        <ellipse cx="0.1" cy="0.32" rx="0.34" ry="0.14" fill="#000" fill-opacity=".18"/></g>`;
+      const clip = (cx, cy, s, deg) => `<g transform="translate(${cx} ${cy}) rotate(${deg}) scale(${s})" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M-0.3,1.5 V-0.9 a0.3,0.3 0 0 1 0.6,0 V1.6 a0.45,0.45 0 0 1 -0.9,0 V-0.4" stroke="#7a7a82" stroke-width="0.13"/>
+        <path d="M-0.3,1.5 V-0.9 a0.3,0.3 0 0 1 0.6,0 V1.6 a0.45,0.45 0 0 1 -0.9,0 V-0.4" stroke="#d8d8de" stroke-width="0.08"/></g>`;
+      const magnet = (cx, cy, s) => `<g transform="translate(${cx} ${cy}) scale(${s})">
+        <circle cx="0" cy="0.08" r="0.72" fill="#000" fill-opacity=".25"/><circle cx="0" cy="0" r="0.7" fill="#c8281f"/>
+        <circle cx="0" cy="-0.04" r="0.62" fill="#ff3b30"/><circle cx="0" cy="-0.04" r="0.3" fill="#e0342b"/><ellipse cx="-0.2" cy="-0.28" rx="0.22" ry="0.12" fill="#ffa39d" fill-opacity=".8"/></g>`;
+      switch (kind) {
+        case 'tape2':     return tape(0, 0, W * 0.26, p * 0.8, -45) + tape(W, 0, W * 0.26, p * 0.8, 45);
+        case 'thumbtack': return thumbtack(W / 2, p * 0.45, p * 1.05, -10);
+        case 'pin':       return pin(W / 2 - p * 0.35, -p * 0.35, p * 1.25, -28, '#ff3b30', '#ffa39d');
+        case 'pin2':      return pin(W * 0.14, -p * 0.25, p * 1.1, -35, '#ff3b30', '#ffa39d') + pin(W * 0.86, -p * 0.25, p * 1.1, 35, '#2f7cf6', '#9cc4ff');
+        case 'clip':      return clip(W * 0.86, p * 0.15, p * 0.95, -8);
+        case 'magnet':    return magnet(W / 2, p * 0.5, p * 1.05);
+        default:          return tape(W / 2, 0, W * 0.26, p * 0.9, 1);
+      }
+    }
+    // Overlay-SVG: deckt den Zettel plus Rand m ab, damit überstehende Teile (Nadelkopf, Klammer) Platz haben
+    function fastenerSvg(kind, W, H, p) {
+      const m = p * 2.2;
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${W + 2 * m} ${H + 2 * m}" width="${W + 2 * m}" height="${H + 2 * m}">${fastenerShapes(kind, W, H, p)}</svg>`;
+    }
+
     const $ = id => document.getElementById(id);
     const noteEl = $('note'), textEl = $('text'), colorsEl = $('colors'), statusEl = $('status'), savedEl = $('saved');
 
     // ---------- Zustand ----------
     // autoRun standardmäßig aus: Start per URL bringt die Kurzbefehle-App in den Vordergrund.
-    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, updated: null, pinned: null };
+    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', font: 'caveat', updated: null, pinned: null };
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) state = { ...state, ...JSON.parse(raw) };
@@ -216,6 +281,8 @@
     if (!COLORS[state.color]) state.color = 'yellow';
     if (typeof state.shortcut !== 'string' || !state.shortcut.trim()) state.shortcut = 'Zettel';
     if (typeof state.fontScale !== 'number' || state.fontScale < 60 || state.fontScale > 140) state.fontScale = 100;
+    if (!FASTENERS[state.fastener]) state.fastener = 'tape';
+    if (!FONTS[state.font]) state.font = 'caveat';
     // Einmalige Umstellung (Sept. 2026): gespeicherte Installationen von „automatisch öffnen“ auf aus setzen
     if (!state.autoRunReset) { state.autoRun = false; state.autoRunReset = true; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {} }
 
@@ -230,7 +297,8 @@
     function fmtTime(ts) { return new Date(ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); }
     function isPinnedCurrent() {
       return !!(state.pinned && state.pinned.text === state.text && state.pinned.color === state.color
-        && (state.pinned.fontScale || 100) === (state.fontScale || 100));
+        && (state.pinned.fontScale || 100) === (state.fontScale || 100)
+        && (state.pinned.fastener || 'tape') === state.fastener && (state.pinned.font || 'caveat') === state.font);
     }
     function updatePinBadge() {
       const pin = $('pin');
@@ -250,7 +318,7 @@
       }
     }
     function markPinned() {
-      state.pinned = { text: state.text, color: state.color, fontScale: state.fontScale, at: Date.now() };
+      state.pinned = { text: state.text, color: state.color, fontScale: state.fontScale, fastener: state.fastener, font: state.font, at: Date.now() };
       persist();
     }
 
@@ -263,6 +331,30 @@
     }
 
     // ---------- UI ----------
+    const fastenersEl = $('fasteners'), fontsEl = $('fonts');
+    for (const [name, f] of Object.entries(FASTENERS)) {
+      const b = document.createElement('button');
+      b.dataset.fastener = name; b.setAttribute('role', 'radio'); b.title = f.label; b.setAttribute('aria-label', f.label);
+      // Miniatur: kleiner Zettel mit der Befestigung
+      b.innerHTML = `<svg viewBox="-14 -14 128 108"><rect x="0" y="0" width="100" height="80" fill="#fff59b"/>${fastenerShapes(name, 100, 80, 12)}</svg>`;
+      b.addEventListener('click', () => { state.fastener = name; applyFastener(); persist(); });
+      fastenersEl.appendChild(b);
+    }
+    for (const [name, f] of Object.entries(FONTS)) {
+      const b = document.createElement('button');
+      b.dataset.font = name; b.setAttribute('role', 'radio'); b.textContent = f.label;
+      b.style.fontFamily = `"${f.family}", ${FALLBACK}`; b.style.fontWeight = f.weight;
+      b.addEventListener('click', () => { state.font = name; applyFont(); persist(); });
+      fontsEl.appendChild(b);
+    }
+    function applyFastener() {
+      for (const b of fastenersEl.children) b.setAttribute('aria-pressed', String(b.dataset.fastener === state.fastener));
+      syncPreview(); updatePinBadge();
+    }
+    function applyFont() {
+      for (const b of fontsEl.children) b.setAttribute('aria-pressed', String(b.dataset.font === state.font));
+      syncPreview(); updatePinBadge();
+    }
     for (const [name, c] of Object.entries(COLORS)) {
       const b = document.createElement('button');
       b.dataset.color = name; b.style.background = c.paper; b.setAttribute('role', 'radio'); b.title = name;
@@ -271,6 +363,8 @@
     }
     textEl.value = state.text;
     applyColor();
+    for (const b of fastenersEl.children) b.setAttribute('aria-pressed', String(b.dataset.fastener === state.fastener));
+    for (const b of fontsEl.children) b.setAttribute('aria-pressed', String(b.dataset.font === state.font));
     updatePinBadge();
 
     let t = null;
@@ -300,9 +394,12 @@
     $('close').addEventListener('click', () => { $('overlay').hidden = true; });
 
     // ---------- Hintergrundbild rendern ----------
+    // Gewählte Schrift; solange sie nicht geladen ist, dieselbe Ersatzschrift in Vorschau und Bild.
     function noteFont() {
-      const ok = document.fonts && document.fonts.check('20px Caveat');
-      return ok ? 'Caveat' : '"Segoe Print", "Bradley Hand", "Comic Sans MS", cursive';
+      const f = FONTS[state.font] || FONTS.caveat;
+      let ok = false;
+      try { ok = document.fonts && document.fonts.check(`${f.weight} 20px "${f.family}"`); } catch (_) {}
+      return { family: ok ? `"${f.family}"` : FALLBACK, weight: f.weight, lh: f.lh };
     }
 
     // Zeilenumbruch: Absätze respektieren, Wörter umbrechen, überlange Wörter hart trennen.
@@ -356,14 +453,16 @@
       const noteW = Math.round(layout.noteW);
       const pad = Math.round(noteW * 0.08);
       const textW = noteW - 2 * pad;
-      const family = noteFont();
+      const font = noteFont();
+      const family = font.family, weight = font.weight, LH = font.lh;
       const paras = text.split('\n');
-      const longestWord = paras.flatMap(p => p.split(/\s+/)).reduce((a, b) => (b.length > a.length ? b : a), '');
+      measureCtx.font = `${weight} 100px ${family}`;
+      const longestWord = paras.flatMap(p => p.split(/\s+/)).reduce((a, b) => (measureCtx.measureText(b).width > measureCtx.measureText(a).width ? b : a), '');
       const minFs = noteW / 28;           // absolute Untergrenze
       const paraFloor = noteW / 16;       // bis hierhin darf die Schrift schrumpfen, damit Absätze einzeilig bleiben
-      const measure = f => { measureCtx.font = `500 ${f}px ${family}`; return wrap(measureCtx, text, textW); };
-      const wordFits = f => { measureCtx.font = `500 ${f}px ${family}`; return measureCtx.measureText(longestWord).width <= textW; };
-      const fitsHeight = (f, ls) => ls.length * f * 1.15 + 2 * pad <= layout.maxNoteH;
+      const measure = f => { measureCtx.font = `${weight} ${f}px ${family}`; return wrap(measureCtx, text, textW); };
+      const wordFits = f => { measureCtx.font = `${weight} ${f}px ${family}`; return measureCtx.measureText(longestWord).width <= textW; };
+      const fitsHeight = (f, ls) => ls.length * f * LH + 2 * pad <= layout.maxNoteH;
 
       let fs = Math.round(noteW / 7), lines;
       // 1) Kein Wort wird hart getrennt: Schrift so weit verkleinern, bis das längste Wort in eine Zeile passt.
@@ -377,9 +476,9 @@
       // 4) Höhe des Layouts einhalten.
       lines = measure(fs);
       while (!fitsHeight(fs, lines) && fs > minFs) { fs = Math.round(fs * 0.92); lines = measure(fs); }
-      const lh = fs * 1.15;
+      const lh = fs * LH;
       const noteH = Math.max(Math.round(lines.length * lh + 2 * pad), Math.round(noteW * 0.6));
-      return { layout, noteW, pad, textW, family, fs, lh, lines, noteH };
+      return { layout, noteW, pad, textW, family, weight, LH, fs, lh, lines, noteH };
     }
 
     // Vorschau in der App: der Zettel wird proportional zum Hintergrundbild skaliert,
@@ -388,15 +487,31 @@
       const t = targetCanvas();
       const f = fitNote(t.w, t.h, t.layout, noteText() || 'Was soll auf den Zettel?');
       const scale = noteEl.clientWidth / f.noteW;
+      textEl.style.fontFamily = f.family; textEl.style.fontWeight = f.weight;
       textEl.style.fontSize = (f.fs * scale) + 'px';
-      textEl.style.lineHeight = '1.15';
+      textEl.style.lineHeight = String(f.LH);
       noteEl.style.height = Math.round(f.noteH * scale) + 'px';
       // Vertikale Lage wie im Bild: Textblock im Zettel zentriert
       const extra = Math.max(0, (f.noteH - 2 * f.pad - f.lines.length * f.lh) / 2) * scale;
       textEl.style.paddingTop = Math.round(extra) + 'px';
+      // Befestigung als Overlay, gleiche Zeichnung und Proportion wie im Bild
+      const m = f.pad * 2.2, fp = $('fastener-preview');
+      fp.style.left = (-m * scale) + 'px'; fp.style.top = (-m * scale) + 'px';
+      fp.style.width = ((f.noteW + 2 * m) * scale) + 'px'; fp.style.height = ((f.noteH + 2 * m) * scale) + 'px';
+      const key = state.fastener + '|' + f.noteW + '|' + f.noteH;
+      if (fp.dataset.key !== key) { fp.innerHTML = fastenerSvg(state.fastener, f.noteW, f.noteH, f.pad); fp.dataset.key = key; }
     }
 
-    function renderWallpaper(w, h, layoutName) {
+    // SVG der Befestigung als Bild fürs Canvas
+    function svgImage(svg) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img); img.onerror = reject;
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+      });
+    }
+
+    async function renderWallpaper(w, h, layoutName) {
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
@@ -407,7 +522,9 @@
       ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
 
       const c = COLORS[state.color];
-      const { layout, noteW, pad, family, fs, lh, lines, noteH } = fitNote(w, h, layoutName, noteText() || '…');
+      const { layout, noteW, pad, family, weight, fs, lh, lines, noteH } = fitNote(w, h, layoutName, noteText() || '…');
+      const m = pad * 2.2;
+      const fastener = await svgImage(fastenerSvg(state.fastener, noteW, noteH, pad)).catch(() => null);
 
       // Position: Mitte leicht unterhalb der Bildmitte – oben bleibt Platz für die Uhr
       const cx = w / 2, cy = layout.cy;
@@ -420,15 +537,14 @@
       ctx.fillRect(-noteW / 2, -noteH / 2, noteW, noteH);
       ctx.shadowColor = 'transparent';
 
-      // Klebestreifen
-      ctx.fillStyle = 'rgba(255,255,255,.55)';
-      ctx.fillRect(-noteW * 0.13, -noteH / 2 - pad * 0.45, noteW * 0.26, pad * 0.9);
-
       ctx.fillStyle = c.ink;
-      ctx.font = `500 ${fs}px ${family}`;
+      ctx.font = `${weight} ${fs}px ${family}`;
       ctx.textBaseline = 'top';
       let y = -noteH / 2 + pad + (noteH - 2 * pad - lines.length * lh) / 2;
       for (const line of lines) { ctx.fillText(line, -noteW / 2 + pad, y); y += lh; }
+
+      // Befestigung zuletzt, liegt über Papier und Text
+      if (fastener) ctx.drawImage(fastener, -noteW / 2 - m, -noteH / 2 - m, noteW + 2 * m, noteH + 2 * m);
       ctx.restore();
       return canvas;
     }
@@ -436,7 +552,7 @@
     async function renderPng() {
       try { if (document.fonts) await document.fonts.ready; } catch (_) {}
       const t = targetCanvas();
-      const canvas = renderWallpaper(t.w, t.h, t.layout);
+      const canvas = await renderWallpaper(t.w, t.h, t.layout);
       return new Promise(r => canvas.toBlob(r, 'image/png'));
     }
 

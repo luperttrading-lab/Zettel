@@ -44,8 +44,12 @@ Keine Web-App, kein Fensterwechsel.
    Es muss ein PNG mit gelbem Zettel erscheinen.
 
 Parameter: `text` (Pflicht), `color` (`gelb`, `rosa`, `gruen`, `blau`), `device` (`iphone` = Hochformat
-1179×2556, sonst iPad-Quadrat 2360×2360), optional `w`/`h` in Pixeln. Bei quadratischem Bild wird das
-Tablet-Layout gewählt, sonst das Hochformat-Layout.
+1179×2556, sonst iPad-Quadrat 2360×2360), `font` (`caveat`, `patrick`, `kalam`, `marker`), `fastener`
+(`tape`, `tape2`, `thumbtack`, `pin`, `pin2`, `clip`, `magnet`; deutsch auch `klebestreifen`, `reisszwecke`,
+`nadel`, `nadeln`, `klammer`), `scale` (Schriftgröße 60–140 %), optional `w`/`h` in Pixeln. Bei
+quadratischem Bild wird das Tablet-Layout gewählt, sonst das Hochformat-Layout.
+
+Beispiel: `…/api/zettel?device=iphone&color=gelb&font=kalam&fastener=pin&text=…`
 
 Hinweis für Vercel: `vercel.json` packt `fonts/**` und `node_modules/harfbuzzjs/**` mit ein; ohne Letzteres
 fehlt satori zur Laufzeit die Datei `hb.wasm`.
