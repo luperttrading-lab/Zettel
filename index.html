@@ -84,7 +84,6 @@
     /* Listenmarkierung liegt außerhalb des Textflusses (nicht editierbar), die Zeile ist um ihre Breite eingerückt */
     .note .editor .ln[data-mk]::before { content: attr(data-mk); position: absolute; left: 0; top: 0; white-space: pre; }
     .note .editor.empty .ln:first-child::after { content: "Was soll auf den Zettel?"; color: rgba(42,42,46,.35); }
-    .note .fastener.picking svg { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 8px rgba(255,255,255,.75)); }
 
     /* --- Auswahl-Schieber: Befestigung · Schrift · Liste ---
        Eine Reihe pro Einstellung, nach links/rechts wischen; das Element in der Mitte ist die Auswahl,
@@ -117,18 +116,29 @@
     .strip-font { --iw: 112px; } .strip-font .item { height: 46px; font-size: 24px; }
     .strip-list { --iw: 104px; } .strip-list .item { height: 40px; font-size: 15px; }
 
-    /* Farbwahl der Befestigung: Leiste am unteren Bildschirmrand, solange eine Befestigung angetippt ist */
+    /* Aussehen der Befestigung: Leiste direkt unter dem Zettel, waagerecht scrollbar */
     .fcolors {
-      position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
-      display: flex; justify-content: center; align-items: center; gap: 14px;
-      padding: 14px 20px max(env(safe-area-inset-bottom), 14px);
-      background: #1e1e21; border-top: 1px solid #2d2d33; box-shadow: 0 -8px 24px rgba(0,0,0,.5);
+      width: min(94vw, 420px); display: flex; align-items: center; gap: 10px;
+      overflow-x: auto; scrollbar-width: none; padding: 10px 14px; border-radius: 16px; background: #1e1e21;
+      -webkit-mask-image: linear-gradient(to right, #000 88%, transparent 100%); mask-image: linear-gradient(to right, #000 88%, transparent 100%);
     }
+    .fcolors::-webkit-scrollbar { display: none; }
     .fcolors[hidden] { display: none; }
-    .fcolors span { font-size: 13px; color: var(--muted); margin-right: 4px; }
-    .fcolors button { width: 36px; height: 36px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.5); padding: 0; }
-    .fcolors button[aria-pressed="true"] { border-color: var(--fg); }
+    .fcolors .sep { flex: 0 0 auto; font-size: 12px; color: var(--muted); padding-left: 10px; border-left: 1px solid #3a3a42; margin-left: 4px; }
+    .fcolors .chip { flex: 0 0 auto; appearance: none; border: 3px solid transparent; cursor: pointer; padding: 0; background: transparent; }
+    .fcolors .chip.color { width: 40px; height: 40px; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+    .fcolors .chip.icon { width: 62px; height: 46px; border-radius: 12px; background: #2d2d33; display: flex; align-items: center; justify-content: center; }
+    .fcolors .chip.icon svg { width: 52px; height: 36px; overflow: visible; display: block; }
+    .fcolors .chip[aria-pressed="true"] { border-color: var(--fg); }
+    /* Solange die Leiste offen ist: Befestigung pulsiert mit dunklem Rand und hellem Schein, der Rest tritt zurück */
+    @keyframes pickpulse {
+      from { filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 4px #fff); }
+      to   { filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 10px #fff) drop-shadow(0 0 18px #fff); }
+    }
+    .note .fastener.picking svg { animation: pickpulse .75s ease-in-out infinite alternate; }
     body.picking .strip-fastener .item.active { box-shadow: inset 0 0 0 2px var(--fg); border-radius: 11px; }
+    body.picking .colors, body.picking .strips > :not(.strip-fastener), body.picking .scale, body.picking .actions, body.picking .status, body.picking .setup { opacity: .35; transition: opacity .2s; }
+    .colors, .strips > *, .scale, .actions, .status, .setup { transition: opacity .2s; }
 
     /* --- Farben --- */
     .colors { display: flex; gap: 14px; }
@@ -206,13 +216,14 @@
       <div class="fastener" id="fastener-preview" aria-hidden="true"></div>
       <span class="pin" id="pin" hidden></span>
     </section>
+    <!-- Aussehen der Befestigung: erscheint beim Antippen der Befestigung, Farben · Muster · Motive -->
+    <div class="fcolors" id="fcolors" hidden role="radiogroup" aria-label="Aussehen der Befestigung"></div>
   </div>
 
   <div class="colors" id="colors" role="radiogroup" aria-label="Zettelfarbe"></div>
   <!-- Drei Schieber: Befestigung · Schrift · Liste. Nach links/rechts wischen, Auswahl in der Mitte. -->
   <div class="strips">
     <div class="strip-wrap strip-fastener"><div class="strip" id="strip-fastener" aria-label="Befestigung"></div></div>
-    <div class="fcolors" id="fcolors" hidden role="radiogroup" aria-label="Farbe der Befestigung"><span>Farbe</span></div>
     <div class="strip-wrap strip-font"><div class="strip" id="strip-font" aria-label="Schriftart"></div></div>
     <div class="strip-wrap strip-list"><div class="strip" id="strip-list" aria-label="Liste"></div></div>
   </div>
@@ -263,9 +274,10 @@
     <button class="btn ghost" id="close">Schließen</button>
   </div>
 
+  <script src="lib/fasteners.js"></script>
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.19'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.20'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -283,96 +295,9 @@
     };
     const FALLBACK = '"Segoe Print", "Bradley Hand", "Comic Sans MS", cursive';
 
-    // Befestigungen: Zeichnung als SVG in Zettel-Koordinaten (0/0 = linke obere Ecke, p = Innenabstand).
-    // Dieselbe Zeichnung landet als Overlay auf der App-Vorschau und im Hintergrundbild.
-    const FASTENERS = {
-      tape:      { label: 'Klebestreifen' },
-      tape2:     { label: 'Zwei Streifen' },
-      thumbtack: { label: 'Reißzwecke' },
-      pushpin:   { label: 'Pinnadel' },
-      pin:       { label: 'Nadel' },
-      pin2:      { label: 'Zwei Nadeln' },
-      clip:      { label: 'Büroklammer' },
-      magnet:    { label: 'Magnet' },
-    };
-    // Farben der Befestigungen: main = Grundton, mid = heller, hi = Glanz, dark/darker = Schatten, tape = Streifenfarbe
-    const FCOLORS = {
-      red:    { label: 'Rot',     main: '#ff3b30', mid: '#ff5147', hi: '#ffa39d', dark: '#c8281f', darker: '#9c1e17', tape: '#ff3b30' },
-      blue:   { label: 'Blau',    main: '#2f7cf6', mid: '#4c90ff', hi: '#9cc4ff', dark: '#1f5fc4', darker: '#174a99', tape: '#2f7cf6' },
-      green:  { label: 'Grün',    main: '#34c759', mid: '#4fd370', hi: '#a8f0b8', dark: '#248f40', darker: '#1a6e31', tape: '#34c759' },
-      yellow: { label: 'Gelb',    main: '#ffcc00', mid: '#ffd633', hi: '#fff0a0', dark: '#cc9f00', darker: '#9a7800', tape: '#ffcc00' },
-      white:  { label: 'Silber',  main: '#d8d8de', mid: '#e8e8ec', hi: '#ffffff', dark: '#9a9aa2', darker: '#7a7a82', tape: '#ffffff' },
-      black:  { label: 'Schwarz', main: '#3a3a40', mid: '#4a4a52', hi: '#8a8a94', dark: '#232327', darker: '#141416', tape: '#3a3a40' },
-    };
-    // Standardfarbe je Befestigung (Streifen und Klammer silbern/weiß, Nadeln rot)
-    const FCOLOR_DEFAULT = { tape: 'white', tape2: 'white', thumbtack: 'red', pushpin: 'red', pin: 'red', pin2: 'red', clip: 'white', magnet: 'red' };
-    // Grundformen (Einheit = Vielfaches von s, Ursprung im Kopf der Befestigung), c = Farbeintrag aus FCOLORS
-    const SHAPE = {
-      tape: (cx, cy, w, h, deg, c) => `<g transform="rotate(${deg} ${cx} ${cy})"><rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" fill="${c.tape}" fill-opacity=".55"/><rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h * 0.12}" fill="#fff" fill-opacity=".25"/></g>`,
-      thumbtack: (cx, cy, s, deg, c) => `<g transform="translate(${cx} ${cy}) rotate(${deg}) scale(${s})">
-        <rect x="-0.06" y="0.55" width="0.12" height="0.7" rx="0.06" fill="#d0d0d6"/><rect x="-0.06" y="0.55" width="0.05" height="0.7" fill="#9a9aa2"/>
-        <rect x="-0.24" y="0.18" width="0.48" height="0.42" rx="0.08" fill="${c.dark}"/>
-        <ellipse cx="0" cy="0.12" rx="0.72" ry="0.44" fill="${c.dark}"/><ellipse cx="0" cy="0" rx="0.72" ry="0.44" fill="${c.main}"/>
-        <ellipse cx="0" cy="-0.04" rx="0.6" ry="0.32" fill="${c.mid}"/><ellipse cx="-0.22" cy="-0.16" rx="0.24" ry="0.12" fill="${c.hi}" fill-opacity=".75"/></g>`,
-      pin: (cx, cy, s, deg, c) => `<g transform="translate(${cx} ${cy}) rotate(${deg}) scale(${s})">
-        <rect x="-0.05" y="0.3" width="0.1" height="1.5" rx="0.05" fill="#d8d8de"/><rect x="-0.05" y="0.3" width="0.04" height="1.5" fill="#9a9aa2"/>
-        <circle cx="0" cy="0" r="0.5" fill="${c.main}"/><circle cx="-0.16" cy="-0.18" r="0.16" fill="${c.hi}" fill-opacity=".8"/>
-        <ellipse cx="0.1" cy="0.32" rx="0.34" ry="0.14" fill="#000" fill-opacity=".18"/></g>`,
-      clip: (cx, cy, s, deg, c) => `<g transform="translate(${cx} ${cy}) rotate(${deg}) scale(${s})" fill="none" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M-0.3,1.5 V-0.9 a0.3,0.3 0 0 1 0.6,0 V1.6 a0.45,0.45 0 0 1 -0.9,0 V-0.4" stroke="${c.darker}" stroke-width="0.13"/>
-        <path d="M-0.3,1.5 V-0.9 a0.3,0.3 0 0 1 0.6,0 V1.6 a0.45,0.45 0 0 1 -0.9,0 V-0.4" stroke="${c.main}" stroke-width="0.08"/></g>`,
-      magnet: (cx, cy, s, c) => `<g transform="translate(${cx} ${cy}) scale(${s})">
-        <circle cx="0" cy="0.08" r="0.72" fill="#000" fill-opacity=".25"/><circle cx="0" cy="0" r="0.7" fill="${c.dark}"/>
-        <circle cx="0" cy="-0.04" r="0.62" fill="${c.main}"/><circle cx="0" cy="-0.04" r="0.3" fill="${c.dark}"/><ellipse cx="-0.2" cy="-0.28" rx="0.22" ry="0.12" fill="${c.hi}" fill-opacity=".8"/></g>`,
-      // Pinnadel: flache Kappe, Schaft, breiter Fuß, Nadel (Ursprung = Mitte der Kappenoberseite)
-      pushpin: (cx, cy, s, deg, c) => `<g transform="translate(${cx} ${cy}) rotate(${deg}) scale(${s})">
-        <ellipse cx="0.12" cy="1.0" rx="0.64" ry="0.17" fill="#000" fill-opacity=".18"/>
-        <rect x="-0.04" y="0.9" width="0.08" height="0.5" rx="0.04" fill="#d8d8de"/><rect x="-0.04" y="0.9" width="0.03" height="0.5" fill="#9a9aa2"/>
-        <ellipse cx="0" cy="0.93" rx="0.56" ry="0.2" fill="${c.darker}"/><rect x="-0.56" y="0.85" width="1.12" height="0.08" fill="${c.darker}"/><ellipse cx="0" cy="0.85" rx="0.56" ry="0.2" fill="${c.main}"/>
-        <rect x="-0.2" y="0.1" width="0.4" height="0.78" fill="${c.dark}"/><rect x="-0.2" y="0.1" width="0.13" height="0.78" fill="${c.mid}" fill-opacity=".55"/>
-        <ellipse cx="0" cy="0.14" rx="0.5" ry="0.25" fill="${c.darker}"/><rect x="-0.5" y="0" width="1" height="0.14" fill="${c.dark}"/><ellipse cx="0" cy="0" rx="0.5" ry="0.25" fill="${c.main}"/>
-        <ellipse cx="-0.16" cy="-0.07" rx="0.17" ry="0.08" fill="${c.hi}" fill-opacity=".8"/></g>`,
-    };
-    // Zweite Nadel bei „Zwei Nadeln“: Gegenfarbe zur gewählten
-    const partnerColor = key => FCOLORS[key === 'red' ? 'blue' : 'red'];
-    // Symbol für die Auswahl: nur die Befestigung, groß, ohne Papier (Zeichenfläche 60×40)
-    function fastenerIcon(kind, colorKey) {
-      const { tape, thumbtack, pin, clip, magnet, pushpin } = SHAPE;
-      const c = FCOLORS[colorKey] || FCOLORS[FCOLOR_DEFAULT[kind]] || FCOLORS.red;
-      let s;
-      switch (kind) {
-        case 'tape2':     s = tape(17, 20, 28, 11, -45, c) + tape(43, 20, 28, 11, 45, c); break;
-        case 'thumbtack': s = thumbtack(30, 11, 15, -10, c); break;
-        case 'pushpin':   s = pushpin(30, 6, 14, -12, c); break;
-        case 'pin':       s = pin(30, 11, 13, -28, c); break;
-        case 'pin2':      s = pin(19, 11, 12, -35, c) + pin(41, 11, 12, 35, partnerColor(colorKey)); break;
-        case 'clip':      s = clip(30, 14, 11, -8, c); break;
-        case 'magnet':    s = magnet(30, 20, 15, c); break;
-        default:          s = tape(30, 20, 46, 14, -3, c);
-      }
-      return `<svg viewBox="0 0 60 40" aria-hidden="true">${s}</svg>`;
-    }
-    function fastenerShapes(kind, W, H, p, colorKey) {
-      const { tape, thumbtack, pin, clip, magnet, pushpin } = SHAPE;
-      const c = FCOLORS[colorKey] || FCOLORS[FCOLOR_DEFAULT[kind]] || FCOLORS.red;
-      switch (kind) {
-        case 'tape2':     return tape(p * 0.7, p * 0.7, W * 0.24, p * 0.8, -45, c) + tape(W - p * 0.7, p * 0.7, W * 0.24, p * 0.8, 45, c); // über die Ecken, etwas ins Papier
-        case 'thumbtack': return thumbtack(W / 2, -p * 0.12, p * 1.05, -10, c); // Kopf ragt über die Oberkante
-        case 'pushpin':   return pushpin(W / 2, -p * 0.75, p * 1.7, -12, c);
-        case 'pin':       return pin(W / 2 - p * 0.35, -p * 0.35, p * 1.25, -28, c);
-        case 'pin2':      return pin(W * 0.14, -p * 0.25, p * 1.1, -35, c) + pin(W * 0.86, -p * 0.25, p * 1.1, 35, partnerColor(colorKey));
-        case 'clip':      return clip(W * 0.86, p * 0.15, p * 0.95, -8, c);
-        case 'magnet':    return magnet(W / 2, p * 0.5, p * 1.05, c);
-        default:          return tape(W / 2, 0, W * 0.26, p * 0.9, 1, c);
-      }
-    }
-    // Wie weit die Befestigung ins Papier ragt (Vielfaches von p): darunter beginnt erst der Text
-    const FASTENER_INSET = { tape: 0, tape2: 0, thumbtack: 0.6, pushpin: 0.9, pin: 0.7, pin2: 0.7, clip: 0, magnet: 0.9 };
-    // Overlay-SVG: deckt den Zettel plus Rand m ab, damit überstehende Teile (Nadelkopf, Klammer) Platz haben
-    function fastenerSvg(kind, W, H, p, colorKey) {
-      const m = p * 2.2;
-      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${W + 2 * m} ${H + 2 * m}" width="${W + 2 * m}" height="${H + 2 * m}">${fastenerShapes(kind, W, H, p, colorKey)}</svg>`;
-    }
+    // Befestigungen (Zeichnung, Farben, Muster, Motive) kommen aus lib/fasteners.js – dieselbe Datei nutzt der Server.
+    const { FASTENERS, FASTENER_INSET, FCOLORS, PATTERNS, PATTERN_SUPPORT, DESIGNS, DESIGN_SUPPORT,
+      normalizeLook, lookKey, fastenerIcon, fastenerSvg } = ZettelFasteners;
 
     const $ = id => document.getElementById(id);
     // Listenmarkierungen: „1.“, „•“ … am Zeilenanfang, dahinter ein geschütztes Leerzeichen (U+00A0),
@@ -495,7 +420,7 @@
 
     // ---------- Zustand ----------
     // autoRun standardmäßig aus: Start per URL bringt die Kurzbefehle-App in den Vordergrund.
-    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fastenerColors: {}, font: 'caveat', list: 'none', updated: null, pinned: null };
+    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fastenerLook: {}, font: 'caveat', list: 'none', updated: null, pinned: null };
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) state = { ...state, ...JSON.parse(raw) };
@@ -504,9 +429,18 @@
     if (typeof state.shortcut !== 'string' || !state.shortcut.trim()) state.shortcut = 'Zettel';
     if (typeof state.fontScale !== 'number' || state.fontScale < 60 || state.fontScale > 140) state.fontScale = 100;
     if (!FASTENERS[state.fastener]) state.fastener = 'tape';
-    if (!state.fastenerColors || typeof state.fastenerColors !== 'object') state.fastenerColors = {};
-    // Farbe der aktuellen Befestigung (je Befestigung gemerkt, sonst Standard)
-    function fastenerColor(kind = state.fastener) { const k = state.fastenerColors[kind]; return FCOLORS[k] ? k : FCOLOR_DEFAULT[kind]; }
+    if (!state.fastenerLook || typeof state.fastenerLook !== 'object') state.fastenerLook = {};
+    // Ältere Installationen: nur Farbe gespeichert
+    if (state.fastenerColors && typeof state.fastenerColors === 'object') {
+      for (const [k, c] of Object.entries(state.fastenerColors)) if (!state.fastenerLook[k]) state.fastenerLook[k] = { color: c };
+      delete state.fastenerColors;
+    }
+    // Aussehen der Befestigung (Farbe, Muster, Motiv), je Befestigung gemerkt, sonst Standard
+    function fastenerLook(kind = state.fastener) { return normalizeLook(kind, state.fastenerLook[kind]); }
+    function setFastenerLook(patch) {
+      state.fastenerLook[state.fastener] = { ...fastenerLook(), ...patch };
+      applyFastener(); persist();
+    }
     if (!FONTS[state.font]) state.font = 'caveat';
     if (!['none', 'num', 'dot', 'square', 'dash', 'check'].includes(state.list)) state.list = 'none';
     // Einmalige Umstellung (Sept. 2026): gespeicherte Installationen von „automatisch öffnen“ auf aus setzen
@@ -525,7 +459,7 @@
       return !!(state.pinned && state.pinned.text === state.text && state.pinned.color === state.color
         && (state.pinned.fontScale || 100) === (state.fontScale || 100)
         && (state.pinned.fastener || 'tape') === state.fastener && (state.pinned.font || 'caveat') === state.font
-        && (state.pinned.fastenerColor || fastenerColor()) === fastenerColor());
+        && (state.pinned.fastenerLook || lookKey(fastenerLook())) === lookKey(fastenerLook()));
     }
     function updatePinBadge() {
       const pin = $('pin');
@@ -545,7 +479,7 @@
       }
     }
     function markPinned() {
-      state.pinned = { text: state.text, color: state.color, fontScale: state.fontScale, fastener: state.fastener, fastenerColor: fastenerColor(), font: state.font, at: Date.now() };
+      state.pinned = { text: state.text, color: state.color, fontScale: state.fontScale, fastener: state.fastener, fastenerLook: lookKey(fastenerLook()), font: state.font, at: Date.now() };
       persist();
     }
 
@@ -601,29 +535,48 @@
         highlight(i);
       }, setHtml(v, html) { const d = inner.querySelector(`.item[data-value="${v}"]`); if (d) d.innerHTML = html; } };
     }
-    const FASTENER_SHORT = { tape: 'Streifen', tape2: 'Ecken', thumbtack: 'Zwecke', pushpin: 'Pinnadel', pin: 'Nadel', pin2: '2 Nadeln', clip: 'Klammer', magnet: 'Magnet' };
-    const fastenerItemHtml = name => fastenerIcon(name, fastenerColor(name)) + `<span>${FASTENER_SHORT[name]}</span>`;
+    const fastenerItemHtml = name => fastenerIcon(name, fastenerLook(name)) + `<span>${FASTENERS[name].short}</span>`;
     const stripFastener = makeStrip($('strip-fastener'), Object.keys(FASTENERS).map(name => ({
       value: name, html: fastenerItemHtml(name),
     })), v => { state.fastener = v; applyFastener(); persist(); }, () => toggleFcolors());
-    // Farbwahl der Befestigung: Tipp auf die Befestigung im Zettel oder auf das gewählte Symbol im Schieber
+
+    // ---------- Aussehen der Befestigung wählen ----------
+    // Leiste direkt unter dem Zettel: Farben, dann (je nach Befestigung) Muster und Motive; nach rechts wischen.
     const fcolorsEl = $('fcolors');
-    for (const [key, c] of Object.entries(FCOLORS)) {
-      const b = document.createElement('button');
-      b.dataset.fcolor = key; b.style.background = c.main; b.setAttribute('role', 'radio'); b.title = c.label; b.setAttribute('aria-label', c.label);
-      b.addEventListener('click', () => { state.fastenerColors[state.fastener] = key; applyFastener(); persist(); });
-      fcolorsEl.appendChild(b);
+    function buildPalette() {
+      const kind = state.fastener, look = fastenerLook(kind);
+      fcolorsEl.innerHTML = '';
+      const chip = (cls, html, pressed, title, onPick) => {
+        const b = document.createElement('button'); b.className = 'chip ' + cls; b.innerHTML = html;
+        b.setAttribute('role', 'radio'); b.setAttribute('aria-pressed', String(pressed)); b.title = title; b.setAttribute('aria-label', title);
+        b.addEventListener('click', onPick); fcolorsEl.appendChild(b); return b;
+      };
+      const sep = label => { const d = document.createElement('span'); d.className = 'sep'; d.textContent = label; fcolorsEl.appendChild(d); };
+      for (const [key, c] of Object.entries(FCOLORS)) {
+        const b = chip('color', '', look.color === key, c.label, () => setFastenerLook({ color: key }));
+        b.style.background = c.main;
+      }
+      const pats = PATTERN_SUPPORT[kind] || [];
+      if (pats.length) {
+        sep('Muster');
+        for (const key of ['none', ...pats]) chip('icon', fastenerIcon(kind, { ...look, pattern: key }), look.pattern === key, PATTERNS[key], () => setFastenerLook({ pattern: key }));
+      }
+      const des = DESIGN_SUPPORT[kind] || [];
+      if (des.length) {
+        sep('Motiv');
+        for (const key of ['none', ...des]) chip('icon', fastenerIcon(kind, { ...look, design: key }), look.design === key, DESIGNS[key], () => setFastenerLook({ design: key }));
+      }
+      // Gewähltes Element in Sicht halten
+      const active = fcolorsEl.querySelector('.chip[aria-pressed="true"]');
+      if (active && active.offsetLeft + active.offsetWidth > fcolorsEl.clientWidth) fcolorsEl.scrollLeft = active.offsetLeft - 40;
     }
-    function syncFcolors() {
-      const cur = fastenerColor();
-      for (const b of fcolorsEl.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.fcolor === cur));
-    }
-    // Leiste unten einblenden; die angetippte Befestigung leuchtet solange. Tipp irgendwo anders schließt.
+    // Leiste unter dem Zettel einblenden; die angetippte Befestigung pulsiert, der Rest tritt zurück.
+    // Tipp irgendwo anders (Zettel, Schieber, Hintergrund) schließt.
     function toggleFcolors(show = fcolorsEl.hidden) {
       fcolorsEl.hidden = !show;
       $('fastener-preview').classList.toggle('picking', show);
       document.body.classList.toggle('picking', show);
-      if (show) syncFcolors();
+      if (show) buildPalette();
     }
     $('fastener-preview').addEventListener('click', e => { e.preventDefault(); toggleFcolors(); });
     document.addEventListener('pointerdown', e => {
@@ -637,7 +590,7 @@
     function applyFastener() {
       stripFastener.set(state.fastener);
       stripFastener.setHtml(state.fastener, fastenerItemHtml(state.fastener));
-      syncFcolors();
+      if (!fcolorsEl.hidden) buildPalette();
       syncPreview(); updatePinBadge();
     }
     // Schrift ausdrücklich laden und danach neu rechnen – sonst misst die Automatik mit der Ersatzschrift
@@ -948,9 +901,9 @@
       const m = f.pad * 2.2, fp = $('fastener-preview');
       fp.style.left = (-m * scale) + 'px'; fp.style.top = (-m * scale) + 'px';
       fp.style.width = ((f.noteW + 2 * m) * scale) + 'px'; fp.style.height = ((f.noteH + 2 * m) * scale) + 'px';
-      const key = state.fastener + '|' + fastenerColor() + '|' + f.noteW + '|' + f.noteH;
+      const key = state.fastener + '|' + lookKey(fastenerLook()) + '|' + f.noteW + '|' + f.noteH;
       if (fp.dataset.key !== key) {
-        fp.innerHTML = fastenerSvg(state.fastener, f.noteW, f.noteH, f.pad, fastenerColor()); fp.dataset.key = key;
+        fp.innerHTML = fastenerSvg(state.fastener, f.noteW, f.noteH, f.pad, fastenerLook()); fp.dataset.key = key;
         // Unsichtbare Tipp-Fläche über der ganzen Befestigung (auch hohle Formen wie die Klammer sind so leicht zu treffen)
         try {
           const svg = fp.querySelector('svg'), bb = svg.getBBox(), g = f.pad * 0.4;
@@ -984,7 +937,7 @@
       const c = COLORS[state.color];
       const { layout, noteW, pad, family, weight, fs, lh, lines, noteH, textTop } = fitNote(w, h, layoutName, noteText() || '…');
       const m = pad * 2.2;
-      const fastener = await svgImage(fastenerSvg(state.fastener, noteW, noteH, pad, fastenerColor())).catch(() => null);
+      const fastener = await svgImage(fastenerSvg(state.fastener, noteW, noteH, pad, fastenerLook())).catch(() => null);
 
       // Position: Mitte leicht unterhalb der Bildmitte – oben bleibt Platz für die Uhr
       const cx = w / 2, cy = layout.cy;

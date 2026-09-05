@@ -1,7 +1,7 @@
 // Offline-Cache. Eigene Dateien: Netz zuerst (neue Versionen kommen sofort an), Cache nur offline.
 // Fremde Dateien (Schriften): Cache zuerst.
 const CACHE = 'zettel-app';
-const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
+const ASSETS = ['./', './index.html', './lib/fasteners.js', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
