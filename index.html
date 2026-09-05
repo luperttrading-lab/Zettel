@@ -302,7 +302,7 @@
   <script src="lib/motifs.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.28.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.28.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -605,6 +605,7 @@
       for (const [key, label] of Object.entries(PAPERS)) chip(r2, 'icon', paperIcon(key), state.paper === key, label, () => { state.paper = key; syncPreview(); updatePinBadge(); persist(); buildPaperCard(); });
       const r3 = row('Stift');
       for (const [key, pen] of Object.entries(PENS)) chip(r3, 'color pen', '', state.pen === key, pen.label, () => { state.pen = key; applyColor(); syncPreview(); persist(); buildPaperCard(); }).style.background = pen.ink || COLORS[state.color].ink;
+      if (!fcolorsEl.hidden) placePalette();   // nach jedem Neuaufbau wieder auf die Farbpunkte legen
     }
     let cardMode = null;
     function openCard(mode) { cardMode = mode; toggleFcolors(true); }
@@ -648,6 +649,14 @@
       const r = strip.getBoundingClientRect(), t = top.getBoundingClientRect();
       const y = r.top - t.top - fcolorsEl.offsetHeight - 8;   // Papierfarben darunter bleiben verdeckt, Schieber frei
       fcolorsEl.style.top = Math.max(t.height * 0.35, y) + 'px';   // darf über den Zettel ragen, nur nicht über dessen obere Hälfte
+      if (cardMode !== 'paper') return;
+      // Papier-Karte: die Papierfarben liegen genau auf den Farbpunkten, Linien und Stift darunter (verdecken die Schieber)
+      const dot = document.querySelector('#colors button[data-color]'), chip = fcolorsEl.querySelector('.chip.color');
+      if (!dot || !chip) return;
+      const d = dot.getBoundingClientRect(), c = chip.getBoundingClientRect();
+      fcolorsEl.style.top = (fcolorsEl.offsetTop + (d.top + d.height / 2) - (c.top + c.height / 2)) + 'px';
+      const lab = chip.parentElement.querySelector('.lab');
+      lab.style.flexBasis = Math.max(24, parseFloat(getComputedStyle(lab).flexBasis) + (d.left + d.width / 2) - (c.left + c.width / 2)) + 'px';
     }
     $('fastener-preview').addEventListener('click', e => { e.preventDefault(); toggleFcolors(); });
     document.addEventListener('pointerdown', e => {
