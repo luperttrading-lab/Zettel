@@ -179,7 +179,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.3'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.4'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -200,6 +200,8 @@
     } catch (_) { /* privater Modus o.ä. – dann eben nur flüchtig */ }
     if (!COLORS[state.color]) state.color = 'yellow';
     if (typeof state.shortcut !== 'string' || !state.shortcut.trim()) state.shortcut = 'Zettel';
+    // Einmalige Umstellung (Sept. 2026): gespeicherte Installationen von „automatisch öffnen“ auf aus setzen
+    if (!state.autoRunReset) { state.autoRun = false; state.autoRunReset = true; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {} }
 
     function persist() {
       state.updated = Date.now();
