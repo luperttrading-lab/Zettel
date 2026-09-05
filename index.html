@@ -190,6 +190,8 @@
       background: #34c759; color: #06240e; padding: 12px 14px; border-radius: 14px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.5);
     }
     .update[hidden] { display: none; }
+    .update.info { background: #2d2d33; color: var(--fg); font-weight: 500; }
+    header h1 { cursor: pointer; }
     .update .btn { width: auto; padding: 8px 14px; font-size: 15px; background: #06240e; color: #fff; }
 
     /* --- Banner „Angeheftet“ --- */
@@ -289,7 +291,7 @@
   <script src="lib/fasteners.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.20.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.21.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -1069,26 +1071,42 @@
     // Neue Version auf dem Server? Geprüft beim Öffnen, beim Zurückholen in den Vordergrund und alle 60 s,
     // solange die App sichtbar ist. Dann Banner oben; wird gerade nicht getippt, lädt die App nach 3 s selbst neu.
     let checking = false, announced = null;
+    const updateEl = $('update');
+    // Kurze Meldung im Banner (z. B. „ist aktuell“), verschwindet von selbst
+    function showInfo(text, ms = 2500) {
+      updateEl.className = 'update info'; $('update-text').textContent = text; $('update-go').hidden = true;
+      updateEl.hidden = false;
+      clearTimeout(showInfo.t); showInfo.t = setTimeout(() => { if (updateEl.classList.contains('info')) updateEl.hidden = true; }, ms);
+    }
     function announceUpdate(v) {
       if (announced === v) return;
-      announced = v; flush();
-      const el = $('update'); $('update-text').textContent = 'Neue Version ' + v + ' ist da';
-      el.hidden = false;
+      announced = v; flush(); clearTimeout(showInfo.t);
+      updateEl.className = 'update'; $('update-text').textContent = 'Neue Version ' + v + ' ist da'; $('update-go').hidden = false;
+      updateEl.hidden = false;
       const typing = document.activeElement === textEl.el;
       if (!typing) setTimeout(() => location.reload(), 3000);
     }
     $('update-go').addEventListener('click', () => { flush(); location.reload(); });
-    async function checkForUpdate() {
-      if (checking || !navigator.onLine || document.visibilityState !== 'visible') return;
+    // manual = Tipp auf den Titel: dann auch „ist aktuell“ bzw. „offline“ melden
+    async function checkForUpdate(manual = false) {
+      if (checking) return;
+      if (!manual && document.visibilityState !== 'visible') return;
+      if (!navigator.onLine) { if (manual) showInfo('Offline – Version ' + APP_VERSION + ', Prüfung nicht möglich'); return; }
       checking = true;
+      if (manual) showInfo('Prüfe auf neue Version …', 8000);
       try {
         const res = await fetch('index.html', { cache: 'no-store' });
-        if (!res.ok) return;
+        if (!res.ok) { if (manual) showInfo('Prüfung fehlgeschlagen (' + res.status + ')'); return; }
         const m = (await res.text()).match(/APP_VERSION = '([^']+)'/);
         if (m && m[1] !== APP_VERSION) announceUpdate(m[1]);
-      } catch (_) { /* offline o.ä. – dann eben beim nächsten Mal */ }
+        else if (manual) showInfo('Version ' + APP_VERSION + ' ist aktuell');
+      } catch (_) { if (manual) showInfo('Prüfung fehlgeschlagen – keine Verbindung?'); }
       finally { checking = false; }
     }
+    // Tipp auf „Zettel“ oben links: sofort prüfen
+    const titleEl = document.querySelector('header h1');
+    titleEl.setAttribute('role', 'button'); titleEl.title = 'Auf neue Version prüfen';
+    titleEl.addEventListener('click', () => checkForUpdate(true));
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
     window.addEventListener('pageshow', () => setTimeout(checkForUpdate, 800));
     setInterval(checkForUpdate, 60000);
