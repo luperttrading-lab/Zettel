@@ -1,6 +1,7 @@
 // Vercel-Funktion: GET /api/zettel?text=…&color=gelb&device=iphone&font=caveat&fastener=tape&fcolor=rot&scale=100  →  PNG
 //   font: caveat | patrick | kalam | marker · fastener: tape | tape2 | thumbtack | pushpin | pin | pin2 | clip | magnet
-//   fcolor: rot | blau | gruen | gelb | silber | schwarz · fpattern: streifen | punkte | karo · fdesign (Magnet): smiley | herz | stern | pfote | blume | sonne · scale: 60–140
+//   fcolor: rot | blau | gruen | gelb | silber | schwarz · fpattern: streifen | punkte | karo · fdesign (Magnet): smiley | herz | stern | pfote | blume | sonne
+//   paper: glatt | liniert | kariert · pen: schwarz | blau | rot | gruen · scale: 60–140
 // Der Kurzbefehl „Zettel“ ruft diese URL mit „Inhalt der URL abrufen“ ab und setzt das Bild als Hintergrund.
 //
 // Der Renderer wird erst im Handler geladen: schlägt das Laden fehl (z. B. natives Modul fehlt),
@@ -28,7 +29,7 @@ export default async function handler(req, res) {
     // device=iphone → Hochformat (Face-ID-iPhones), device=ipad → Quadrat; w/h überschreiben beides
     const preset = String(q.device || '').toLowerCase() === 'iphone' ? [1179, 2556] : [2360, 2360];
     const w = Number(q.w) || preset[0], h = Number(q.h) || preset[1];
-    const { png } = await renderZettel({ text: t, color: q.color, font: q.font, fastener: q.fastener, fastenerColor: q.fcolor, fastenerPattern: q.fpattern, fastenerDesign: q.fdesign, fontScale: q.scale, list: q.list, w, h });
+    const { png } = await renderZettel({ text: t, color: q.color, font: q.font, fastener: q.fastener, fastenerColor: q.fcolor, fastenerPattern: q.fpattern, fastenerDesign: q.fdesign, paper: q.paper, pen: q.pen, fontScale: q.scale, list: q.list, w, h });
     res.status(200);
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Content-Disposition', 'inline; filename="zettel.png"');

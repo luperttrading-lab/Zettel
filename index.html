@@ -136,6 +136,8 @@
     .fcolors .chip.icon { width: 62px; height: 46px; border-radius: 12px; background: #2d2d33; display: flex; align-items: center; justify-content: center; }
     .fcolors .chip.icon svg { width: 52px; height: 36px; overflow: visible; display: block; }
     .fcolors .chip[aria-pressed="true"] { border-color: var(--fg); }
+    .fcolors .chip.pen { width: 30px; height: 30px; }
+    body.picking-paper .colors button[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--fg); }
     /* Solange die Leiste offen ist: Befestigung pulsiert mit dunklem Rand und hellem Schein, der Rest tritt zurück */
     @keyframes pickpulse {
       from { filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 4px #fff); }
@@ -296,7 +298,7 @@
   <script src="lib/fasteners.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.23.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.24.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -305,6 +307,10 @@
       blue:   { paper: '#c5e4ff', ink: '#1a2a3d' },
     };
 
+    // Papier: glatt, liniert (Zeilenabstand = Schriftzeile), kariert (Kästchen = Zeilenhöhe). Stift: Schwarz = Tinte der Papierfarbe.
+    const PAPERS = { plain: 'Glatt', lined: 'Liniert', grid: 'Kariert' };
+    const PENS = { black: { label: 'Schwarz', ink: null }, blue: { label: 'Blau', ink: '#1b3f9c' }, red: { label: 'Rot', ink: '#c0392b' }, green: { label: 'Grün', ink: '#1e6b3a' } };
+    const LINE_COLOR = 'rgba(0,0,0,.14)';
     // Schriften (alle frei lizenziert, liegen auch auf dem Server). lh = Zeilenhöhe relativ zur Schriftgröße.
     const FONTS = {
       caveat:  { label: 'Caveat',  family: 'Caveat',           weight: 500, lh: 1.15 },
@@ -441,7 +447,7 @@
 
     // ---------- Zustand ----------
     // autoRun standardmäßig aus: Start per URL bringt die Kurzbefehle-App in den Vordergrund.
-    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fastenerLook: {}, font: 'caveat', list: 'none', updated: null, pinned: null };
+    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fastenerLook: {}, paper: 'plain', pen: 'black', font: 'caveat', list: 'none', updated: null, pinned: null };
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) state = { ...state, ...JSON.parse(raw) };
@@ -465,6 +471,9 @@
     }
     if (!FONTS[state.font]) state.font = 'caveat';
     if (!['none', 'num', 'dot', 'square', 'dash', 'check'].includes(state.list)) state.list = 'none';
+    if (!PAPERS[state.paper]) state.paper = 'plain';
+    if (!PENS[state.pen]) state.pen = 'black';
+    function inkColor() { return PENS[state.pen].ink || COLORS[state.color].ink; }
     // Einmalige Umstellung (Sept. 2026): gespeicherte Installationen von „automatisch öffnen“ auf aus setzen
     if (!state.autoRunReset) { state.autoRun = false; state.autoRunReset = true; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {} }
 
@@ -481,7 +490,8 @@
       return !!(state.pinned && state.pinned.text === state.text && state.pinned.color === state.color
         && (state.pinned.fontScale || 100) === (state.fontScale || 100)
         && (state.pinned.fastener || 'tape') === state.fastener && (state.pinned.font || 'caveat') === state.font
-        && (state.pinned.fastenerLook || lookKey(fastenerLook())) === lookKey(fastenerLook()));
+        && (state.pinned.fastenerLook || lookKey(fastenerLook())) === lookKey(fastenerLook())
+        && (state.pinned.paper || 'plain') === state.paper && (state.pinned.pen || 'black') === state.pen);
     }
     // Hinweis „Bild liegt bereit …“ gilt nur, solange der Zettel dem angehefteten Stand entspricht
     const READY_HINT = 'Bild liegt bereit. Jetzt den Kurzbefehl „%s“ starten: Icon neben der App, Kontrollzentrum oder Rückseite doppelt tippen.';
@@ -504,14 +514,14 @@
       }
     }
     function markPinned() {
-      state.pinned = { text: state.text, color: state.color, fontScale: state.fontScale, fastener: state.fastener, fastenerLook: lookKey(fastenerLook()), font: state.font, at: Date.now() };
+      state.pinned = { text: state.text, color: state.color, fontScale: state.fontScale, fastener: state.fastener, fastenerLook: lookKey(fastenerLook()), paper: state.paper, pen: state.pen, font: state.font, at: Date.now() };
       persist();
     }
 
     function applyColor() {
       const c = COLORS[state.color];
       noteEl.style.setProperty('--paper', c.paper);
-      noteEl.style.setProperty('--ink', c.ink);
+      noteEl.style.setProperty('--ink', inkColor());
       for (const b of colorsEl.children) b.setAttribute('aria-pressed', String(b.dataset.color === state.color));
       updatePinBadge();
     }
@@ -568,6 +578,31 @@
     // ---------- Aussehen der Befestigung wählen ----------
     // Leiste direkt unter dem Zettel: Farben, dann (je nach Befestigung) Muster und Motive; nach rechts wischen.
     const fcolorsEl = $('fcolors');
+    // Karte „Zettel“: Papierfarbe, Linien, Stift
+    function buildPaperCard() {
+      fcolorsEl.innerHTML = '';
+      const row = label => { const r = document.createElement('div'); r.className = 'row'; const l = document.createElement('span'); l.className = 'lab'; l.textContent = label; r.appendChild(l); fcolorsEl.appendChild(r); return r; };
+      const chip = (parent, cls, html, pressed, title, onPick) => {
+        const b = document.createElement('button'); b.className = 'chip ' + cls; b.innerHTML = html;
+        b.setAttribute('role', 'radio'); b.setAttribute('aria-pressed', String(pressed)); b.title = title; b.setAttribute('aria-label', title);
+        b.addEventListener('click', onPick); parent.appendChild(b); return b;
+      };
+      const r1 = row('Papier');
+      for (const [name, c] of Object.entries(COLORS)) chip(r1, 'color', '', state.color === name, name, () => { state.color = name; applyColor(); persist(); buildPaperCard(); }).style.background = c.paper;
+      const r2 = row('Linien');
+      const paperIcon = kind => {
+        const paper = COLORS[state.color].paper, ln = 'rgba(0,0,0,.28)';
+        let lines = '';
+        if (kind !== 'plain') for (let y = 10; y < 40; y += 8) lines += `<line x1="6" y1="${y}" x2="54" y2="${y}" stroke="${ln}" stroke-width="1"/>`;
+        if (kind === 'grid') for (let x = 10; x < 54; x += 8) lines += `<line x1="${x}" y1="2" x2="${x}" y2="38" stroke="${ln}" stroke-width="1"/>`;
+        return `<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="2" y="2" width="56" height="36" fill="${paper}"/>${lines}</svg>`;
+      };
+      for (const [key, label] of Object.entries(PAPERS)) chip(r2, 'icon', paperIcon(key), state.paper === key, label, () => { state.paper = key; syncPreview(); updatePinBadge(); persist(); buildPaperCard(); });
+      const r3 = row('Stift');
+      for (const [key, pen] of Object.entries(PENS)) chip(r3, 'color pen', '', state.pen === key, pen.label, () => { state.pen = key; applyColor(); syncPreview(); persist(); buildPaperCard(); }).style.background = pen.ink || COLORS[state.color].ink;
+    }
+    let cardMode = null;
+    function openCard(mode) { cardMode = mode; toggleFcolors(true); }
     function buildPalette() {
       const kind = state.fastener, look = fastenerLook(kind);
       fcolorsEl.innerHTML = '';
@@ -592,10 +627,13 @@
     // Leiste unter dem Zettel einblenden; die angetippte Befestigung pulsiert, der Rest tritt zurück.
     // Tipp irgendwo anders (Zettel, Schieber, Hintergrund) schließt.
     function toggleFcolors(show = fcolorsEl.hidden) {
+      if (show && !cardMode) cardMode = 'fastener';
       fcolorsEl.hidden = !show;
-      $('fastener-preview').classList.toggle('picking', show);
+      $('fastener-preview').classList.toggle('picking', show && cardMode === 'fastener');
       document.body.classList.toggle('picking', show);
-      if (show) { buildPalette(); placePalette(); }
+      document.body.classList.toggle('picking-paper', show && cardMode === 'paper');
+      if (show) { (cardMode === 'paper' ? buildPaperCard : buildPalette)(); placePalette(); }
+      else cardMode = null;
     }
     // Karte direkt oberhalb des Befestigungs-Schiebers: Unterkante der Karte = Oberkante des Schiebers
     function placePalette() {
@@ -607,7 +645,7 @@
     $('fastener-preview').addEventListener('click', e => { e.preventDefault(); toggleFcolors(); });
     document.addEventListener('pointerdown', e => {
       if (fcolorsEl.hidden) return;
-      if (e.target.closest && e.target.closest('#fcolors, #fastener-preview, #strip-fastener .item.active')) return;
+      if (e.target.closest && e.target.closest('#fcolors, #fastener-preview, #strip-fastener .item.active, #colors button[aria-pressed="true"]')) return;
       toggleFcolors(false);
     }, true);
     const stripFont = makeStrip($('strip-font'), Object.entries(FONTS).map(([name, f]) => ({
@@ -616,7 +654,7 @@
     function applyFastener() {
       stripFastener.set(state.fastener);
       stripFastener.setHtml(state.fastener, fastenerItemHtml(state.fastener));
-      if (!fcolorsEl.hidden) buildPalette();
+      if (!fcolorsEl.hidden && cardMode === 'fastener') buildPalette();
       syncPreview(); updatePinBadge();
     }
     // Schrift ausdrücklich laden und danach neu rechnen – sonst misst die Automatik mit der Ersatzschrift
@@ -636,7 +674,7 @@
     for (const [name, c] of Object.entries(COLORS)) {
       const b = document.createElement('button');
       b.dataset.color = name; b.style.background = c.paper; b.setAttribute('role', 'radio'); b.title = name;
-      b.addEventListener('click', () => { state.color = name; applyColor(); persist(); });
+      b.addEventListener('click', () => { if (state.color === name) { openCard('paper'); return; } state.color = name; applyColor(); persist(); });
       colorsEl.appendChild(b);
     }
     textEl.value = state.text;
@@ -910,6 +948,15 @@
       const scale = noteEl.clientWidth / f.noteW;
       // Innenabstand exakt wie im Bild (CSS-Prozent-Padding bezöge sich auf die Breite des Elternelements)
       noteEl.style.padding = (f.pad * scale) + 'px';
+      // Linien/Karos: Abstand = Zeilenhöhe, Linie knapp unter der Grundlinie jeder Textzeile
+      const lhS = f.lh * scale, y0 = (f.textTop + 0.95 * f.lh) * scale, x0 = f.pad * scale;
+      if (state.paper === 'plain') { noteEl.style.backgroundImage = ''; }
+      else {
+        const h = `repeating-linear-gradient(to bottom, transparent 0, transparent ${lhS - 1}px, ${LINE_COLOR} ${lhS - 1}px, ${LINE_COLOR} ${lhS}px)`;
+        const v = `repeating-linear-gradient(to right, transparent 0, transparent ${lhS - 1}px, ${LINE_COLOR} ${lhS - 1}px, ${LINE_COLOR} ${lhS}px)`;
+        noteEl.style.backgroundImage = state.paper === 'grid' ? `${h}, ${v}` : h;
+        noteEl.style.backgroundPosition = state.paper === 'grid' ? `0 ${y0 % lhS}px, ${(x0 + 1) % lhS}px 0` : `0 ${y0 % lhS}px`;
+      }
       textEl.style.fontFamily = f.family; textEl.style.fontWeight = f.weight;
       textEl.style.fontSize = (f.fs * scale) + 'px';
       textEl.style.lineHeight = String(f.LH);
@@ -977,8 +1024,16 @@
       ctx.fillStyle = c.paper;
       ctx.fillRect(-noteW / 2, -noteH / 2, noteW, noteH);
       ctx.shadowColor = 'transparent';
+      if (state.paper !== 'plain') {
+        ctx.strokeStyle = LINE_COLOR; ctx.lineWidth = Math.max(1, Math.round(noteW / 470)); ctx.beginPath();
+        const y0 = textTop + 0.95 * lh;
+        for (let y = y0 - Math.floor(y0 / lh) * lh; y < noteH; y += lh) { ctx.moveTo(-noteW / 2, -noteH / 2 + y); ctx.lineTo(noteW / 2, -noteH / 2 + y); }
+        if (state.paper === 'grid') for (let x = pad - Math.floor(pad / lh) * lh; x < noteW; x += lh) { ctx.moveTo(-noteW / 2 + x, -noteH / 2); ctx.lineTo(-noteW / 2 + x, noteH / 2); }
+        ctx.stroke();
+      }
+      ctx.shadowColor = 'transparent';
 
-      ctx.fillStyle = c.ink;
+      ctx.fillStyle = inkColor();
       ctx.font = `${weight} ${fs}px ${family}`;
       ctx.textBaseline = 'top';
       let y = -noteH / 2 + textTop;
