@@ -217,7 +217,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.8'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.9'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -273,6 +273,8 @@
         default:          return tape(W / 2, 0, W * 0.26, p * 0.9, 1);
       }
     }
+    // Wie weit die Befestigung ins Papier ragt (Vielfaches von p): darunter beginnt erst der Text
+    const FASTENER_INSET = { tape: 0, tape2: 0, thumbtack: 0.9, pin: 0.7, pin2: 0.7, clip: 0, magnet: 0.9 };
     // Overlay-SVG: deckt den Zettel plus Rand m ab, damit überstehende Teile (Nadelkopf, Klammer) Platz haben
     function fastenerSvg(kind, W, H, p) {
       const m = p * 2.2;
@@ -551,7 +553,8 @@
       const paraFloor = noteW / 16;       // bis hierhin darf die Schrift schrumpfen, damit Absätze einzeilig bleiben
       const measure = f => { measureCtx.font = `${weight} ${f}px ${family}`; return wrap(measureCtx, text, textW); };
       const wordFits = f => { measureCtx.font = `${weight} ${f}px ${family}`; return measureCtx.measureText(longestWord).width <= textW; };
-      const fitsHeight = (f, ls) => ls.length * f * LH + 2 * pad <= layout.maxNoteH;
+      const inset = Math.round(pad * (FASTENER_INSET[state.fastener] || 0));
+      const fitsHeight = (f, ls) => ls.length * f * LH + 2 * pad + inset <= layout.maxNoteH;
 
       let fs = Math.round(noteW / 7), lines;
       // 1) Kein Wort wird hart getrennt: Schrift so weit verkleinern, bis das längste Wort in eine Zeile passt.
@@ -566,8 +569,10 @@
       lines = measure(fs);
       while (!fitsHeight(fs, lines) && fs > minFs) { fs = Math.round(fs * 0.92); lines = measure(fs); }
       const lh = fs * LH;
-      const noteH = Math.max(Math.round(lines.length * lh + 2 * pad), Math.round(noteW * 0.6));
-      return { layout, noteW, pad, textW, family, weight, LH, fs, lh, lines, noteH };
+      const noteH = Math.max(Math.round(lines.length * lh + 2 * pad + inset), Math.round(noteW * 0.6));
+      // Textblock: unterhalb des Einschubs vertikal zentriert
+      const textTop = pad + inset + Math.max(0, (noteH - 2 * pad - inset - lines.length * lh) / 2);
+      return { layout, noteW, pad, textW, family, weight, LH, fs, lh, lines, noteH, inset, textTop };
     }
 
     // Vorschau in der App: der Zettel wird proportional zum Hintergrundbild skaliert,
@@ -580,9 +585,8 @@
       textEl.style.fontSize = (f.fs * scale) + 'px';
       textEl.style.lineHeight = String(f.LH);
       noteEl.style.height = Math.round(f.noteH * scale) + 'px';
-      // Vertikale Lage wie im Bild: Textblock im Zettel zentriert
-      const extra = Math.max(0, (f.noteH - 2 * f.pad - f.lines.length * f.lh) / 2) * scale;
-      textEl.style.paddingTop = Math.round(extra) + 'px';
+      // Vertikale Lage wie im Bild: Textblock unter dem Einschub der Befestigung, zentriert
+      textEl.style.paddingTop = Math.round((f.textTop - f.pad) * scale) + 'px';
       // Befestigung als Overlay, gleiche Zeichnung und Proportion wie im Bild
       const m = f.pad * 2.2, fp = $('fastener-preview');
       fp.style.left = (-m * scale) + 'px'; fp.style.top = (-m * scale) + 'px';
@@ -611,7 +615,7 @@
       ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
 
       const c = COLORS[state.color];
-      const { layout, noteW, pad, family, weight, fs, lh, lines, noteH } = fitNote(w, h, layoutName, noteText() || '…');
+      const { layout, noteW, pad, family, weight, fs, lh, lines, noteH, textTop } = fitNote(w, h, layoutName, noteText() || '…');
       const m = pad * 2.2;
       const fastener = await svgImage(fastenerSvg(state.fastener, noteW, noteH, pad)).catch(() => null);
 
@@ -629,7 +633,7 @@
       ctx.fillStyle = c.ink;
       ctx.font = `${weight} ${fs}px ${family}`;
       ctx.textBaseline = 'top';
-      let y = -noteH / 2 + pad + (noteH - 2 * pad - lines.length * lh) / 2;
+      let y = -noteH / 2 + textTop;
       for (const line of lines) { ctx.fillText(line, -noteW / 2 + pad, y); y += lh; }
 
       // Befestigung zuletzt, liegt über Papier und Text
