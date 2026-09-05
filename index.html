@@ -159,6 +159,7 @@
   <div class="colors" id="colors" role="radiogroup" aria-label="Zettelfarbe"></div>
   <div class="chips" id="fasteners" role="radiogroup" aria-label="Befestigung"></div>
   <div class="chips fonts" id="fonts" role="radiogroup" aria-label="Schriftart"></div>
+  <div class="chips" id="lists" role="radiogroup" aria-label="Liste"></div>
 
   <label class="scale" for="fontscale">
     <span class="a small">A</span>
@@ -206,7 +207,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.6'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.7'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -273,7 +274,7 @@
 
     // ---------- Zustand ----------
     // autoRun standardmäßig aus: Start per URL bringt die Kurzbefehle-App in den Vordergrund.
-    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', font: 'caveat', updated: null, pinned: null };
+    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', font: 'caveat', list: 'none', updated: null, pinned: null };
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) state = { ...state, ...JSON.parse(raw) };
@@ -283,6 +284,7 @@
     if (typeof state.fontScale !== 'number' || state.fontScale < 60 || state.fontScale > 140) state.fontScale = 100;
     if (!FASTENERS[state.fastener]) state.fastener = 'tape';
     if (!FONTS[state.font]) state.font = 'caveat';
+    if (!['none', 'num', 'dot', 'square', 'dash', 'check'].includes(state.list)) state.list = 'none';
     // Einmalige Umstellung (Sept. 2026): gespeicherte Installationen von „automatisch öffnen“ auf aus setzen
     if (!state.autoRunReset) { state.autoRun = false; state.autoRunReset = true; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {} }
 
@@ -368,11 +370,80 @@
     updatePinBadge();
 
     let t = null;
-    textEl.addEventListener('input', () => {
+    function onTextChanged() {
       state.text = textEl.value;
       syncPreview();
       updatePinBadge();
       clearTimeout(t); t = setTimeout(() => { t = null; persist(); }, 300);
+    }
+    textEl.addEventListener('input', onTextChanged);
+
+    // ---------- Listen ----------
+    // Die Markierung steht als echter Text in der Zeile (so bleibt die Vorschau exakt).
+    // Enter setzt die nächste Markierung, Zahlen werden fortlaufend neu vergeben.
+    const LISTS = {
+      none:   { label: 'Ohne',      mark: () => '' },
+      num:    { label: '1. 2. 3.',  mark: i => (i + 1) + '. ' },
+      dot:    { label: '• Punkte',  mark: () => '• ' },
+      square: { label: '▪ Eckig',   mark: () => '▪ ' },
+      dash:   { label: '– Striche', mark: () => '– ' },
+      check:  { label: '☐ Kästchen', mark: () => '☐ ' },
+    };
+    const PREFIX_RE = /^(\d+\.|•|▪|–|☐|☑)\s+/;
+    function relist(text, mode) {
+      let n = 0;
+      return text.split('\n').map(line => {
+        const had = PREFIX_RE.test(line);
+        const bare = line.replace(PREFIX_RE, '');
+        if (mode === 'none') return bare;
+        if (bare.trim() === '' && !had) return bare;   // Leerzeile ohne Markierung bleibt Leerzeile
+        return LISTS[mode].mark(n++) + bare;           // markierte, noch leere Zeile behält ihre Markierung
+      }).join('\n');
+    }
+    const listsEl = $('lists');
+    for (const [name, l] of Object.entries(LISTS)) {
+      const b = document.createElement('button');
+      b.dataset.list = name; b.setAttribute('role', 'radio'); b.textContent = l.label;
+      b.addEventListener('click', () => {
+        state.list = name;
+        let v = relist(textEl.value, name);
+        if (name !== 'none' && v.trim() === '') v = LISTS[name].mark(0);  // leerer Zettel: erste Markierung setzen
+        textEl.value = v;
+        applyList(); onTextChanged(); flush(); textEl.focus();
+        textEl.selectionStart = textEl.selectionEnd = textEl.value.length;
+      });
+      listsEl.appendChild(b);
+    }
+    function applyList() {
+      for (const b of listsEl.children) b.setAttribute('aria-pressed', String(b.dataset.list === state.list));
+    }
+    applyList();
+    textEl.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' || state.list === 'none' || e.isComposing) return;
+      e.preventDefault();
+      const v = textEl.value, pos = textEl.selectionStart, end = textEl.selectionEnd;
+      const lineStart = v.lastIndexOf('\n', pos - 1) + 1;
+      const lineEnd = v.indexOf('\n', end) === -1 ? v.length : v.indexOf('\n', end);
+      const line = v.slice(lineStart, lineEnd);
+      const lineIdx = v.slice(0, lineStart).split('\n').length - 1;
+      let next, caretLine, caretInLine;
+      if (line.replace(PREFIX_RE, '').trim() === '') {
+        // Enter auf leerem Listenpunkt: Markierung entfernen, Liste an dieser Stelle beenden
+        next = v.slice(0, lineStart) + v.slice(lineEnd);
+        caretLine = lineIdx; caretInLine = 0;
+        if (lineStart === next.length) { next += '\n'; }
+      } else {
+        next = v.slice(0, pos) + '\n' + LISTS[state.list].mark(0) + v.slice(end);
+        caretLine = lineIdx + 1; caretInLine = -1; // hinter die Markierung
+      }
+      next = relist(next, state.list);
+      const lines = next.split('\n');
+      let caret = 0;
+      for (let i = 0; i < caretLine && i < lines.length; i++) caret += lines[i].length + 1;
+      if (caretInLine === -1) { const m = (lines[caretLine] || '').match(PREFIX_RE); caret += m ? m[0].length : 0; }
+      textEl.value = next;
+      textEl.selectionStart = textEl.selectionEnd = Math.min(caret, next.length);
+      onTextChanged();
     });
     function flush() { if (t) { clearTimeout(t); t = null; persist(); } }
 
