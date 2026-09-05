@@ -179,7 +179,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.2'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.3'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -192,7 +192,8 @@
     const noteEl = $('note'), textEl = $('text'), colorsEl = $('colors'), statusEl = $('status'), savedEl = $('saved');
 
     // ---------- Zustand ----------
-    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: true, updated: null, pinned: null };
+    // autoRun standardmäßig aus: Start per URL bringt die Kurzbefehle-App in den Vordergrund.
+    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, updated: null, pinned: null };
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) state = { ...state, ...JSON.parse(raw) };
@@ -469,7 +470,7 @@
     shortcutEl.value = state.shortcut;
     shortcutEl.addEventListener('input', () => { state.shortcut = shortcutEl.value.trim() || 'Zettel'; persist(); });
     const autoRunEl = $('autorun');
-    autoRunEl.checked = state.autoRun !== false;
+    autoRunEl.checked = state.autoRun === true;
     autoRunEl.addEventListener('change', () => { state.autoRun = autoRunEl.checked; persist(); });
 
     // ---------- Vorschau synchron halten ----------
