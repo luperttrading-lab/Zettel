@@ -35,6 +35,14 @@
       display: flex; flex-direction: column; align-items: center; gap: 22px;
       -webkit-tap-highlight-color: transparent;
     }
+    /* Kopf + Zettel bleiben oben stehen, die Einstellungen scrollen darunter durch */
+    .top {
+      position: sticky; top: 0; z-index: 5; width: 100%;
+      display: flex; flex-direction: column; align-items: center; gap: 22px;
+      background: var(--bg);
+      margin-top: calc(-1 * max(env(safe-area-inset-top), 20px));
+      padding: max(env(safe-area-inset-top), 20px) 0 18px;
+    }
     header { width: 100%; max-width: 420px; display: flex; justify-content: space-between; align-items: baseline; }
     header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .02em; }
     header span { font-size: 13px; color: var(--muted); }
@@ -145,16 +153,18 @@
   </style>
 </head>
 <body>
-  <header>
-    <h1>Zettel</h1>
-    <span id="saved"></span>
-  </header>
+  <div class="top">
+    <header>
+      <h1>Zettel</h1>
+      <span id="saved"></span>
+    </header>
 
-  <section class="note" id="note" aria-label="Zettel">
-    <textarea id="text" placeholder="Was soll auf den Zettel?" spellcheck="false" autocapitalize="sentences"></textarea>
-    <div class="fastener" id="fastener-preview" aria-hidden="true"></div>
-    <span class="pin" id="pin" hidden></span>
-  </section>
+    <section class="note" id="note" aria-label="Zettel">
+      <textarea id="text" placeholder="Was soll auf den Zettel?" spellcheck="false" autocapitalize="sentences"></textarea>
+      <div class="fastener" id="fastener-preview" aria-hidden="true"></div>
+      <span class="pin" id="pin" hidden></span>
+    </section>
+  </div>
 
   <div class="colors" id="colors" role="radiogroup" aria-label="Zettelfarbe"></div>
   <div class="chips" id="fasteners" role="radiogroup" aria-label="Befestigung"></div>
@@ -207,7 +217,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.7'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.8'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -353,9 +363,16 @@
       for (const b of fastenersEl.children) b.setAttribute('aria-pressed', String(b.dataset.fastener === state.fastener));
       syncPreview(); updatePinBadge();
     }
+    // Schrift ausdrücklich laden und danach neu rechnen – sonst misst die Automatik mit der Ersatzschrift
+    // und wählt für breite Schriften (Marker) eine zu große Größe.
+    function ensureFont() {
+      const f = FONTS[state.font] || FONTS.caveat;
+      if (!document.fonts || !document.fonts.load) return Promise.resolve();
+      return document.fonts.load(`${f.weight} 20px "${f.family}"`).then(() => syncPreview()).catch(() => {});
+    }
     function applyFont() {
       for (const b of fontsEl.children) b.setAttribute('aria-pressed', String(b.dataset.font === state.font));
-      syncPreview(); updatePinBadge();
+      syncPreview(); updatePinBadge(); ensureFont();
     }
     for (const [name, c] of Object.entries(COLORS)) {
       const b = document.createElement('button');
@@ -499,7 +516,8 @@
     // Tablet = quadratisches Bild (iPad nutzt ein Bild für beide Ausrichtungen und schneidet zu);
     // der Zettel liegt in der Zone, die in Hoch- UND Querformat sichtbar und unterhalb der Uhr ist.
     const LAYOUTS = {
-      phone:  (w, h) => ({ noteW: w * 0.80, maxNoteH: h * 0.52, cy: h * 0.56 }),
+      // iPhone: nutzbar zwischen Uhr (endet ≈ 0,30 h) und Taschenlampe/Kamera (ab ≈ 0,88 h)
+      phone:  (w, h) => ({ noteW: w * 0.80, maxNoteH: h * 0.56, cy: h * 0.585 }),
       tablet: (w, h) => ({ noteW: w * 0.60, maxNoteH: h * 0.42, cy: h * 0.61 }),
     };
 
@@ -621,7 +639,7 @@
     }
 
     async function renderPng() {
-      try { if (document.fonts) await document.fonts.ready; } catch (_) {}
+      try { await ensureFont(); if (document.fonts) await document.fonts.ready; } catch (_) {}
       const t = targetCanvas();
       const canvas = await renderWallpaper(t.w, t.h, t.layout);
       return new Promise(r => canvas.toBlob(r, 'image/png'));
@@ -701,6 +719,7 @@
 
     // ---------- Vorschau synchron halten ----------
     syncPreview();
+    ensureFont();
     window.addEventListener('resize', syncPreview);
     if (document.fonts) { document.fonts.ready.then(syncPreview).catch(() => {}); document.fonts.addEventListener && document.fonts.addEventListener('loadingdone', syncPreview); }
 
