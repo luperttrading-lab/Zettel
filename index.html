@@ -80,8 +80,11 @@
       overflow: hidden; overflow-wrap: break-word; white-space: pre-wrap; caret-color: currentColor;
       -webkit-user-select: text; user-select: text;
     }
-    .note .editor .ln { min-height: 1em; }
-    .note .editor.empty .ln:first-child::before { content: "Was soll auf den Zettel?"; color: rgba(42,42,46,.35); }
+    .note .editor .ln { min-height: 1em; position: relative; }
+    /* Listenmarkierung liegt außerhalb des Textflusses (nicht editierbar), die Zeile ist um ihre Breite eingerückt */
+    .note .editor .ln[data-mk]::before { content: attr(data-mk); position: absolute; left: 0; top: 0; white-space: pre; }
+    .note .editor.empty .ln:first-child::after { content: "Was soll auf den Zettel?"; color: rgba(42,42,46,.35); }
+    .note .fastener.picking svg { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 8px rgba(255,255,255,.75)); }
 
     /* --- Auswahl-Schieber: Befestigung · Schrift · Liste ---
        Eine Reihe pro Einstellung, nach links/rechts wischen; das Element in der Mitte ist die Auswahl,
@@ -114,12 +117,18 @@
     .strip-font { --iw: 112px; } .strip-font .item { height: 46px; font-size: 24px; }
     .strip-list { --iw: 104px; } .strip-list .item { height: 40px; font-size: 15px; }
 
-    /* Farbwahl der Befestigung: erscheint unter dem Befestigungs-Schieber */
-    .fcolors { display: flex; justify-content: center; align-items: center; gap: 12px; padding: 6px 0 2px; }
+    /* Farbwahl der Befestigung: Leiste am unteren Bildschirmrand, solange eine Befestigung angetippt ist */
+    .fcolors {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
+      display: flex; justify-content: center; align-items: center; gap: 14px;
+      padding: 14px 20px max(env(safe-area-inset-bottom), 14px);
+      background: #1e1e21; border-top: 1px solid #2d2d33; box-shadow: 0 -8px 24px rgba(0,0,0,.5);
+    }
     .fcolors[hidden] { display: none; }
-    .fcolors span { font-size: 12px; color: var(--muted); margin-right: 4px; }
-    .fcolors button { width: 28px; height: 28px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.5); padding: 0; }
+    .fcolors span { font-size: 13px; color: var(--muted); margin-right: 4px; }
+    .fcolors button { width: 36px; height: 36px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.5); padding: 0; }
     .fcolors button[aria-pressed="true"] { border-color: var(--fg); }
+    body.picking .strip-fastener .item.active { box-shadow: inset 0 0 0 2px var(--fg); border-radius: 11px; }
 
     /* --- Farben --- */
     .colors { display: flex; gap: 14px; }
@@ -256,7 +265,7 @@
 
   <script>
     'use strict';
-    const APP_VERSION = '2026-09-05.18'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
+    const APP_VERSION = '2026-09-05.19'; // bei jeder Änderung hochzählen – die App lädt sich dann selbst neu
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -366,9 +375,15 @@
     }
 
     const $ = id => document.getElementById(id);
+    // Listenmarkierungen: „1.“, „•“ … am Zeilenanfang, dahinter ein geschütztes Leerzeichen (U+00A0),
+    // damit Textfeld, Zeichenfläche und Server dort nie umbrechen.
+    const NB = ' ';
+    const PREFIX_RE = /^(\d+\.|•|▪|–|☐|☑)\s+/;
+
     // ---------- Eingabefeld ----------
     // Editierbarer Bereich mit einem <div class="ln"> pro Zeile. Nach außen verhält er sich wie ein
-    // Textfeld (value, selectionStart/End, focus). Jede Zeile bekommt ihren Einzug per indentFn(zeile) in px.
+    // Textfeld (value, selectionStart/End, focus). Die Listenmarkierung steht als data-mk am Zeilenblock
+    // und wird per CSS gezeichnet (nicht editierbar); die Zeile ist um indentFn(zeile) px eingerückt.
     class Editor {
       constructor(el) {
         this.el = el; this._value = ''; this.indentFn = () => 0; this._composing = false;
@@ -407,6 +422,8 @@
             else if (/^(DIV|P|LI)$/.test(n.nodeName)) {
               close(); const before = lines.length; walk(n); close();
               if (lines.length === before) lines.push('');
+              const mk = n.getAttribute && n.getAttribute('data-mk');
+              if (mk) lines[before] = mk + NB + lines[before];
             } else walk(n);
           }
         };
@@ -422,15 +439,19 @@
       }
       render(text) {
         this._value = text;
-        const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-        this.el.innerHTML = text.split('\n').map(l => `<div class="ln">${l ? esc(l) : '<br>'}</div>`).join('');
+        const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        this.el.innerHTML = text.split('\n').map(l => {
+          const m = l.match(PREFIX_RE);
+          const body = m ? l.slice(m[0].length) : l;
+          return `<div class="ln"${m ? ` data-mk="${esc(m[0].trim())}"` : ''}>${body ? esc(body) : '<br>'}</div>`;
+        }).join('');
         this.applyIndents();
       }
       applyIndents() {
         const lines = this._value.split('\n');
         [...this.el.children].forEach((d, i) => {
           const ind = Math.round(this.indentFn(lines[i] || '') * 100) / 100;
-          d.style.paddingLeft = ind ? ind + 'px' : ''; d.style.textIndent = ind ? (-ind) + 'px' : '';
+          d.style.paddingLeft = ind ? ind + 'px' : '';
         });
         this.el.classList.toggle('empty', this._value === '');
       }
@@ -455,6 +476,7 @@
         const lines = this._value.split('\n');
         let li = 0, col = offset;
         while (li < lines.length - 1 && col > lines[li].length) { col -= lines[li].length + 1; li++; }
+        const mk = (lines[li] || '').match(PREFIX_RE); if (mk) col = Math.max(0, col - mk[0].length); // Markierung steht nicht im DOM-Text
         const d = this.el.children[li]; if (!d) return;
         const r = document.createRange();
         const tn = [...d.childNodes].find(n => n.nodeType === 3);
@@ -596,8 +618,19 @@
       const cur = fastenerColor();
       for (const b of fcolorsEl.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.fcolor === cur));
     }
-    function toggleFcolors(show = fcolorsEl.hidden) { fcolorsEl.hidden = !show; if (show) syncFcolors(); }
-    $('fastener-preview').addEventListener('click', e => { e.preventDefault(); toggleFcolors(); fcolorsEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); });
+    // Leiste unten einblenden; die angetippte Befestigung leuchtet solange. Tipp irgendwo anders schließt.
+    function toggleFcolors(show = fcolorsEl.hidden) {
+      fcolorsEl.hidden = !show;
+      $('fastener-preview').classList.toggle('picking', show);
+      document.body.classList.toggle('picking', show);
+      if (show) syncFcolors();
+    }
+    $('fastener-preview').addEventListener('click', e => { e.preventDefault(); toggleFcolors(); });
+    document.addEventListener('pointerdown', e => {
+      if (fcolorsEl.hidden) return;
+      if (e.target.closest && e.target.closest('#fcolors, #fastener-preview, #strip-fastener .item.active')) return;
+      toggleFcolors(false);
+    }, true);
     const stripFont = makeStrip($('strip-font'), Object.entries(FONTS).map(([name, f]) => ({
       value: name, html: f.label, style: `font-family:"${f.family}",${FALLBACK};font-weight:${f.weight}`,
     })), v => { state.font = v; applyFont(); persist(); });
@@ -643,11 +676,8 @@
     textEl.addEventListener('input', onTextChanged);
 
     // ---------- Listen ----------
-    // Die Markierung steht als echter Text in der Zeile (so bleibt die Vorschau exakt).
-    // Enter setzt die nächste Markierung, Zahlen werden fortlaufend neu vergeben.
-    // Hinter der Markierung steht ein geschütztes Leerzeichen (U+00A0): Textfeld, Zeichenfläche und
-    // Server brechen dort nie um – eine Zahl bleibt also nie allein am Zeilenende stehen.
-    const NB = ' ';
+    // Die Markierung steht im gespeicherten Text am Zeilenanfang (NB und PREFIX_RE siehe oben);
+    // im Eingabefeld wird sie außerhalb des Textflusses gezeichnet. Enter setzt die nächste Markierung.
     const LISTS = {
       none:   { label: 'Ohne',      mark: () => '' },
       num:    { label: '1. 2. 3.',  mark: i => (i + 1) + '.' + NB },
@@ -656,7 +686,6 @@
       dash:   { label: '– Striche', mark: () => '–' + NB },
       check:  { label: '☐ Kästchen', mark: () => '☐' + NB },
     };
-    const PREFIX_RE = /^(\d+\.|•|▪|–|☐|☑)\s+/;
     function relist(text, mode) {
       let n = 0;
       return text.split('\n').map(line => {
@@ -757,23 +786,25 @@
     // Zeilenumbruch: Absätze respektieren, Wörter umbrechen, überlange Wörter hart trennen.
     // Listenpunkte: Folgezeilen um die Breite der Markierung eingerückt (hängender Einzug).
     // Ergebnis: [{ t: Text, x: Einzug in px }]
+    // Ergebnis: [{ t: Text, x: Einzug in px, mk: Markierung (nur erste Zeile eines Listenpunkts) }]
+    // Die Markierung steht links neben dem eingerückten Textblock; alle Zeilen des Punkts sind gleich breit.
     function wrap(ctx, text, maxW) {
       const lines = [];
       for (const para of text.replace(/\r/g, '').split('\n')) {
-        if (para.trim() === '') { lines.push({ t: '', x: 0 }); continue; }
+        if (para.trim() === '') { lines.push({ t: '', x: 0, mk: '' }); continue; }
         const m = para.match(PREFIX_RE);
-        const indent = m ? ctx.measureText(m[0]).width : 0;
+        const mk = m ? m[0] : '', body = para.slice(mk.length);
+        const indent = mk ? ctx.measureText(mk).width : 0, limit = maxW - indent;
         let line = '', first = true;
-        const push = t => { lines.push({ t, x: first ? 0 : indent }); first = false; };
-        const limit = () => (first ? maxW : maxW - indent);
-        for (const c of chunksOf(para)) {
+        const push = t => { lines.push({ t, x: indent, mk: first ? mk.trim() : '' }); first = false; };
+        for (const c of chunksOf(body)) {
           const test = line ? line + c.sep + c.s : c.s;
-          if (ctx.measureText(test).width <= limit()) { line = test; continue; }
+          if (ctx.measureText(test).width <= limit) { line = test; continue; }
           if (line) push(line);
           line = c.s;
-          while (ctx.measureText(line).width > limit() && line.length > 1) {
+          while (ctx.measureText(line).width > limit && line.length > 1) {
             let cut = line.length - 1;
-            while (cut > 1 && ctx.measureText(line.slice(0, cut)).width > limit()) cut--;
+            while (cut > 1 && ctx.measureText(line.slice(0, cut)).width > limit) cut--;
             push(line.slice(0, cut)); line = line.slice(cut);
           }
         }
@@ -821,11 +852,19 @@
       const family = font.family, weight = font.weight, LH = font.lh;
       const paras = text.split('\n');
       measureCtx.font = `${weight} 100px ${family}`;
-      const longestWord = paras.flatMap(p => chunksOf(p).map(c => c.s)).reduce((a, b) => (measureCtx.measureText(b).width > measureCtx.measureText(a).width ? b : a), '');
+      // Je Absatz: Markierung und breitestes Umbruchstück des Textes dahinter (Breiten skalieren linear mit fs)
+      const paraInfo = paras.map(p => {
+        const m = p.match(PREFIX_RE), mk = m ? m[0] : '';
+        const longest = chunksOf(p.slice(mk.length)).map(c => c.s).reduce((a, b) => (measureCtx.measureText(b).width > measureCtx.measureText(a).width ? b : a), '');
+        return { mk, longest };
+      });
       const minFs = noteW / 28;           // absolute Untergrenze
       const paraFloor = noteW / 16;       // bis hierhin darf die Schrift schrumpfen, damit Absätze einzeilig bleiben
       const measure = f => { measureCtx.font = `${weight} ${f}px ${family}`; return wrap(measureCtx, text, wrapW); };
-      const wordFits = f => { measureCtx.font = `${weight} ${f}px ${family}`; return measureCtx.measureText(longestWord).width <= wrapW; };
+      const wordFits = f => {
+        measureCtx.font = `${weight} ${f}px ${family}`;
+        return paraInfo.every(pi => measureCtx.measureText(pi.longest).width <= wrapW - (pi.mk ? measureCtx.measureText(pi.mk).width : 0));
+      };
       const inset = Math.round(pad * (FASTENER_INSET[state.fastener] || 0));
       // Feste Zettelgröße wie ein echter Haftzettel: quadratisch, höchstens so hoch wie das Layout erlaubt.
       // Die Größe hängt nicht vom Text ab – nur die Schrift passt sich an.
@@ -870,7 +909,8 @@
       const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
       mirrorEl.innerHTML = text.split('\n').map(l => {
         const ind = Math.round(lineIndent(l, f.family, f.weight, px) * 100) / 100;
-        return `<div style="min-height:1em;padding-left:${ind}px;text-indent:${-ind}px">${l ? esc(l) : '<br>'}</div>`;
+        const body = l.replace(PREFIX_RE, '');
+        return `<div style="min-height:1em;padding-left:${ind}px">${body ? esc(body) : '<br>'}</div>`;
       }).join('');
       return Math.round(mirrorEl.offsetHeight / (px * f.LH));
     }
@@ -961,7 +1001,10 @@
       ctx.font = `${weight} ${fs}px ${family}`;
       ctx.textBaseline = 'top';
       let y = -noteH / 2 + textTop;
-      for (const line of lines) { ctx.fillText(line.t, -noteW / 2 + pad + line.x, y); y += lh; }
+      for (const line of lines) {
+        if (line.mk) ctx.fillText(line.mk, -noteW / 2 + pad, y);          // Markierung links
+        ctx.fillText(line.t, -noteW / 2 + pad + line.x, y); y += lh;      // Text eingerückt
+      }
 
       // Befestigung zuletzt, liegt über Papier und Text
       if (fastener) ctx.drawImage(fastener, -noteW / 2 - m, -noteH / 2 - m, noteW + 2 * m, noteH + 2 * m);
