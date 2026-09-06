@@ -77,6 +77,19 @@ Square image, 1024 x 1024 pixels.
   Dateien oder Commits schreiben.** Nur `process.env.ROUTELLM_API_KEY` lesen.
 - Endpunkt: `POST https://routellm.abacus.ai/v1/chat/completions`, OpenAI-kompatibel, Header
   `Authorization: Bearer <key>`. Bilder laufen über denselben Endpunkt, nicht über `/images/generations`.
+- **Schlüssel richtig prüfen** (geprüft 6.9.2026): `GET /v1/models` ist **nicht authentifiziert** und antwortet
+  auch ganz ohne Header mit 200 – als Schlüsseltest also wertlos, nur als Netzwerktest brauchbar. Ein toter
+  Schlüssel zeigt sich erst am `chat/completions`-Endpunkt als `403 {"error": "Invalid API Key"}`. Richtiger,
+  fast kostenloser Test:
+
+  ```
+  curl -s -w '\nHTTP %{http_code}\n' https://routellm.abacus.ai/v1/chat/completions \
+    -H "Authorization: Bearer $ROUTELLM_API_KEY" -H 'Content-Type: application/json' \
+    -d '{"model":"route-llm-code","messages":[{"role":"user","content":"hi"}],"max_tokens":5}'
+  ```
+
+  Umgebungsvariablen werden beim Start des Containers gesetzt. Wird der Schlüssel in der Umgebungs-
+  konfiguration ausgetauscht, greift das **erst in einer neu gestarteten Sitzung**, nicht in der laufenden.
 - Anfrage: `{ model, modalities: ['image','text'], messages: [{ role:'user', content:[{type:'text', text}] }], image_config: { aspect_ratio, num_images?, quality?, resolution? } }`.
 - Antwort: `choices[0].message.images[].image_url.url` als Data-URI, ersatzweise Data-URI im `content`-Text.
 - Modell-Schlüssel laut `/v1/models` (geprüft 5.9.2026): `gpt_image2`, `gpt_image2_edit`, `nano_banana2`,
@@ -85,6 +98,11 @@ Square image, 1024 x 1024 pixels.
   `gpt_image2_edit` nimmt zusätzlich ein Referenzbild als `{type:'image_url', image_url:{url: dataUri}}` im
   content, damit lassen sich Fuchs/Panda als Stilvorlage mitgeben [Wahrscheinlich].
 - Seitenverhältnis: FLUX-Modelle wollen `square_hd`, die anderen `1:1`. `tools/gen_image.mjs` übersetzt das.
+  **`gpt_image2` lehnt `image_config.aspect_ratio` ab** (`400 Invalid image config param`); dort
+  `--noconfig` benutzen, dann liefert das Modell 1024 x 1024 px. Die Doku-Seite unter `abacus.ai/help/...`
+  ist vom Egress-Proxy der Cloud-Umgebung blockiert, die erlaubten Werte lassen sich dort nicht nachlesen.
+- Verbrauch: die Antwort enthält `usage.compute_points_used` (Frosch mit `gpt_image2`, 1024 x 1024:
+  **695,5 Punkte**, 19,4 s). Damit lässt sich pro Bild gegen das ChatLLM-Dashboard abgleichen.
 - Kosten: ChatLLM Teams enthält laut Abacus 10 $ API-Guthaben pro Monat; ob Bildmodelle darin enthalten sind, ist
   ungeprüft. Deshalb **zuerst ein einzelnes Bild** erzeugen, dann in ChatLLM unter Credits nachsehen, was es
   abgezogen hat, und dem Auftraggeber die Zahl nennen, bevor Serien laufen.
@@ -97,7 +115,14 @@ node tools/gen_image.mjs /tmp/frosch.png nano_banana_pro "..." --n 2      # zwei
 ```
 
 Wenn die Antwort anders aussieht als erwartet: `*.response.json` neben der Ausgabe lesen und das Skript anpassen.
-Fehler 401/403 = Schlüssel oder Kontingent, 400 = Parameter (dann `image_config` weglassen und erneut versuchen).
+Fehler 401/403 = Schlüssel oder Kontingent (**erst mit dem Text-Request oben klären, ob der Schlüssel überhaupt
+noch lebt**, bevor man das Modell verdächtigt), 400 = Parameter (dann `image_config` weglassen bzw. `--noconfig`).
+
+Ergebnis des ersten echten Laufs (6.9.2026): `gpt_image2` liefert sauber freistellbare Bilder (Hintergrund
+253–254 von 255, kein Schatten), setzt das Motiv aber **vertieft in eine Mulde mit dickem Rand** statt erhaben –
+genau die Variante, die der Auftraggeber beim Panda abgelehnt hat. Die Prompt-Zeile „raised and embossed …,
+never sunken or recessed“ reicht bei diesem Modell nicht. Nächster Versuch: eine Nano-Banana-Variante oder
+`gpt_image2_edit` mit dem Fuchs als Stilvorlage.
 
 ## 4. Bilder einbauen
 
