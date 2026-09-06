@@ -308,6 +308,10 @@
       <button class="btn ghost" id="share">Teilen / sichern</button>
       <button class="btn ghost" id="clear">Zettel leeren</button>
     </div>
+    <!-- Nur das gespeicherte Hintergrundfoto aufs Display, ohne Zettel – Text und Einstellungen bleiben -->
+    <div class="row">
+      <button class="btn ghost" id="hide" title="Nur das Hintergrundfoto aufs Display, der Zettel bleibt in der App">Zettel ausblenden</button>
+    </div>
   </div>
   <p class="status" id="status"></p>
 
@@ -357,7 +361,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.35.5'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.36.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -592,6 +596,7 @@
     function isPinnedCurrent() {
       const p = state.pinned;
       if (!p || typeof p.title !== 'boolean' || typeof p.bg !== 'string') return false;
+      if (p.bgOnly) return p.bg === bgKennung;   // Zettel ausgeblendet: nur das Foto ist im Bild, der Zettel selbst zählt nicht
       return p.text === state.text && p.color === state.color
         && (p.fontScale || 100) === (state.fontScale || 100)
         && (p.fastener || 'tape') === state.fastener && (p.font || 'caveat') === state.font
@@ -604,10 +609,11 @@
     // Wortlaut: Die App legt das Bild nur in die Zwischenablage (und ruft höchstens den Kurzbefehl auf);
     // ob es wirklich auf dem Sperrbildschirm gelandet ist, kann sie nie wissen. Darum „Bild bereit“ bzw.
     // „Kurzbefehl angefordert“ – in Marke, Kopfzeile, Statuszeile und Banner gleich – und nie „angeheftet“.
-    function pinWortlaut(p = state.pinned) { return p && p.requested ? 'Kurzbefehl angefordert' : 'Bild bereit'; }
+    // Dazu, was im Bild war: „mit Zettel“ oder „nur Hintergrund“ (Zettel ausblenden).
+    function pinWortlaut(p = state.pinned) { return (p && p.requested ? 'Kurzbefehl angefordert' : 'Bild bereit') + ' · ' + (p && p.bgOnly ? 'nur Hintergrund' : 'mit Zettel'); }
     // Hinweis in der Statuszeile gilt nur, solange der Zettel dem bereitgestellten Stand entspricht
-    const READY_HINT = 'Bild bereit. Jetzt den Kurzbefehl „%s“ starten: Icon neben der App, Kontrollzentrum oder Rückseite doppelt tippen.';
-    const REQUESTED_HINT = 'Kurzbefehl „%s“ angefordert. Ob er gelaufen ist, zeigt nur der Sperrbildschirm.';
+    const READY_HINT = 'Bild bereit · %w. Jetzt den Kurzbefehl „%s“ starten: Icon neben der App, Kontrollzentrum oder Rückseite doppelt tippen.';
+    const REQUESTED_HINT = 'Kurzbefehl „%s“ angefordert · %w. Ob er gelaufen ist, zeigt nur der Sperrbildschirm.';
     function updatePinBadge() {
       const pin = $('pin');
       if (!isPinnedCurrent() && /^(Bild bereit|Kurzbefehl „)/.test(statusEl.textContent)) statusEl.textContent = '';
@@ -627,8 +633,9 @@
       }
     }
     // requested: der Kurzbefehl wurde per URL aufgerufen (sonst liegt das Bild nur in der Zwischenablage)
-    function markPinned({ requested = false } = {}) {
-      state.pinned = { text: state.text, color: state.color, fontScale: state.fontScale, fastener: state.fastener, fastenerLook: lookKey(fastenerLook()), paper: state.paper, pen: state.pen, texture: state.texture, edge: state.edge, font: state.font, title: state.title, titleSize: state.titleSize, bg: bgKennung, requested, at: Date.now() };
+    // bgOnly: „Zettel ausblenden“ – im Bild ist nur das Hintergrundfoto
+    function markPinned({ requested = false, bgOnly = false } = {}) {
+      state.pinned = { text: state.text, color: state.color, fontScale: state.fontScale, fastener: state.fastener, fastenerLook: lookKey(fastenerLook()), paper: state.paper, pen: state.pen, texture: state.texture, edge: state.edge, font: state.font, title: state.title, titleSize: state.titleSize, bg: bgKennung, requested, bgOnly, at: Date.now() };
       persist();
     }
 
@@ -960,6 +967,7 @@
       try { localStorage.setItem(BG_KEY, url); }
       catch { showInfo('Foto passt nicht in den Speicher'); return; }
       bgLaden();
+      if (statusEl.textContent === BG_FEHLER) statusEl.textContent = '';
       showInfo('Hintergrundfoto gesetzt');
     }
 
@@ -969,6 +977,7 @@
       try { localStorage.removeItem(BG_KEY); } catch {}
       bgImage = null; bgKennung = ''; bgFehler = false; bgReady = Promise.resolve(); bgAnzeigen(null); updatePinBadge();
       if (!updateEl.hidden && $('update-text').textContent === BG_FEHLER) updateEl.hidden = true;
+      if (statusEl.textContent === BG_FEHLER) statusEl.textContent = '';
       showInfo('Hintergrundfoto entfernt');
     });
     bgLaden();
@@ -1262,7 +1271,8 @@
       });
     }
 
-    async function renderWallpaper(w, h, layoutName) {
+    // nurHintergrund: „Zettel ausblenden“ – nur das Foto (bzw. der Verlauf), ohne Papier, Schrift und Befestigung
+    async function renderWallpaper(w, h, layoutName, { nurHintergrund = false } = {}) {
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
@@ -1277,6 +1287,7 @@
         g.addColorStop(0, '#1b1b1f'); g.addColorStop(1, '#09090b');
         ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
       }
+      if (nurHintergrund) return canvas;
 
       const c = COLORS[state.color];
       const { layout, noteW, pad, family, weight, fs, lh, lines, noteH, textTop, titleGap, titleF } = fitNote(w, h, layoutName, noteText() || '…');
@@ -1348,11 +1359,11 @@
       return canvas;
     }
 
-    async function renderPng() {
+    async function renderPng({ nurHintergrund = false } = {}) {
       await fotoAbwarten();   // wirft bei Ladefehler – die Aufrufer melden das statt stumm den Verlauf zu nehmen
       try { await ensureFont(); if (document.fonts) await document.fonts.ready; } catch (_) {}
       const t = targetCanvas();
-      const canvas = await renderWallpaper(t.w, t.h, t.layout);
+      const canvas = await renderWallpaper(t.w, t.h, t.layout, { nurHintergrund });
       return new Promise(r => canvas.toBlob(r, 'image/png'));
     }
 
@@ -1377,10 +1388,16 @@
     // Weg 1 (automatisch): Bild in die Zwischenablage, dann den Kurzbefehl starten,
     // der es per „Hintergrundbild-Foto festlegen“ setzt. Safari erlaubt Clipboard-Schreiben nur
     // synchron in der Tipp-Geste – deshalb bekommt ClipboardItem ein Promise, kein fertiges Blob.
-    function stickViaShortcut() {
-      if (!state.text.trim()) { statusEl.textContent = 'Erst was draufschreiben.'; textEl.focus(); return; }
+    // nurHintergrund = „Zettel ausblenden“: nur das gespeicherte Foto, gleicher Weg über die Zwischenablage.
+    // Ohne Foto gibt es nichts Sinnvolles auszugeben (der dunkle Verlauf wäre eine Überraschung) – dann nur ein Hinweis.
+    function stickViaShortcut({ nurHintergrund = false } = {}) {
+      if (nurHintergrund) {
+        if (bgFehler) { statusEl.textContent = BG_FEHLER; return; }
+        if (!bgKennung) { statusEl.textContent = 'Kein Hintergrundfoto hinterlegt – erst „Eigenes Hintergrundfoto“ wählen. Ohne Foto gäbe es nur den dunklen Verlauf.'; return; }
+      } else if (!state.text.trim()) { statusEl.textContent = 'Erst was draufschreiben.'; textEl.focus(); return; }
       statusEl.textContent = 'Rendere …';
-      const png = renderPng();
+      const was = nurHintergrund ? 'nur Hintergrund' : 'mit Zettel';
+      const png = renderPng({ nurHintergrund });
       png.catch(() => {});   // Ablehnung (Hintergrundfoto) wird unten behandelt; ohne diesen Haken meldet der Browser sie voreilig als unbehandelt
       if (!(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem)) {
         statusEl.textContent = 'Zwischenablage nicht verfügbar – Teilen stattdessen.';
@@ -1392,14 +1409,14 @@
       write.then(() => {
         // Das Bild liegt jetzt in der Zwischenablage – mehr weiß die App nicht. Der Kurzbefehl läuft erst danach,
         // und ob er das Hintergrundbild wirklich gesetzt hat, erfährt die App nie.
-        markPinned({ requested: !!state.autoRun });
+        markPinned({ requested: !!state.autoRun, bgOnly: nurHintergrund });
         if (state.autoRun) {
-          statusEl.textContent = REQUESTED_HINT.replace('%s', state.shortcut);
+          statusEl.textContent = REQUESTED_HINT.replace('%s', state.shortcut).replace('%w', was);
           location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(state.shortcut) + '&input=clipboard';
         } else {
           // Kurzbefehl nicht per URL starten: vom Icon/Kontrollzentrum gestartet öffnet er die Kurzbefehle-App nicht.
-          statusEl.textContent = READY_HINT.replace('%s', state.shortcut);
-          showToast('Bild bereit', 'Jetzt „' + state.shortcut + '“ starten:\nIcon neben der App · Kontrollzentrum · Rückseite doppelt tippen');
+          statusEl.textContent = READY_HINT.replace('%s', state.shortcut).replace('%w', was);
+          showToast('Bild bereit', (nurHintergrund ? 'Nur Hintergrund, ohne Zettel.\n' : '') + 'Jetzt „' + state.shortcut + '“ starten:\nIcon neben der App · Kontrollzentrum · Rückseite doppelt tippen');
         }
       }, async () => {
         let blob;
@@ -1419,6 +1436,7 @@
     }
 
     $('stick').addEventListener('click', () => { try { stickViaShortcut(); } catch (e) { statusEl.textContent = 'Fehler: ' + e.message; } });
+    $('hide').addEventListener('click', () => { try { stickViaShortcut({ nurHintergrund: true }); } catch (e) { statusEl.textContent = 'Fehler: ' + e.message; } });
     $('share').addEventListener('click', () => stickViaShare().catch(e => { statusEl.textContent = 'Fehler: ' + e.message; }));
 
     const shortcutEl = $('shortcut');
