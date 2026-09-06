@@ -1,41 +1,96 @@
-# Übergabe: Magnet-Bilder für Zettel selbst erzeugen
+# Übergabe: Zettel – Stand, Erkenntnisse, nächste Schritte
 
-**Repository: `luperttrading-lab/Zettel`** (nicht `wetter` oder ein anderes). Diese Datei liegt dort unter
-`docs/UEBERGABE.md`; die Sitzung muss in diesem Repository gestartet sein, sonst fehlen Skripte, Motive und Kontext.
+**Repository: `luperttrading-lab/Zettel`.** Diese Datei liegt dort unter `docs/UEBERGABE.md`. Eine neue Sitzung
+muss in diesem Repository laufen, sonst fehlen Skripte, Motive, Schriften und Kontext.
 
-Stand: 6. September 2026, App-Version 1.29.0, Branch `claude/projekt-zettel-xjs5ko` (wird immer auf `main`
-vorgespult; Vercel baut aus `main`). Diese Datei ist für eine neue Claude-Code-Sitzung gedacht, die in einer
-Cloud-Umgebung mit dem RouteLLM-Schlüssel läuft. Der Auftraggeber schreibt Deutsch, wird geduzt, diktiert per
-Sprache (Erkennungsfehler mitdenken), will Aussagen als [Sicher] / [Wahrscheinlich] / [Vermutung] markiert und
-bekommt jedes Bild und jede Datei über SendUserFile zugeschickt, bevor die Sitzung endet.
+Stand: 7. September 2026, App-Version **1.35.2**, Branch `claude/uebergabe-key-auth-5l0a1t` (wird nach jedem
+Commit per Fast-Forward auf `main` gebracht; Vercel und GitHub Pages bauen aus `main`).
 
-## 1. Worum es geht
+## 0. Arbeitsweise mit dem Auftraggeber
 
-Zettel ist eine PWA (`index.html`, GitHub Pages) plus Vercel-Renderer (`api/zettel.js` → `lib/render.js`).
-Ein Zettel wird als Sperrbildschirm-Bild gerendert. Oben am Zettel sitzt eine „Befestigung“
-(Klebestreifen, Reißzwecke, Nadel, Klammer, Magnet, Bildmagnet). Zwei Befestigungen nehmen eigene Bilder:
+- Schreibt Deutsch, wird geduzt, diktiert per Sprache (Erkennungsfehler mitdenken: „Backen“ kam als „Päckchen“,
+  „Katze“ als „Kratzer“, „Paar 10“ als „paar Zehen“). Im Zweifel kurz nachfragen statt raten.
+- Will Aussagen als [Sicher] / [Wahrscheinlich] / [Vermutung] markiert. Unbequeme Wahrheit zuerst, kein Aufwärmen.
+- Antworten kurz. Er hat ausdrücklich gebeten, nicht „so viel langen Text“ zu bekommen.
+- **Am Ende jeder Antwort genau diese zwei Zeilen**, sonst nichts dazu:
 
-| Befestigung | Schlüssel | Bildform | Datei | Was das Bild ist |
-|---|---|---|---|---|
-| Magnet | `magnet` | rund, Scheibe | JPEG 512 px, ohne Transparenz | Motiv **auf** einer runden Magnetscheibe; die Scheibe ist Teil des Bildes (Flächenfarbe) |
-| Bildmagnet | `photo` | quadratisch, runde Ecken, puffig 3D | WebP 480 px mit Alpha (App) + PNG (Server) | Das Bild **ist** der Magnet, freigestellt auf Transparenz |
+  ```
+  Diese Frage: 0,0 ct RouteLLM · ~0,30 $ Claude
+  Heute gesamt: 72 ct RouteLLM · 148,9 $ Claude
+  ```
 
-Größe auf dem iPhone-Wallpaper (1179 × 2556): Scheibe des runden Magneten ca. 196 px Durchmesser, Bildmagnet
-ca. 200 px Kante. Deshalb reichen 512 bzw. 480 px Quellauflösung, mehr wird beim Einbauen ohnehin verkleinert.
-Der Auftraggeber hat den Bildmagneten als Alternative gewählt, weil ihm der puffige 3D-Stil (Fuchs) besser gefiel
-als die flachen runden Motive. Neue Bilder sollen vor allem **Bildmagnete** sein.
+  RouteLLM-Cent sind gemessen (`usage.compute_points_used`, siehe Abschnitt 4). Die Claude-Zahl wird aus dem
+  Sitzungsprotokoll berechnet (`~/.claude/projects/<projekt>/<sitzung>.jsonl`, Feld `message.usage`, nach
+  `message.id` dedupliziert, Preise des jeweiligen Modells; Opus 5: 5/25 $ pro Mio, Cache-Schreiben 1 h 10 $,
+  Cache-Lesen 0,50 $; Fable 5.1: 10/50, 20, 0,25). Eine Tilde vor der Zahl heißt „geschätzt, nicht gemessen“.
+  **Die Zahlen waren nie freie Schätzungen** – der Auftraggeber hat das einmal misstrauisch nachgefragt.
+- Bilder und Dateien vor Sitzungsende per SendUserFile schicken. Achtung: auf seinem iPad (anderer
+  Apple-Account) kommen Anhänge nicht an; dort war eine Artifact-Seite der funktionierende Kanal.
+- Er gibt Richtung und logische Prüfung, Claude liefert Breite und Umsetzung („Mach du das bitte, ich verstehe
+  nur die Hälfte“). Feature-Wünsche direkt bauen, testen, committen, auf `main` bringen – nicht erst fragen.
 
-Vorhandene Motive (`lib/motifs.js`, Registry `{ key: { label, src, [kind:'photo', png] } }`):
-rund: `wink` (Zwinker), `dog` (Hund), `ghost` (Geist), `ladybug` (Marienkäfer);
-Bildmagnet: `fox` (Fuchs), `owl` (Eule), `panda` (Panda). Geschmacksurteil des Auftraggebers: Fuchs und Panda
-(Mint) sehr gut, Eule gut aber Motiv etwas klein auf der Fläche, erste Panda-Versuche (schwarz auf schwarz,
-vertieft mit dickem Rand) abgelehnt.
+## 1. Was Zettel ist und wie es benutzt wird
 
-## 2. Bild-Prompts (bewährt)
+Zettel ist eine PWA (`index.html`, kein Build) plus Vercel-Renderer (`api/zettel.js` → `lib/render.js`,
+satori + resvg). Ein handgeschriebener Notizzettel wird als Sperrbildschirm-Bild gerendert (iPhone 1179 × 2556).
 
-### 2a. Bildmagnet (puffig 3D), bevorzugt
+**Ablauf beim Auftraggeber (funktioniert, Stand 7.9. 00:31 Uhr):**
 
-Zwei Variablen: OBJEKT (Motiv) und FLAECHE (Farbe des Magnetkörpers).
+1. In der App Text schreiben, Gestaltung wählen. Einmalig ist sein Hintergrundfoto (Weltraum-Nebel) als
+   „Eigenes Hintergrundfoto“ hinterlegt; die App zeichnet den Zettel darauf.
+2. „Aufs Display kleben“ legt das fertige Bild in die Zwischenablage und startet den Kurzbefehl „Zettel“.
+3. Kurzbefehl: *Zwischenablage abrufen → Hintergrundbild-Foto festlegen (nur Sperrbildschirm) → Bildschirm sperren.*
+
+**Was wir über iOS gelernt haben (drei Abende, mehrfach reproduziert):**
+
+- Ein Sperrbildschirm ist ein **Paar**: Sperrbildschirm + Home-Bildschirm + Uhrstil + Widgets.
+- „Hintergrundbild-Foto festlegen“ legt beim **ersten** Lauf ein neues Paar an (beim Auftraggeber „Paar 10“).
+  Das neue Paar hat keine Widgets, und seine Home-Hälfte ist einfarbig (mattes Grün). Danach **überschreibt
+  der Kurzbefehl dieses Paar an Ort und Stelle** – Widgets und Home-Foto, die man einmal darauf einrichtet,
+  bleiben. [Sicher für seine Konfiguration; Apple dokumentiert den Mechanismus nicht]
+- Löscht man das Paar, beginnt es von vorn (neues Paar, wieder grün, wieder ohne Widgets). Regel: **Paar aktiv
+  lassen, nie löschen.**
+- Ist ein anderes Paar aktiv, läuft der Kurzbefehl trotzdem in sein eigenes Paar – man sieht das Ergebnis nur nicht.
+- iOS gibt ein gesetztes Hintergrundbild **nie** heraus. Sein Nebelfoto liegt nur in der Fotos-Mediathek
+  (Sperrbildschirm bearbeiten → „Foto in Mediathek anzeigen“). Das ist die Quelle für die App.
+- Die Aktion kennt nur: Bild, Sperrbildschirm, Home-Bildschirm, Vorschau anzeigen. **Keine** Zielauswahl eines
+  vorhandenen Paars, **keine** zwei Bilder. Widgets kann keine Kurzbefehl-Aktion setzen. Die Aktion verlangt
+  einen Sperrbildschirm im Modus „Foto“, nicht „Fotoshuffle“.
+- Eine andere KI hat dem Auftraggeber eine „Zielauswahl in der Aktion“ als Lösung verkauft – die gibt es nach
+  allen Quellen nicht. Der Auftraggeber weiß das.
+
+Die Einrichtungsanleitung in der App (`<details class="setup">`) beschreibt seit 1.35.2 genau diese drei
+Handgriffe beim ersten Mal. Mehr lässt sich am Erstlauf nicht glätten.
+
+**Notausgänge, falls das In-Place-Überschreiben doch einmal ausbleibt** (nur beschrieben, nicht gebaut):
+
+- **A – Fotoshuffle mit Ein-Bild-Album:** Sperrbildschirm auf Fotoshuffle → Album „Zettel“ → „Beim Sperren“.
+  Kurzbefehl: Zwischenablage abrufen → Fotos suchen (Album „Zettel“) merken → In Fotoalbum sichern → gemerkte
+  alte Fotos löschen → sperren. Erst sichern, dann löschen. **„Fotos löschen“ löscht aus der Mediathek**, das
+  Nebel-Original darf nie in dieses Album. Ungeklärt: ob Fotoshuffle beim Sperren sofort umschaltet und ob es
+  das Bild eigenständig rahmt.
+- **B – manuell im bestehenden Paar:** Kurzbefehl sichert nur ins Album; Tausch per Sperrbildschirm lange
+  drücken → Anpassen → Fotosymbol unten links → neuestes Bild. Fünf Tipper, garantiert alles erhalten.
+
+## 2. Was in dieser Sitzung gebaut wurde (1.29.0 → 1.35.2)
+
+| Version | Was | Wichtig zu wissen |
+|---|---|---|
+| 1.30–1.32 | Bildmagnete `rabbit` (Hase), `lola` (fotorealistisch, seine Französische Bulldogge), `lolacomic`, `brunocomic` (Britisch Kurzhaar) | Registry `lib/motifs.js` jetzt 438 KB von ~600 KB Budget; ca. 4 Motive passen noch, dann WebP-Qualität in `prep_photo.mjs` (0.9) senken |
+| 1.32 | Alias-Fehler in `setMotifs` behoben | Vorher zeigte `fdesign=rabbit` den Fuchs: nur der deutsche Name war Alias. Jetzt auch der Schlüssel – aber nur, wenn er kein Symbol (`herz`, `stern` …) verdeckt |
+| 1.33 | Überschrift an/aus (`title`) | Erste Zeile **unterstrichen**, nicht fett: Handschriften haben einen Schnitt, der Browser fettet künstlich, satori nicht → Vorschau ≠ Bild. Keine Listenmarke auf der ersten Zeile |
+| 1.34 | Drei Überschriftgrößen (`tsize` 1/2/3 = 1 / 1,25 / 1,55) | `TITLE_F` und `TITLE_GAP` (0,28 em) stehen **doppelt** in `index.html` und `lib/render.js`. Überschrift zählt nicht für „jeder Absatz auf eine Zeile“, sonst schrumpfte der ganze Text; sie bricht lieber um |
+| 1.35 | Eigenes Hintergrundfoto in der App; Server-Parameter `bg=transparent` | Foto wird formatfüllend auf Displaygröße geschnitten, JPEG, unter `localStorage['zettel.bg']` getrennt vom Zustand (`zettel.v1`). `bg=transparent` liefert PNG mit Alphakanal (nur Zettel + Schatten) für „Bild überlagern“ im Kurzbefehl |
+| 1.35.1 | Zwei Fehler | ✕-Knopf erbte `width:100%` → Seite lief 100 px über, iOS zoomte heraus. Unterstrich lag bei Schrift Marker in den Buchstaben: fester Faktor 0,98 em ersetzt durch Grundlinie aus Schriftmetriken (`actualBoundingBoxAscent` von „H“ mit Baseline alphabetic minus top), Strich 0,1 em darunter, 0,05 em stark – wie das CSS |
+| 1.35.2 | Einrichtungsanleitung in der App neu | Drei Schritte, sagt vorher, was beim ersten Lauf passiert |
+
+**Parität App ↔ Server ist die wichtigste Regel.** Für denselben Text müssen `fitNote` (App) und die
+Schriftgrößenwahl in `render.js` dieselbe Größe und Zeilenzahl ergeben (zuletzt geprüft: 135 px / 105 px bei
+Stufe 3, 4 bzw. 5 Zeilen, identisch). Wer Layoutregeln anfasst, ändert beide Dateien.
+
+## 3. Bild-Prompts (bewährt, unverändert gültig)
+
+### 3a. Bildmagnet (puffig 3D), bevorzugt
 
 ```
 OBJEKT = [panda face]
@@ -47,18 +102,15 @@ The motif is OBJEKT, raised and embossed on top of the body, never sunken or rec
 Big expressive eyes with bright highlights, small friendly smile, soft rounded shapes, 4 to 6 flat colors with gentle shading, thin dark outlines.
 ```
 
-Regeln für FLAECHE: nie Weiß oder sehr hell (sonst keine Freistellung vom weißen Hintergrund), nie eine
-Hauptfarbe des Motivs (Panda: kein Schwarz/Weiß/Grau, Fuchs: kein Orange). Pastell funktioniert: mint green,
-sky blue, soft coral, lavender, butter yellow, peach. Bei Motiven, die zu klein geraten (Eule), ergänzen:
-„the motif fills 85 % of the square, feet or base touching the lower margin“.
+FLAECHE nie weiß oder sehr hell (Freistellung), nie eine Hauptfarbe des Motivs. **Für ein individuelles Tier
+(Lola, Bruno) zählt, dass das Bild in sich stimmig ist – nicht, dass es in die Palette der Sammlung passt.**
+Das war eine ausdrückliche Vorgabe.
 
-Wichtig für die Freistellung: reines Weiß, **kein Schatten auf dem Hintergrund**. Das Skript entfernt Weiß per
-Flutfüllung von den Bildrändern her; ein grauer Schatten bleibt sonst als Fahne stehen.
+**Korrektur einer alten Fehldiagnose:** Ein Motiv, das leicht **vertieft** in einer Mulde sitzt, ist **kein**
+Mangel – Eule und Fuchs haben denselben Look, der Auftraggeber findet ihn gut. Abgelehnt war beim Panda nur
+Schwarz auf Schwarz. Frühere Fassungen dieser Datei behaupteten das Gegenteil.
 
-Ideen, die der Auftraggeber bekommen hat und gut fand: Frosch auf peach, Pinguin auf butter yellow, Biene auf
-lavender, Katze, Koi, Hund, Igel, Faultier, Erdbeere, Avocado, Donut, Kaktus, Regenbogen, Rakete, Herz.
-
-### 2b. Rundes Motiv (flach), nur falls gewünscht
+### 3b. Rundes Motiv (flach), nur falls gewünscht
 
 ```
 OBJEKT = [cartoon dog face]
@@ -71,135 +123,110 @@ Keep all important details inside the inner 80 % of the circle; the outer 20 % i
 Square image, 1024 x 1024 pixels.
 ```
 
-## 3. Bilder per API erzeugen (RouteLLM, Abacus.AI ChatLLM)
+## 4. Bilder per API (RouteLLM, Abacus.AI ChatLLM) – gemessen, nicht vermutet
 
-- Schlüssel liegt als Umgebungsvariable `ROUTELLM_API_KEY` in der Cloud-Umgebung. **Nie ausgeben, nie in
-  Dateien oder Commits schreiben.** Nur `process.env.ROUTELLM_API_KEY` lesen.
-- Endpunkt: `POST https://routellm.abacus.ai/v1/chat/completions`, OpenAI-kompatibel, Header
-  `Authorization: Bearer <key>`. Bilder laufen über denselben Endpunkt, nicht über `/images/generations`.
-- **Schlüssel richtig prüfen** (geprüft 6.9.2026): `GET /v1/models` ist **nicht authentifiziert** und antwortet
-  auch ganz ohne Header mit 200 – als Schlüsseltest also wertlos, nur als Netzwerktest brauchbar. Ein toter
-  Schlüssel zeigt sich erst am `chat/completions`-Endpunkt als `403 {"error": "Invalid API Key"}`. Richtiger,
-  fast kostenloser Test:
+- Schlüssel: Umgebungsvariable `ROUTELLM_API_KEY`. **Nie ausgeben, nie in Dateien oder Commits schreiben.**
+  Ein Tausch in der Umgebungskonfiguration greift erst in einer neuen Sitzung.
+- Endpunkt `POST https://routellm.abacus.ai/v1/chat/completions`, OpenAI-kompatibel. `GET /v1/models` ist
+  **unauthentifiziert** (antwortet ohne Schlüssel mit 200) – als Schlüsseltest wertlos. Test:
+  `{"model":"route-llm-code","messages":[{"role":"user","content":"hi"}],"max_tokens":5}` → 200 oder
+  `403 Invalid API Key`.
+- `GET /v1/account` ist authentifiziert und liefert Name, E-Mail, Organisation, Plan, `credits_used`,
+  `credits_granted`. `credits_used` wird **in Schüben** geschrieben, Verzögerung etwa eine Stunde – der
+  Auftraggeber hat lange „nichts abgegangen“ gesehen und zwischendurch die falsche Zahl (Gesamtvolumen statt
+  Verbrauch) angeschaut.
+- **`usage.compute_points_used` pro Anfrage; 100 Punkte = 1 Credit** (gemessen 99,84 ± 0,03). ChatLLM Pro:
+  20 $/Monat, 30 000 Credits → ~0,06 ct je Credit. Damit: `gpt_image2` ≈ 0,4 ct je Bild, `nano_banana_pro` ≈ 8 ct.
+  Gesamt diese Sitzung: 72 ct.
+- Bilder: `modalities: ['image','text']`, Antwort in `choices[0].message.images[].image_url.url` (Data-URI).
+  `gpt_image2` lehnt `image_config.aspect_ratio` ab → `--noconfig` in `tools/gen_image.mjs`.
+- `gpt_image2_edit` nimmt **bis zu drei Referenzbilder** in einem Aufruf, ohne Aufpreis. Es kann aber **nicht
+  lokal retuschieren** – es erzeugt alles neu – und **übertreibt kleine Korrekturen systematisch** („5 % schlanker“
+  wird 20 %). Geometrische Nacharbeit am Pixel (Klonen, Füllen) ist zweimal gescheitert; besser neu erzeugen und
+  messen.
+- Qualitätsurteil des Auftraggebers: `gpt_image2` war für die kleine Darstellung oft besser als Nano Banana
+  (dessen Plastizität ist für 200 px fast zu stark); die Comic-Fassungen von Lola und Bruno kamen aus `gpt_image2_edit`
+  mit Fuchs/Panda als Stilvorlage.
+- Messtechnik, die sich bewährt hat: Freistellen per Flutfüllung vom Rand, Rendern auf 200/120/60 px, Michelson-
+  Kontrast, Wärmekarte (r − b), Belichtungsnormierung über die Stirnhelligkeit. Drei eigene Messkriterien waren
+  falsch und wurden zurückgezogen (Kontrastmetrik brach bei Klassifizierer-Wechsel, Brauenmaß saturierte,
+  Kopfbreite maß die Schnurrhaare). Autonome Schleifen brauchen ein **hartes Kriterium für die Magnetplatte**,
+  sonst optimiert das Modell sie weg (sechs von sechs Kandidaten ohne Platte).
 
-  ```
-  curl -s -w '\nHTTP %{http_code}\n' https://routellm.abacus.ai/v1/chat/completions \
-    -H "Authorization: Bearer $ROUTELLM_API_KEY" -H 'Content-Type: application/json' \
-    -d '{"model":"route-llm-code","messages":[{"role":"user","content":"hi"}],"max_tokens":5}'
-  ```
+Skripte: `node tools/gen_image.mjs <out.png> <modell> "<prompt>" [--dump] [--noconfig] [--n 2]`,
+`node lib/prep_photo.mjs <quelle.png> <key> <Anzeigename>` (Bildmagnet), `node lib/prep_motif.mjs …` (rund).
 
-  Umgebungsvariablen werden beim Start des Containers gesetzt. Wird der Schlüssel in der Umgebungs-
-  konfiguration ausgetauscht, greift das **erst in einer neu gestarteten Sitzung**, nicht in der laufenden.
-- Anfrage: `{ model, modalities: ['image','text'], messages: [{ role:'user', content:[{type:'text', text}] }], image_config: { aspect_ratio, num_images?, quality?, resolution? } }`.
-- Antwort: `choices[0].message.images[].image_url.url` als Data-URI, ersatzweise Data-URI im `content`-Text.
-- Modell-Schlüssel laut `/v1/models` (geprüft 5.9.2026): `gpt_image2`, `gpt_image2_edit`, `nano_banana2`,
-  `nano_banana_pro`, `flux2_pro`, `flux3`, `flux_pro_ultra`, `seedream5_pro`, `ideogram`, `recraft`,
-  `gemini-3-pro-image`. Für den kawaii-3D-Stil zuerst `gpt_image2` und `nano_banana_pro` probieren [Vermutung].
-  `gpt_image2_edit` nimmt zusätzlich ein Referenzbild als `{type:'image_url', image_url:{url: dataUri}}` im
-  content, damit lassen sich Fuchs/Panda als Stilvorlage mitgeben [Wahrscheinlich].
-- Seitenverhältnis: FLUX-Modelle wollen `square_hd`, die anderen `1:1`. `tools/gen_image.mjs` übersetzt das.
-  **`gpt_image2` lehnt `image_config.aspect_ratio` ab** (`400 Invalid image config param`); dort
-  `--noconfig` benutzen, dann liefert das Modell 1024 x 1024 px. Die Doku-Seite unter `abacus.ai/help/...`
-  ist vom Egress-Proxy der Cloud-Umgebung blockiert, die erlaubten Werte lassen sich dort nicht nachlesen.
-- Verbrauch: die Antwort enthält `usage.compute_points_used` (Frosch mit `gpt_image2`, 1024 x 1024:
-  **695,5 Punkte**, 19,4 s). Damit lässt sich pro Bild gegen das ChatLLM-Dashboard abgleichen.
-- Kosten: ChatLLM Teams enthält laut Abacus 10 $ API-Guthaben pro Monat; ob Bildmodelle darin enthalten sind, ist
-  ungeprüft. Deshalb **zuerst ein einzelnes Bild** erzeugen, dann in ChatLLM unter Credits nachsehen, was es
-  abgezogen hat, und dem Auftraggeber die Zahl nennen, bevor Serien laufen.
+## 5. Prüfen (so, wie es in dieser Umgebung wirklich läuft)
 
-Skript (ungeprüft, ohne Schlüssel geschrieben, beim ersten Lauf mit `--dump` die Antwortstruktur prüfen):
+- Playwright liegt in `node_modules` des Repos; Skripte **aus `/home/user/Zettel`** starten, sonst findet Node das
+  Paket nicht. Chromium: `chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  args: ['--no-sandbox'] })` – ohne `executablePath` sucht Playwright eine andere Version und bricht ab.
+- **WebKit ist nicht verfügbar** (Download scheitert am Egress-Proxy). Alle App-Tests liefen in Chromium; die
+  lokalen Schriften aus `fonts/` werden über `@font-face` geladen, `document.fonts.check` bestätigt sie.
+  **iPhone-Prüfung bleibt beim Menschen.**
+- App-Test: `file:///home/user/Zettel/index.html` öffnen (Viewport 430 × 900), Text per `innerHTML` in `#text`
+  setzen und `input` feuern, `renderWallpaper(1179, 2556, 'phone')` aufrufen und als PNG sichern. `fitNote(...)`
+  liefert `fs` und `lines` zum Vergleich mit `renderZettel(...)` vom Server.
+- Server-Test: `import { renderZettel } from './lib/render.js'` – gibt `png`, `fontSize`, `lines`, `titleSize`, `bg`.
+- Bildmessung ohne PIL/sharp (beides fehlt): PNG in Chromium auf ein Canvas zeichnen, `getImageData` auswerten.
+  Zettel finden über Gelb (R > 200, G > 180, B < 170); Tinte R+G+B < 330; Ränder und Ecken ausschließen.
+- Überlaufprüfung: `document.documentElement.scrollWidth` muss beim 430-px-Viewport ≤ 448 bleiben (der Rest ist
+  ein alter, harmloser Überlauf der Befestigungsvorschau). Bei 535 zoomte iOS die ganze App heraus.
+- Sieben-Motive-Regression: alle Bildmagnete rendern und PNG-Größen vergleichen – gleiche Größe = gleiches Bild
+  (so fiel der Alias-Fehler auf).
+- Temporäre Skripte in den Scratchpad-Ordner, nicht ins Repo; vor dem Commit `git status` prüfen.
 
-```
-node tools/gen_image.mjs /tmp/panda.png gpt_image2 "OBJEKT = panda face ... (ganzer Prompt)" --dump
-node tools/gen_image.mjs /tmp/frosch.png nano_banana_pro "..." --n 2      # zwei Varianten: frosch-1.png, frosch-2.png
-```
+## 6. Nächste Schritte
 
-Wenn die Antwort anders aussieht als erwartet: `*.response.json` neben der Ausgabe lesen und das Skript anpassen.
-Fehler 401/403 = Schlüssel oder Kontingent (**erst mit dem Text-Request oben klären, ob der Schlüssel überhaupt
-noch lebt**, bevor man das Modell verdächtigt), 400 = Parameter (dann `image_config` weglassen bzw. `--noconfig`).
+### 6a. Auf dem iPhone zu bestätigen (kann kein Code)
 
-Ergebnis des ersten echten Laufs (6.9.2026): `gpt_image2` liefert sauber freistellbare Bilder (Hintergrund
-253–254 von 255, kein Schatten), setzt das Motiv aber **vertieft in eine Mulde mit dickem Rand** statt erhaben –
-genau die Variante, die der Auftraggeber beim Panda abgelehnt hat. Die Prompt-Zeile „raised and embossed …,
-never sunken or recessed“ reicht bei diesem Modell nicht. Nächster Versuch: eine Nano-Banana-Variante oder
-`gpt_image2_edit` mit dem Fuchs als Stilvorlage.
+1. Neuen Text anheften, Kurzbefehl laufen lassen: **bleiben Widgets, Uhrstil und Home-Foto auf Paar 10?**
+   Der Screenshot vom 7.9., 00:31 sagt ja. Wenn nein → Notausgang A testen, B als Netz.
+2. Falls der Home-Bildschirm den Zettel zeigt (unscharf oder scharf): Home-Hälfte steht auf „Paar“ oder der
+   Kurzbefehl hat „Home-Bildschirm“ angehakt. Beides in Ordnung; „Nebel ohne Zettel“ nur über Anpassen → Foto.
 
-## 4. Bilder einbauen
+### 6b. Sechs Verbesserungen an der App (Auftrag liegt vor, noch nicht begonnen)
 
-Beide Skripte brauchen Playwright mit Chromium (`/opt/pw-browsers/chromium` ist in der Cloud-Umgebung
-vorinstalliert). Playwright einmalig ohne Änderung an package.json installieren:
+Vorlage einer anderen KI, vom Auftraggeber gebilligt, hier mit Prioritäten und Fallstricken:
 
-```
-cd /home/user/Zettel && npm install --no-save playwright@1.62.1
-```
+1. **Status erfasst nicht alles** – `isPinnedCurrent()` prüft `title`, `titleSize` und das Hintergrundfoto nicht;
+   nach dem Umschalten steht trotzdem „✓ angeheftet“. Für das Foto eine kurze Kennung (z. B. Länge + Hash der
+   Data-URL) in `state.pinned` ablegen, nicht das Bild. Alte `pinned`-Einträge ohne die Felder gelten als veraltet.
+   **Höchste Priorität, klein.**
+2. **„Zettel ausblenden“** – nur den gespeicherten Hintergrund ohne Papier, Schrift, Befestigung ausgeben, über
+   denselben Zwischenablage-Weg; Text und Einstellungen bleiben. Ohne hinterlegtes Foto ein Hinweis statt
+   stiller Ausgabe des dunklen Verlaufs. Im Status unterscheiden: „mit Zettel“ / „nur Hintergrund“.
+3. **„Angeheftet“ ist voreilig** – `stickViaShortcut()` ruft `markPinned()` nach dem Kopieren auf; der Kurzbefehl
+   ist da noch nicht gelaufen. Wortlaut „Bild bereit“ bzw. „Kurzbefehl angefordert“ in Marke, Statuszeile und
+   Toast konsistent. Die App kann den Erfolg nie bestätigen.
+4. **Foto vor der Ausgabe abwarten** – `bgLaden()` ist asynchron; `renderPng()` wartet auf Schriften, nicht aufs
+   Foto. Ein Promise für „Foto bereit“, das Ausgabe, „Teilen / sichern“ und Ausblenden abwarten. Ladefehler
+   melden statt stumm den Verlauf zu nehmen. Fenster ist klein (Dekodierzeit), Fix trotzdem billig.
+5. **Vorschau wächst, Bild nicht** – `syncPreview()` vergrößert den Vorschau-Zettel, wenn Text bei Mindestschrift
+   nicht passt; der Export behält die feste Größe und schneidet ab. Warnen und Ausgabe sperren. **Aufwendigster
+   Punkt.** Layoutregeln nur zusammen mit `lib/render.js` ändern (Parität). Eine Vollbild-Vorschau gibt es
+   bereits: das Overlay `#preview` hinter „Teilen / sichern“ zeigt das gerenderte Bild.
+6. **Trennung Foto/Zustand erhalten** – ist heute so (`zettel.bg` vs. `zettel.v1`), nur nicht kaputt machen. Das
+   gespeicherte Foto ist zugeschnitten und JPEG-komprimiert, **kein Original** – so beschriften.
 
-Bildmagnet (Bild auf reinem Weiß, Skript stellt frei, beschneidet, quadratisch 480 px, schreibt Registry + PNG):
+Für alle Punkte: `APP_VERSION` hochzählen (Mitte neue Funktion, hinten Korrektur), deutsche Commit-Betreffzeile,
+Chromium-Tests wie in Abschnitt 5, danach Fast-Forward auf `main`. Am Ende trennen: geändert / hier getestet /
+auf dem iPhone offen. Den Erhalt von Home-Bildschirm, Uhrstil und Widgets nie aus dem Code ableiten.
 
-```
-cd /home/user/Zettel && node lib/prep_photo.mjs /tmp/frosch.png frog Frosch
-```
+### 6c. Kleinere offene Punkte
 
-Rundes Motiv (Kreis auf Weiß finden, quadratisch beschneiden, 512 px JPEG; optionaler Zoom > 1 zieht enger):
+- Regler für Ausschnitt und Zoom des Hintergrundfotos (falls der mittige Schnitt vom iOS-Ausschnitt abweicht).
+- Der Auftraggeber möchte die Rechnungslogik „ein Paar pro Kurzbefehl“ nicht weiter automatisieren; Hintergrund
+  wechselt er „selten bis nie“.
+- `docs/` enthält außer dieser Datei nichts; die alte Fassung dieser Datei hatte falsche Angaben (Mulde,
+  Kostenmodell, Alias), alle hier korrigiert.
 
-```
-cd /home/user/Zettel && node lib/prep_motif.mjs /tmp/hund.jpg dog Hund 1.1
-```
+## 7. Kosten dieser Sitzung und Rat für die nächste
 
-Argumente: Quelldatei, interner Schlüssel (englisch, klein, wird auch in `lib/motifs/<key>.png` verwendet),
-Anzeigename (deutsch, erscheint als Chip-Tooltip und als URL-Alias `fdesign=<name klein>`).
-Dann:
-
-1. `APP_VERSION` in `index.html` hochzählen (Mitte: neue Funktion, hinten: Korrektur), z. B. `1.28.0`.
-   Die App meldet neue Versionen selbst; die Zeile enthält `const APP_VERSION = '…'`.
-2. README-Liste der Bildmagnete ergänzen (Abschnitt Parameter, `fdesign`).
-3. Tests (Abschnitt 5), Kontrollbild zusammenstellen, **anschauen** (Auftraggeber hat mehrfach Bilder
-   zurückgewiesen, die ungeprüft hochgeladen wurden), dann dem Auftraggeber schicken.
-4. Commit (deutsche Betreffzeile, z. B. „Bildmagnete Frosch und Pinguin, Version 1.28.0“) und
-   `git push -u origin claude/projekt-zettel-xjs5ko`.
-
-Größenbudget: `lib/motifs.js` liegt bei 238 KB für 7 Motive, wird vom Service Worker gecacht. Bis etwa 600 KB
-unkritisch; darüber Bilder stärker komprimieren (WebP-Qualität in `prep_photo.mjs`, aktuell 0.9).
-
-## 5. Prüfen
-
-Server (aus dem Repo-Verzeichnis starten, sonst findet `render.js` die Schriften nicht):
-
-```
-cd /home/user/Zettel && node tests/srv_photo.mjs /tmp/out frosch panda
-```
-
-App im WebKit-Browser (iPhone-Viewport), Screenshot und Wallpaper je Motiv:
-
-```
-cd /home/user/Zettel && (setsid nohup python3 -m http.server 8766 >/dev/null 2>&1 < /dev/null &)
-PLAYWRIGHT_BROWSERS_PATH=/tmp/pw-webkit npx playwright install webkit --with-deps   # einmalig, dauert einige Minuten
-PLAYWRIGHT_BROWSERS_PATH=/tmp/pw-webkit node tests/app_photo.mjs /tmp/out frog panda
-```
-
-Der lokale Server stirbt zwischen den Chat-Runden; vor jedem App-Test neu starten. Klicks auf die Befestigung
-gehen über das unsichtbare `rect.hit` mit `{ force: true }`, sonst scrollt Playwright vor dem Klick und die
-Schiebeleisten übernehmen einen falschen Wert.
-
-Kontrollbild aus mehreren PNGs nebeneinander: mit Chromium eine HTML-Seite mit `<img>`-Elementen rendern und
-per `page.screenshot` speichern (siehe Beispiel in `tests/app_photo.mjs`, gleiche Technik), dann per Read
-ansehen und per SendUserFile schicken.
-
-## 6. Technik, die man beim Einbauen kennen muss
-
-- `lib/fasteners.js` ist die gemeinsame Zeichendatei für App und Server (UMD). `setMotifs(registry)` teilt
-  Einträge mit `kind:'photo'` in `PHOTOS`, den Rest in `MOTIFS`/`DESIGNS`; der deutsche Name wird klein als
-  Alias eingetragen. Im Server wird die Datei per `new Function('module','exports',src)` geladen.
-- Server-Renderer (satori + resvg): resvg kann kein WebP und lädt keine `<image>` innerhalb eingebetteter SVGs.
-  Deshalb liegt je Bildmagnet ein PNG in `lib/motifs/`, das `render.js` als eigenen `img`-Knoten mit
-  `borderRadius` zeichnet; der Glanz kommt danach als SVG darüber.
-- `lib/render.js`: innerhalb von `renderZettel` heißt eine Variable `fs` (Schriftgröße); Dateizugriffe dort über
-  `const { readFileSync } = fs` am Modulanfang.
-- Vercel deployt aus `main`. Bild-URL zum Testen nach dem Merge:
-  `https://zettel-beta.vercel.app/api/zettel?device=iphone&text=Test&fastener=bildmagnet&fdesign=panda`
-
-## 7. Offen (nicht beauftragt, nur angeboten)
-
-- Bildmagnet ca. 25 % größer zeichnen (Auftraggeber fand ihn eventuell klein; Entscheidung steht aus).
-- Aus der App-Durchsicht: Foto als Zettelhintergrund, abhakbare Kästchen, Verlauf/Vorlagen, Positionsregler,
-  Datumsstempel, Sicherung, Tests ins Repo (hiermit begonnen), Option `autoRun` entfernen, Wortlaut
-  „angeheftet“ ist optimistisch (Bild liegt nur bereit).
+- RouteLLM gesamt 72 ct (alle Bilder der drei Tage).
+- Claude gesamt ≈ 149 $ (Opus 5 bis zum Modellwechsel, danach Fable 5.1). Ein sehr großer Teil davon ist
+  Cache-Lesen des riesigen Verlaufs; **jeder Neustart nach mehr als einer Stunde Pause und jeder Modellwechsel
+  kostet bei dieser Verlaufslänge rund 9 $**, weil der Cache neu geschrieben wird. Ein einzelner Feature-Schritt mit
+  Tests kostete zuletzt 2–5 $, eine kurze Antwort 0,2–0,5 $.
+- Empfehlung: **Neue Sitzung starten.** Diese Datei plus README plus die App-Anleitung reichen als Kontext; ein
+  frischer Chat kostet pro Schritt einen Bruchteil.
