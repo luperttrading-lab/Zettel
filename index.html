@@ -240,6 +240,7 @@
       font-size: 15px; color: var(--muted, #9a9aa2); cursor: pointer; }
     .toggle input { width: 20px; height: 20px; accent-color: #6d6df0; flex: 0 0 auto; }
     .tsizes { display: flex; gap: 4px; flex: 0 0 auto; }
+    .tsizes[hidden] { display: none; }   /* display:flex schlüge sonst das hidden-Attribut – die Knöpfe blieben ohne Überschrift sichtbar */
     .tsizes button { width: 34px; height: 34px; border: 0; border-radius: 9px; cursor: pointer;
       background: rgba(255,255,255,.06); color: var(--muted, #9a9aa2); font-family: var(--note-font);
       line-height: 1; padding: 0; }
@@ -365,7 +366,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.36.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.36.3'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
