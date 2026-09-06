@@ -1,6 +1,9 @@
 # Übergabe: Magnet-Bilder für Zettel selbst erzeugen
 
-Stand: 5. September 2026, App-Version 1.27.0, Branch `claude/projekt-zettel-xjs5ko` (wird immer auf `main`
+**Repository: `luperttrading-lab/Zettel`** (nicht `wetter` oder ein anderes). Diese Datei liegt dort unter
+`docs/UEBERGABE.md`; die Sitzung muss in diesem Repository gestartet sein, sonst fehlen Skripte, Motive und Kontext.
+
+Stand: 6. September 2026, App-Version 1.29.0, Branch `claude/projekt-zettel-xjs5ko` (wird immer auf `main`
 vorgespult; Vercel baut aus `main`). Diese Datei ist für eine neue Claude-Code-Sitzung gedacht, die in einer
 Cloud-Umgebung mit dem RouteLLM-Schlüssel läuft. Der Auftraggeber schreibt Deutsch, wird geduzt, diktiert per
 Sprache (Erkennungsfehler mitdenken), will Aussagen als [Sicher] / [Wahrscheinlich] / [Vermutung] markiert und
