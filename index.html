@@ -248,7 +248,7 @@
     .bgrow { display: flex; align-items: center; gap: 8px; margin: 2px auto 0; padding: 0 4px;
       max-width: 520px; width: 100%; }
     .bgrow .btn { flex: 1 1 auto; padding: 9px 12px; font-size: 14px; }
-    .bgrow .btn.off { flex: 0 0 auto; }
+    .bgrow .btn.off { flex: 0 0 auto; width: auto; min-width: 44px; }   /* .btn hat width:100% – hier ausdrücklich aufheben, sonst läuft die Reihe über */
     /* Vorschau: das gewählte Foto liegt hinter dem Zettel, leicht abgedunkelt wie auf dem Sperrbildschirm */
     .top.foto { background-size: cover; background-position: center; }
     .top.foto header h1, .top.foto header small, .top.foto #saved { text-shadow: 0 1px 3px rgba(0,0,0,.8); }
@@ -349,7 +349,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.35.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.35.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -1271,6 +1271,14 @@
       ctx.fillStyle = inkColor();
       ctx.font = `${weight} ${fs}px ${family}`;
       ctx.textBaseline = 'top';
+      // Abstand Oberkante → Grundlinie für Schriftgröße f: Versalhöhe über der Grundlinie plus Abstand
+      // der Versal-Oberkante zur Zeilenoberkante. Ohne Metriken (alte Browser) der bisherige Näherungswert.
+      const baselineOf = f => {
+        ctx.font = `${weight} ${f}px ${family}`;
+        ctx.textBaseline = 'alphabetic'; const a = ctx.measureText('H').actualBoundingBoxAscent;
+        ctx.textBaseline = 'top';        const b = ctx.measureText('H').actualBoundingBoxAscent;
+        return Number.isFinite(a - b) ? a - b : f * 0.88;
+      };
       let y = -noteH / 2 + textTop;
       lines.forEach((line, i) => {
         const isTitle = state.title && line.p === 0;                      // ganzer erster Absatz, auch mehrzeilig
@@ -1279,8 +1287,10 @@
         if (line.mk) ctx.fillText(line.mk, -noteW / 2 + pad, y);          // Markierung links
         const tx = -noteW / 2 + pad + line.x;
         ctx.fillText(line.t, tx, y);                                      // Text eingerückt
-        // Unterstrich von Hand: Canvas kennt keine Textdekoration
-        if (isTitle && line.t) ctx.fillRect(tx, y + f * 0.98, ctx.measureText(line.t).width, Math.max(1, f / 20));
+        // Unterstrich von Hand: Canvas kennt keine Textdekoration. Lage wie im CSS (text-underline-offset .1em,
+        // Stärke .05em) unter der Grundlinie – und die liegt je nach Schrift verschieden tief unter der Oberkante
+        // (Marker deutlich tiefer als Caveat), darum aus den Metriken statt mit festem Faktor.
+        if (isTitle && line.t) ctx.fillRect(tx, y + baselineOf(f) + f * 0.1, ctx.measureText(line.t).width, Math.max(1, f * 0.05));
         const letzteTitelzeile = isTitle && (!lines[i + 1] || lines[i + 1].p !== 0);
         y += f * (lh / fs) + (letzteTitelzeile ? titleGap : 0);
       });
