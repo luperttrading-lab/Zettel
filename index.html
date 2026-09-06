@@ -301,7 +301,7 @@
   </div>
 
   <div class="bgrow">
-    <button class="btn ghost" type="button" id="bgpick">Eigenes Hintergrundfoto</button>
+    <button class="btn ghost" type="button" id="bgpick" title="Gespeichert wird ein auf Displaygröße zugeschnittener JPEG-Abzug, nicht das Original">Eigenes Hintergrundfoto</button>
     <button class="btn ghost off" type="button" id="bgclear" hidden aria-label="Hintergrundfoto entfernen">✕</button>
     <input id="bgfile" type="file" accept="image/*" hidden>
   </div>
@@ -332,7 +332,7 @@
       <li>Oben auf den Titel „Neuer Kurzbefehl“ tippen → umbenennen in genau <strong>Zettel</strong> → <strong>Fertig</strong>.</li>
     </ol>
     <p><strong>2. Hintergrundfoto in der App wählen</strong></p>
-    <p>Oben <strong>Eigenes Hintergrundfoto</strong> antippen und dasselbe Foto nehmen, das dein Sperrbildschirm zeigt. Wo es liegt: Sperrbildschirm lange drücken → Anpassen → Fotosymbol unten links → <em>Foto in Mediathek anzeigen</em>. Ohne diesen Schritt klebt der Zettel auf schwarzem Grund – iOS gibt das aktuelle Hintergrundbild an keine App heraus, das Foto muss die App selbst mitbringen.</p>
+    <p>Oben <strong>Eigenes Hintergrundfoto</strong> antippen und dasselbe Foto nehmen, das dein Sperrbildschirm zeigt. Wo es liegt: Sperrbildschirm lange drücken → Anpassen → Fotosymbol unten links → <em>Foto in Mediathek anzeigen</em>. Ohne diesen Schritt klebt der Zettel auf schwarzem Grund – iOS gibt das aktuelle Hintergrundbild an keine App heraus, das Foto muss die App selbst mitbringen. Die App speichert davon einen auf Displaygröße zugeschnittenen JPEG-Abzug, <strong>nicht das Original</strong>; er bleibt getrennt vom Zettel und auch beim Leeren erhalten.</p>
     <p><strong>3. Erster Lauf – danach einmal nachbessern</strong></p>
     <p>Beim ersten „Aufs Display kleben“ legt iOS einen <strong>neuen</strong> Sperrbildschirm an. Der kommt ohne Widgets, und sein Home-Bildschirm ist einfarbig. Das ist normal und passiert nur dieses eine Mal:</p>
     <ol>
@@ -365,7 +365,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.36.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.36.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -908,7 +908,8 @@
     // ---------- Eigenes Hintergrundfoto ----------
     // iOS gibt kein Programm an das aktuelle Hintergrundbild heran. Damit der Zettel trotzdem auf dem
     // gewohnten Bild klebt, wählt man das Foto einmal selbst; es wird auf Displaygröße zugeschnitten
-    // (mittig, formatfüllend) und als JPEG gespeichert – getrennt vom übrigen Zustand, weil es groß ist.
+    // (mittig, formatfüllend) und als JPEG gespeichert – getrennt vom übrigen Zustand (zettel.v1), weil es groß ist.
+    // Diese Trennung ist Absicht: der Zustand samt pinned enthält nur die Kennung des Fotos, nie das Bild.
     const BG_KEY = 'zettel.bg';
     var bgImage = null;                  // hochgezogen: renderWallpaper liest es, wird aber erst später aufgerufen
     // Das Foto wird asynchron dekodiert. Jede Ausgabe (Kleben, Teilen) wartet auf bgReady, sonst käme im
@@ -972,7 +973,7 @@
       catch { showInfo('Foto passt nicht in den Speicher'); return; }
       bgLaden();
       if (statusEl.textContent === BG_FEHLER) statusEl.textContent = '';
-      showInfo('Hintergrundfoto gesetzt');
+      showInfo('Hintergrundfoto gesetzt – als zugeschnittener JPEG-Abzug, nicht das Original');
     }
 
     bgPick.addEventListener('click', () => bgFile.click());
