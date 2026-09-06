@@ -3,8 +3,8 @@
 **Repository: `luperttrading-lab/Zettel`.** Diese Datei liegt dort unter `docs/UEBERGABE.md`. Eine neue Sitzung
 muss in diesem Repository laufen, sonst fehlen Skripte, Motive, Schriften und Kontext.
 
-Stand: 7. September 2026, App-Version **1.35.2**, Branch `claude/uebergabe-key-auth-5l0a1t` (wird nach jedem
-Commit per Fast-Forward auf `main` gebracht; Vercel und GitHub Pages bauen aus `main`).
+Stand: 7. September 2026, App-Version **1.36.3**, Branch `claude/docs-uebergabe-readme-e8bkvo` (nach Abschluss per
+Fast-Forward auf `main` gebracht; Vercel und GitHub Pages bauen aus `main`).
 
 ## 0. Arbeitsweise mit dem Auftraggeber
 
@@ -84,6 +84,18 @@ Handgriffe beim ersten Mal. Mehr lässt sich am Erstlauf nicht glätten.
 | 1.35.1 | Zwei Fehler | ✕-Knopf erbte `width:100%` → Seite lief 100 px über, iOS zoomte heraus. Unterstrich lag bei Schrift Marker in den Buchstaben: fester Faktor 0,98 em ersetzt durch Grundlinie aus Schriftmetriken (`actualBoundingBoxAscent` von „H“ mit Baseline alphabetic minus top), Strich 0,1 em darunter, 0,05 em stark – wie das CSS |
 | 1.35.2 | Einrichtungsanleitung in der App neu | Drei Schritte, sagt vorher, was beim ersten Lauf passiert |
 
+Zweite Sitzung (Auftrag aus 6b, alle sechs Punkte umgesetzt, Reihenfolge 1 · 3 · 4 · 2 · 5 · 6):
+
+| Version | Was | Wichtig zu wissen |
+|---|---|---|
+| 1.35.3 | Punkt 1: `isPinnedCurrent()` prüft `title`, `titleSize` (nur bei Überschrift an) und das Foto | `state.pinned.bg` = Kennung `Länge:FNV-1a-Hash` der Data-URL (`fotoKennung`, ~7 ms bei 2,4 MB), gesetzt in `bgLaden` synchron aus der URL, geleert bei ✕ und Ladefehler. `pinned` ohne `title`/`bg` (ältere Versionen) gilt als veraltet |
+| 1.35.4 | Punkt 3: Wortlaut „Bild bereit“ / „Kurzbefehl angefordert“ statt „angeheftet“ | `pinned.requested` = Kurzbefehl per URL aufgerufen. Nach Änderung „geändert · Bild veraltet“. `updatePinBadge` löscht Statuszeilen, die mit „Bild bereit“ oder „Kurzbefehl „“ beginnen, sobald der Stand nicht mehr passt |
+| 1.35.5 | Punkt 4: `bgReady`-Promise, `fotoAbwarten()` in `renderPng()` | Ladefehler → `bgFehler`, Banner + Statuszeile `BG_FEHLER`, Ausgabe gesperrt, ✕ bleibt sichtbar („ohne Foto weitermachen“). `png.catch(() => {})` in `stickViaShortcut`, sonst meldet der Browser die Ablehnung als unbehandelt, weil `ClipboardItem` das Promise vor unserem Handler hält |
+| 1.36.0 | Punkt 2: Knopf „Zettel ausblenden“ | `stickViaShortcut({ nurHintergrund: true })` → `renderWallpaper(…, { nurHintergrund })` zeichnet nur Foto/Verlauf. Ohne Foto Hinweis, keine Ausgabe. `pinned.bgOnly`; dann zählt für „aktuell“ nur noch die Foto-Kennung (Textänderungen lassen den Stand stehen, der Zettel ist ja nicht im Bild). Status überall „· mit Zettel“ / „· nur Hintergrund“ |
+| 1.36.1 | Punkt 5: `fitNote` liefert `overflow`; Marke „⚠ Zu viel Text“ links unten, Statuszeile `OVERFLOW_HINT`, Kleben und Teilen gesperrt (`.btn.blocked`) | Vorschau wächst weiterhin (man sieht, was man tippt). `lib/render.js` gibt `overflow` zurück – **keine Layoutregel geändert**; Parität geprüft: 3–40 Zeilen gleiche Schriftgröße, Zeilenzahl und Flag, Grenze bei 22 Zeilen „Zeile n Einkauf“. Ausblenden bleibt möglich |
+| 1.36.2 | Punkt 6: Beschriftung „zugeschnittener JPEG-Abzug, nicht das Original“ in Anleitung, Knopf-Titel und Bestätigung | Trennung `zettel.bg` / `zettel.v1` unverändert; `pinned` trägt nur die Kennung; Test prüft, dass Leeren das Foto stehen lässt |
+| 1.36.3 | Altfehler: `.tsizes` hatte `display:flex`, das schlug das `hidden`-Attribut – die drei A-Knöpfe waren seit 1.34 immer sichtbar | Regel `.tsizes[hidden] { display: none }` |
+
 **Parität App ↔ Server ist die wichtigste Regel.** Für denselben Text müssen `fitNote` (App) und die
 Schriftgrößenwahl in `render.js` dieselbe Größe und Zeilenzahl ergeben (zuletzt geprüft: 135 px / 105 px bei
 Stufe 3, 4 bzw. 5 Zeilen, identisch). Wer Layoutregeln anfasst, ändert beide Dateien.
@@ -158,9 +170,22 @@ Skripte: `node tools/gen_image.mjs <out.png> <modell> "<prompt>" [--dump] [--noc
 
 ## 5. Prüfen (so, wie es in dieser Umgebung wirklich läuft)
 
-- Playwright liegt in `node_modules` des Repos; Skripte **aus `/home/user/Zettel`** starten, sonst findet Node das
-  Paket nicht. Chromium: `chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+- `node_modules` fehlt in einer frischen Sitzung: `npm install && npm install --no-save playwright` (Playwright
+  steht absichtlich nicht in `package.json`, Vercel braucht es nicht). Skripte **aus `/home/user/Zettel`** starten,
+  sonst findet Node das Paket nicht (Skripte im Scratchpad: `import … from '/home/user/Zettel/node_modules/playwright/index.mjs'`).
+  Chromium: `chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
   args: ['--no-sandbox'] })` – ohne `executablePath` sucht Playwright eine andere Version und bricht ab.
+- Lokaler Server statt `file://` (sonst CORS-Fehler der Versionsprüfung in der Konsole):
+  `(setsid nohup python3 -m http.server 8766 >/dev/null 2>&1 < /dev/null &)`, dann `http://localhost:8766/index.html`.
+- **Prüfskripte im Repo** (Chromium, Aufruf im Kopf jeder Datei, Ausgabeverzeichnis als Argument): `tests/app_status.mjs`
+  (Punkt 1), `app_wortlaut.mjs` (3), `app_foto.mjs` (4), `app_ausblenden.mjs` (2), `app_ueberlauf.mjs` (5, inkl.
+  Parität mit `lib/render.js`), `app_trennung.mjs` (6 + Größenknöpfe). Jedes endet mit „ALLE TESTS OK“ oder „n FEHLER“.
+  `tests/app_photo.mjs` und `app_paper.mjs` sind für WebKit geschrieben; für Chromium die zwei `webkit`-Zeilen ersetzen.
+- Zwischenablage im Test: `context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin })`, Klick per
+  Playwright gilt als Geste. **Nach `location.href = 'shortcuts://…'` nimmt Chromium keine Klicks und Tasten mehr an**
+  (Navigation zu unbekanntem Schema) – autoRun-Fälle deshalb ans Ende eines Tests, Textänderungen danach per
+  `textEl.insertText(…)`. Nach dem Kleben liegt der Fokus auf dem Knopf und der Toast liegt über allem: erst
+  `toast.hidden = true`, dann `#text` anklicken, dann tippen.
 - **WebKit ist nicht verfügbar** (Download scheitert am Egress-Proxy). Alle App-Tests liefen in Chromium; die
   lokalen Schriften aus `fonts/` werden über `@font-face` geladen, `document.fonts.check` bestätigt sie.
   **iPhone-Prüfung bleibt beim Menschen.**
@@ -185,9 +210,13 @@ Skripte: `node tools/gen_image.mjs <out.png> <modell> "<prompt>" [--dump] [--noc
 2. Falls der Home-Bildschirm den Zettel zeigt (unscharf oder scharf): Home-Hälfte steht auf „Paar“ oder der
    Kurzbefehl hat „Home-Bildschirm“ angehakt. Beides in Ordnung; „Nebel ohne Zettel“ nur über Anpassen → Foto.
 
-### 6b. Sechs Verbesserungen an der App (Auftrag liegt vor, noch nicht begonnen)
+### 6b. Sechs Verbesserungen an der App – **erledigt** (1.35.3 bis 1.36.2, Tabelle in Abschnitt 2)
 
-Vorlage einer anderen KI, vom Auftraggeber gebilligt, hier mit Prioritäten und Fallstricken:
+Vorlage einer anderen KI, vom Auftraggeber gebilligt. Der ursprüngliche Auftrag zum Nachlesen; was daraus wurde,
+steht in Abschnitt 2. **Auf dem iPhone noch offen** (hier nur Chromium): Zwischenablage-Weg mit `png.catch`, Banner
+`BG_FEHLER` und ✕ nach Ladefehler, Toast-Wortlaut, Marke „⚠ Zu viel Text“ links unten neben der Befestigung, und
+ob „Zettel ausblenden“ mit dem Kurzbefehl das Paar 10 genauso an Ort und Stelle überschreibt (dasselbe PNG-Format,
+also [Wahrscheinlich] ja).
 
 1. **Status erfasst nicht alles** – `isPinnedCurrent()` prüft `title`, `titleSize` und das Hintergrundfoto nicht;
    nach dem Umschalten steht trotzdem „✓ angeheftet“. Für das Foto eine kurze Kennung (z. B. Länge + Hash der
@@ -220,6 +249,12 @@ auf dem iPhone offen. Den Erhalt von Home-Bildschirm, Uhrstil und Widgets nie au
   wechselt er „selten bis nie“.
 - `docs/` enthält außer dieser Datei nichts; die alte Fassung dieser Datei hatte falsche Angaben (Mulde,
   Kostenmodell, Alias), alle hier korrigiert.
+- Offen nach der zweiten Sitzung: `state.pinned` wächst mit jedem Feld (`requested`, `bgOnly`); wer weitere
+  bildbestimmende Einstellungen einführt, muss sie in `markPinned` **und** `isPinnedCurrent` eintragen – sonst
+  zeigt die App wieder „Bild bereit“ nach einer Änderung (genau der alte Fehler aus Punkt 1).
+- Statuszeile ist eine einzige Textzeile für alles (Hinweise, Fehler, Warnung); die Löschregeln in `updatePinBadge`
+  (Präfix „Bild bereit“/„Kurzbefehl „“) und `syncPreview` (`OVERFLOW_HINT`) arbeiten mit Textvergleich. Neue
+  Meldungen dort brauchen eine eigene Löschregel, sonst bleiben sie stehen.
 
 ## 7. Kosten dieser Sitzung und Rat für die nächste
 
