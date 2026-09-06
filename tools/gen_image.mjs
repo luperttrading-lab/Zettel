@@ -1,7 +1,7 @@
 // Bild über die RouteLLM-API (Abacus.AI ChatLLM) erzeugen und als Datei speichern.
 //
 //   ROUTELLM_API_KEY muss als Umgebungsvariable gesetzt sein (nie im Chat ausgeben).
-//   node tools/gen_image.mjs <ausgabe.png> <modell> "<prompt>"  [--n 2] [--ratio 1:1] [--quality high]
+//   node tools/gen_image.mjs <ausgabe.png> <modell> "<prompt>"  [--n 2] [--ratio 1:1] [--quality high] [--noconfig]
 //
 // Format nach der Abacus-Doku und dem Hermes-Plugin (github.com/ZoniBoy00/hermes-agent-abacus-ai):
 //   POST https://routellm.abacus.ai/v1/chat/completions
@@ -14,7 +14,7 @@
 import fs from 'node:fs';
 
 const args = process.argv.slice(2);
-const opt = { n: 1, ratio: '1:1', quality: '', dump: false };
+const opt = { n: 1, ratio: '1:1', quality: '', dump: false, noConfig: false };
 const pos = [];
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
@@ -22,11 +22,12 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--ratio') opt.ratio = args[++i];
   else if (a === '--quality') opt.quality = args[++i];
   else if (a === '--dump') opt.dump = true;
+  else if (a === '--noconfig') opt.noConfig = true;
   else pos.push(a);
 }
 const [outPath, model, prompt] = pos;
 if (!outPath || !model || !prompt) {
-  console.error('Aufruf: node tools/gen_image.mjs <ausgabe.png> <modell> "<prompt>" [--n 2] [--ratio 1:1] [--quality high] [--dump]');
+  console.error('Aufruf: node tools/gen_image.mjs <ausgabe.png> <modell> "<prompt>" [--n 2] [--ratio 1:1] [--quality high] [--noconfig] [--dump]');
   process.exit(2);
 }
 const key = process.env.ROUTELLM_API_KEY;
@@ -42,8 +43,10 @@ const body = {
   model,
   modalities: ['image', 'text'],
   messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
-  image_config,
 };
+// gpt_image2 lehnt aspect_ratio:'1:1' mit HTTP 400 ab (geprüft 6.9.2026). Mit --noconfig
+// wird image_config ganz weggelassen; das Modell nimmt dann sein Standardformat (quadratisch).
+if (!opt.noConfig) body.image_config = image_config;
 
 const t0 = Date.now();
 const res = await fetch('https://routellm.abacus.ai/v1/chat/completions', {
