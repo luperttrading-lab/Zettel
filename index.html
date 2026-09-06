@@ -313,16 +313,24 @@
 
   <details class="setup">
     <summary>Kurzbefehl einrichten (einmalig)</summary>
-    <p>„Aufs Display kleben“ kopiert das Bild in die Zwischenablage und startet einen Kurzbefehl, der es als Hintergrund setzt. Den Kurzbefehl legst du einmal an:</p>
+    <p>„Aufs Display kleben“ kopiert das Bild in die Zwischenablage und startet einen Kurzbefehl, der es als Hintergrund setzt. Drei Schritte, alle nur einmal:</p>
+    <p><strong>1. Kurzbefehl anlegen</strong></p>
     <ol>
       <li>App <strong>Kurzbefehle</strong> öffnen → oben rechts <strong>+</strong>.</li>
       <li>In der Aktionssuche <strong>Zwischenablage</strong> eingeben → <strong>Zwischenablage abrufen</strong> antippen.</li>
       <li>Dann <strong>Hintergrund</strong> suchen → <strong>Hintergrundbild-Foto festlegen</strong> antippen (englisch: <em>Set Wallpaper Photo</em>). Die Aktion übernimmt automatisch die Zwischenablage als Bild.</li>
-      <li>Pfeil an dieser Aktion aufklappen: nur <strong>Sperrbildschirm</strong> anhaken – dann behält der Home-Bildschirm sein Bild –, <strong>Vorschau anzeigen</strong> ausschalten.</li>
-      <li>Optional, damit du das Ergebnis sofort siehst: <strong>sperren</strong> suchen → <strong>Bildschirm sperren</strong> als dritte Aktion anhängen. Das Gerät sperrt sich nach dem Setzen; beim Aufwecken liegt der neue Zettel auf dem Sperrbildschirm.</li>
+      <li>Pfeil an dieser Aktion aufklappen: nur <strong>Sperrbildschirm</strong> anhaken, <strong>Vorschau anzeigen</strong> ausschalten.</li>
+      <li>Optional: <strong>sperren</strong> suchen → <strong>Bildschirm sperren</strong> als dritte Aktion anhängen. Dann siehst du den neuen Zettel sofort.</li>
       <li>Oben auf den Titel „Neuer Kurzbefehl“ tippen → umbenennen in genau <strong>Zettel</strong> → <strong>Fertig</strong>.</li>
-      <li>Voraussetzung: dein aktueller Hintergrund ist ein Foto (kein Foto-Shuffle) – das ist nach dem ersten manuellen Setzen der Fall.</li>
-      <li>Soll der Zettel auf deinem gewohnten Bild kleben statt auf schwarzem Grund: oben <strong>Eigenes Hintergrundfoto</strong> wählen und dasselbe Foto nehmen, das dein Hintergrund ist. iOS gibt das aktuelle Hintergrundbild nicht heraus, deshalb dieser eine Handgriff.</li>
+    </ol>
+    <p><strong>2. Hintergrundfoto in der App wählen</strong></p>
+    <p>Oben <strong>Eigenes Hintergrundfoto</strong> antippen und dasselbe Foto nehmen, das dein Sperrbildschirm zeigt. Wo es liegt: Sperrbildschirm lange drücken → Anpassen → Fotosymbol unten links → <em>Foto in Mediathek anzeigen</em>. Ohne diesen Schritt klebt der Zettel auf schwarzem Grund – iOS gibt das aktuelle Hintergrundbild an keine App heraus, das Foto muss die App selbst mitbringen.</p>
+    <p><strong>3. Erster Lauf – danach einmal nachbessern</strong></p>
+    <p>Beim ersten „Aufs Display kleben“ legt iOS einen <strong>neuen</strong> Sperrbildschirm an. Der kommt ohne Widgets, und sein Home-Bildschirm ist einfarbig. Das ist normal und passiert nur dieses eine Mal:</p>
+    <ol>
+      <li>Sperrbildschirm lange drücken → <strong>Anpassen</strong> → Widgets und Uhr einrichten wie gewohnt.</li>
+      <li>Rechts <strong>Home-Bildschirm</strong> → <strong>Foto</strong> → dein Hintergrundfoto.</li>
+      <li>Diesen Sperrbildschirm <strong>aktiv lassen und nie löschen</strong>. Ab jetzt tauscht der Kurzbefehl nur noch das Foto darin – Widgets und Home-Bildschirm bleiben. Löschst du ihn, beginnt Schritt 3 von vorn.</li>
     </ol>
     <label>Name des Kurzbefehls <input id="shortcut" type="text" autocapitalize="words" spellcheck="false"></label>
     <label class="row"><input id="autorun" type="checkbox"> Kurzbefehl automatisch öffnen</label>
@@ -349,7 +357,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.35.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.35.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },

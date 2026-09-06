@@ -76,7 +76,13 @@ fehlt satori zur Laufzeit die Datei `hb.wasm`.
 Dann: Kurzbefehl-Details (ⓘ) → „Zum Home-Bildschirm". Ab jetzt: Icon tippen → Text eingeben oder
 diktieren → fertig. Oder „Hey Siri, Zettel".
 
-In Aktion 4 nur **Sperrbildschirm** anhaken; der Home-Bildschirm behält dann sein Bild.
+In Aktion 4 nur **Sperrbildschirm** anhaken.
+
+**Beim ersten Lauf** legt iOS einen neuen Sperrbildschirm an – ohne Widgets, Home-Hälfte einfarbig.
+Einmal nachbessern: Sperrbildschirm lange drücken → Anpassen → Widgets einrichten, Home-Bildschirm → Foto
+→ eigenes Hintergrundfoto. Diesen Sperrbildschirm aktiv lassen und nicht löschen: der Kurzbefehl
+überschreibt danach nur noch das Foto darin, Widgets und Home-Bildschirm bleiben erhalten. Wird er
+gelöscht, entsteht beim nächsten Lauf wieder ein leerer.
 
 ### Zettel auf das vorhandene Hintergrundbild kleben
 
