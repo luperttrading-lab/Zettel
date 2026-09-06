@@ -60,6 +60,9 @@
       padding: 7px 11px; border-radius: 999px; box-shadow: 0 3px 8px rgba(0,0,0,.4); white-space: nowrap;
     }
     .note .pin[hidden] { display: none; }
+    /* Warnung „Zu viel Text“: links unten, orange – das Bild würde abschneiden, die Ausgabe ist gesperrt */
+    .note .pin.over { left: -6px; right: auto; background: #ff9f0a; color: #1a1200; transform: rotate(-1.5deg); }
+    .btn.blocked { opacity: .45; }
 
     /* --- der Zettel --- */
     .note {
@@ -267,6 +270,7 @@
       <div class="editor" id="text" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Zettel-Text" spellcheck="false" autocapitalize="sentences" enterkeyhint="enter"></div>
       <div class="fastener" id="fastener-preview" aria-hidden="true"></div>
       <span class="pin" id="pin" hidden></span>
+      <span class="pin over" id="overpin" hidden>⚠ Zu viel Text</span>
     </section>
     <!-- Aussehen der Befestigung: erscheint beim Antippen der Befestigung, Farben · Muster · Motive -->
     <div class="fcolors" id="fcolors" hidden role="radiogroup" aria-label="Aussehen der Befestigung"></div>
@@ -361,7 +365,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.36.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.36.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -1170,11 +1174,18 @@
       // 4) Höhe des Layouts einhalten.
       lines = measure(fs);
       while (!fitsHeight(fs, lines) && fs > minFs) { fs = Math.round(fs * 0.92); lines = measure(fs); }
+      // overflow: auch in kleinster Schrift passt der Text nicht in den Zettel – das Bild würde ihn abschneiden
+      const overflow = !fitsHeight(fs, lines);
       const lh = fs * LH;
       // Textblock: oben beginnen, unterhalb des Einschubs der Befestigung (wie von Hand geschrieben)
       const textTop = pad + inset;
-      return { layout, noteW, pad, textW, family, weight, LH, fs, lh, lines, noteH, inset, textTop, titleGap: gapOf(fs), titleF };
+      return { layout, noteW, pad, textW, family, weight, LH, fs, lh, lines, noteH, inset, textTop, titleGap: gapOf(fs), titleF, overflow };
     }
+    // Zu viel Text: die Vorschau wächst nach unten, damit man weiter sieht, was man tippt – das Bild hat aber
+    // feste Maße und schnitte ab. Darum Warnung in Vorschau und Statuszeile, und Kleben/Teilen sind gesperrt.
+    const OVERFLOW_HINT = 'Zu viel Text: passt auch in kleinster Schrift nicht auf den Zettel. Bitte kürzen – so wird nichts geklebt.';
+    let textUeberlauf = false;
+    function ueberlauf() { const t = targetCanvas(); return !!noteText() && fitNote(t.w, t.h, t.layout, noteText()).overflow; }
 
     // Vorschau in der App: der Zettel wird proportional zum Hintergrundbild skaliert,
     // Schriftgröße und Umbrüche sind dann identisch mit dem, was aufs Display kommt.
@@ -1242,6 +1253,11 @@
       // wächst der Zettel in der App, bis alles sichtbar ist.
       const padPx = parseFloat(getComputedStyle(noteEl).paddingTop) || 0;
       if (textEl.scrollHeight > textEl.clientHeight + 1) noteEl.style.height = Math.ceil(textEl.scrollHeight + 2 * padPx) + 'px';
+      // Warnung und Sperre, solange der Text auch in kleinster Schrift nicht ins Bild passt
+      textUeberlauf = f.overflow && !!noteText();
+      $('overpin').hidden = !textUeberlauf;
+      $('stick').classList.toggle('blocked', textUeberlauf); $('share').classList.toggle('blocked', textUeberlauf);
+      if (textUeberlauf) statusEl.textContent = OVERFLOW_HINT; else if (statusEl.textContent === OVERFLOW_HINT) statusEl.textContent = '';
       // Befestigung als Overlay, gleiche Zeichnung und Proportion wie im Bild
       const m = f.pad * 2.2, fp = $('fastener-preview');
       fp.style.left = (-m * scale) + 'px'; fp.style.top = (-m * scale) + 'px';
@@ -1395,6 +1411,7 @@
         if (bgFehler) { statusEl.textContent = BG_FEHLER; return; }
         if (!bgKennung) { statusEl.textContent = 'Kein Hintergrundfoto hinterlegt – erst „Eigenes Hintergrundfoto“ wählen. Ohne Foto gäbe es nur den dunklen Verlauf.'; return; }
       } else if (!state.text.trim()) { statusEl.textContent = 'Erst was draufschreiben.'; textEl.focus(); return; }
+      else if (ueberlauf()) { statusEl.textContent = OVERFLOW_HINT; return; }   // das Bild schnitte ab
       statusEl.textContent = 'Rendere …';
       const was = nurHintergrund ? 'nur Hintergrund' : 'mit Zettel';
       const png = renderPng({ nurHintergrund });
@@ -1429,6 +1446,7 @@
     // Weg 2 (manuell): Teilen-Dialog → Bild sichern → Einstellungen.
     async function stickViaShare() {
       if (!state.text.trim()) { statusEl.textContent = 'Erst was draufschreiben.'; textEl.focus(); return; }
+      if (ueberlauf()) { statusEl.textContent = OVERFLOW_HINT; return; }
       statusEl.textContent = 'Rendere …';
       let blob;
       try { blob = await renderPng(); } catch (e) { statusEl.textContent = e.message; return; }
