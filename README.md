@@ -53,7 +53,8 @@ Parameter: `text` (Pflicht), `color` (`gelb`, `rosa`, `gruen`, `blau`), `device`
 `pen` (Stiftfarbe: `schwarz`, `blau`, `rot`, `gruen`), `texture` (Papierstruktur: `glatt`, `koernig`), `edge` (obere Kante: `gerade`,
 `abgerissen`), `scale` (Schriftgröße 60–140 %), `list` (`num`, `dot`, `square`, `dash`,
 `check`: jede Zeile bekommt eine Nummer bzw. ein Zeichen), `title` (`an`/`aus`: erste Zeile als
-Überschrift, fett und ohne Listenmarkierung), optional `w`/`h` in Pixeln. Bei
+Überschrift, unterstrichen und ohne Listenmarkierung), `tsize` (`1`, `2`, `3`: Größe der
+Überschrift, 1 = wie der übrige Text), optional `w`/`h` in Pixeln. Bei
 quadratischem Bild wird das Tablet-Layout gewählt, sonst das Hochformat-Layout.
 
 Beispiel: `…/api/zettel?device=iphone&color=gelb&font=kalam&fastener=pin&text=…`

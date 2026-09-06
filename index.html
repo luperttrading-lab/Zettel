@@ -93,7 +93,7 @@
     /* Überschrift: erste Zeile unterstrichen, mit etwas Luft darunter (Werte auch in fitNote und render.js).
        Kein fett: die Handschriften haben nur einen Schnitt, der Browser würde künstlich fetten, satori nicht. */
     .note .editor.titled .ln:first-child { text-decoration: underline; text-underline-offset: .1em;
-      text-decoration-thickness: .05em; margin-bottom: .28em; }
+      text-decoration-thickness: .05em; margin-bottom: .28em; font-size: calc(1em * var(--titlef, 1)); }
 
     /* --- Auswahl-Schieber: Befestigung · Schrift · Liste ---
        Eine Reihe pro Einstellung, nach links/rechts wischen; das Element in der Mitte ist die Auswahl,
@@ -230,10 +230,20 @@
     .overlay[hidden] { display: none; }
     .overlay img { max-height: 66vh; max-width: 90vw; border-radius: 22px; box-shadow: 0 10px 40px rgba(0,0,0,.7); }
     .overlay p { margin: 0; color: var(--fg); text-align: center; font-size: 15px; max-width: 340px; }
-    /* Schalter „Überschrift“ */
-    .toggle { display: flex; align-items: center; gap: 10px; margin: 2px auto 0; padding: 0 4px;
-      max-width: 520px; width: 100%; font-size: 15px; color: var(--muted, #9a9aa2); cursor: pointer; }
+    /* Schalter „Überschrift“ samt drei Größen */
+    .titlerow { display: flex; align-items: center; gap: 12px; margin: 2px auto 0; padding: 0 4px;
+      max-width: 520px; width: 100%; }
+    .toggle { display: flex; align-items: center; gap: 10px; flex: 1 1 auto;
+      font-size: 15px; color: var(--muted, #9a9aa2); cursor: pointer; }
     .toggle input { width: 20px; height: 20px; accent-color: #6d6df0; flex: 0 0 auto; }
+    .tsizes { display: flex; gap: 4px; flex: 0 0 auto; }
+    .tsizes button { width: 34px; height: 34px; border: 0; border-radius: 9px; cursor: pointer;
+      background: rgba(255,255,255,.06); color: var(--muted, #9a9aa2); font-family: var(--note-font);
+      line-height: 1; padding: 0; }
+    .tsizes button:nth-child(1) { font-size: 14px; }
+    .tsizes button:nth-child(2) { font-size: 18px; }
+    .tsizes button:nth-child(3) { font-size: 23px; }
+    .tsizes button[aria-checked="true"] { background: #fff; color: #17171a; }
   </style>
 </head>
 <body>
@@ -269,7 +279,14 @@
     <output id="fontscale-out">100 %</output>
   </label>
 
-  <label class="toggle" for="titleon"><input id="titleon" type="checkbox"> Erste Zeile als Überschrift</label>
+  <div class="titlerow">
+    <label class="toggle" for="titleon"><input id="titleon" type="checkbox"> Erste Zeile als Überschrift</label>
+    <div class="tsizes" id="tsizes" role="radiogroup" aria-label="Größe der Überschrift" hidden>
+      <button type="button" data-s="1" aria-label="wie der Text">A</button>
+      <button type="button" data-s="2" aria-label="größer">A</button>
+      <button type="button" data-s="3" aria-label="am größten">A</button>
+    </div>
+  </div>
 
   <div class="actions">
     <button class="btn primary" id="stick">Aufs Display kleben</button>
@@ -317,7 +334,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.33.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.34.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -357,6 +374,10 @@
     // Überschrift an? Wird nach dem Laden des Zustands gesetzt. Eigene Variable, weil die
     // Editor-Klasse vor `state` angelegt wird und `state` dort noch in der TDZ läge.
     var noteTitleOn = false;
+    // Drei Größen der Überschrift: 1 = wie der übrige Text, 2 und 3 größer.
+    // Dieselben Faktoren stehen in lib/render.js unter TITLE_F.
+    const TITLE_F = { 1: 1, 2: 1.25, 3: 1.55 };
+    var noteTitleF = 1;
 
     // ---------- Eingabefeld ----------
     // Editierbarer Bereich mit einem <div class="ln"> pro Zeile. Nach außen verhält er sich wie ein
@@ -424,6 +445,7 @@
           return `<div class="ln"${m ? ` data-mk="${esc(m[0].trim())}"` : ''}>${body ? esc(body) : '<br>'}</div>`;
         }).join('');
         this.el.classList.toggle('titled', noteTitleOn);
+        this.el.style.setProperty('--titlef', noteTitleF);
         this.applyIndents();
       }
       applyIndents() {
@@ -489,7 +511,7 @@
 
     // ---------- Zustand ----------
     // autoRun standardmäßig aus: Start per URL bringt die Kurzbefehle-App in den Vordergrund.
-    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fastenerLook: {}, paper: 'plain', pen: 'black', font: 'caveat', list: 'none', title: false, updated: null, pinned: null };
+    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fastenerLook: {}, paper: 'plain', pen: 'black', font: 'caveat', list: 'none', title: false, titleSize: 1, updated: null, pinned: null };
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) state = { ...state, ...JSON.parse(raw) };
@@ -514,7 +536,8 @@
     if (!FONTS[state.font]) state.font = 'caveat';
     if (!['none', 'num', 'dot', 'square', 'dash', 'check'].includes(state.list)) state.list = 'none';
     if (typeof state.title !== 'boolean') state.title = false;
-    noteTitleOn = state.title;
+    if (![1, 2, 3].includes(state.titleSize)) state.titleSize = 1;
+    noteTitleOn = state.title; noteTitleF = TITLE_F[state.titleSize];
     if (!PAPERS[state.paper]) state.paper = 'plain';
     if (!PENS[state.pen]) state.pen = 'black';
     if (!TEXTURES[state.texture]) state.texture = 'smooth';
@@ -803,11 +826,24 @@
     function applyList() { stripList.set(state.list); }
     applyList();
     // Überschrift an/aus: erste Zeile fett, ohne Listenmarkierung
-    const titleToggle = $('titleon');
+    const titleToggle = $('titleon'), sizesEl = $('tsizes');
     titleToggle.checked = !!state.title;
+    sizesEl.hidden = !state.title;
+    function markSizes() {
+      for (const b of sizesEl.children) b.setAttribute('aria-checked', String(Number(b.dataset.s) === state.titleSize));
+    }
+    markSizes();
+    sizesEl.addEventListener('click', e => {
+      const b = e.target.closest('button[data-s]'); if (!b) return;
+      state.titleSize = Number(b.dataset.s);
+      noteTitleF = TITLE_F[state.titleSize];
+      $('text').style.setProperty('--titlef', noteTitleF);
+      markSizes(); onTextChanged(); flush();
+    });
     titleToggle.addEventListener('change', () => {
       state.title = noteTitleOn = titleToggle.checked;
       $('text').classList.toggle('titled', noteTitleOn);   // sofort sichtbar, ohne Neuaufbau des Editors
+      sizesEl.hidden = !noteTitleOn;
       if (state.list !== 'none') {                       // Markierung der ersten Zeile setzen oder entfernen
         const v = relist(textEl.value, state.list);
         if (v !== textEl.value) textEl.value = v;
@@ -896,9 +932,11 @@
     // Ergebnis: [{ t: Text, x: Einzug in px }]
     // Ergebnis: [{ t: Text, x: Einzug in px, mk: Markierung (nur erste Zeile eines Listenpunkts) }]
     // Die Markierung steht links neben dem eingerückten Textblock; alle Zeilen des Punkts sind gleich breit.
-    function wrap(ctx, text, maxW) {
+    // fontFor(pi) liefert optional eine eigene Schrift für einen Absatz (die Überschrift ist größer)
+    function wrap(ctx, text, maxW, fontFor) {
       const lines = [];
       text.replace(/\r/g, '').split('\n').forEach((para, pi) => {
+        if (fontFor) ctx.font = fontFor(pi);
         if (para.trim() === '') { lines.push({ t: '', x: 0, mk: '', p: pi }); return; }
         const m = para.match(PREFIX_RE);
         const mk = m ? m[0] : '', body = para.slice(mk.length);
@@ -968,25 +1006,32 @@
       });
       const minFs = noteW / 28;           // absolute Untergrenze
       const paraFloor = noteW / 16;       // bis hierhin darf die Schrift schrumpfen, damit Absätze einzeilig bleiben
-      const measure = f => { measureCtx.font = `${weight} ${f}px ${family}`; return wrap(measureCtx, text, wrapW); };
-      const wordFits = f => {
-        measureCtx.font = `${weight} ${f}px ${family}`;
-        return paraInfo.every(pi => measureCtx.measureText(pi.longest).width <= wrapW - (pi.mk ? measureCtx.measureText(pi.mk).width : 0));
-      };
+      const titleF = state.title ? TITLE_F[state.titleSize] : 1;
+      const fontAt = f => `${weight} ${f}px ${family}`;
+      const fontOf = (f, pi) => fontAt(Math.round(f * (state.title && pi === 0 ? titleF : 1)));
+      const measure = f => wrap(measureCtx, text, wrapW, pi => fontOf(f, pi));
+      const wordFits = f => paraInfo.every((pi, i) => {
+        measureCtx.font = fontOf(f, i);
+        return measureCtx.measureText(pi.longest).width <= wrapW - (pi.mk ? measureCtx.measureText(pi.mk).width : 0);
+      });
       const inset = Math.round(pad * (FASTENER_INSET[state.fastener] || 0));
       // Feste Zettelgröße wie ein echter Haftzettel: quadratisch, höchstens so hoch wie das Layout erlaubt.
       // Die Größe hängt nicht vom Text ab – nur die Schrift passt sich an.
       const noteH = Math.round(Math.min(noteW, layout.maxNoteH));
       const TITLE_GAP = 0.28;             // em unter der Überschrift, gleicher Wert im CSS und in render.js
-      const gapOf = f => (state.title ? f * TITLE_GAP : 0);
-      const fitsHeight = (f, ls) => ls.length * f * LH + gapOf(f) + 2 * pad + inset <= noteH;
+      const gapOf = f => (state.title ? f * titleF * TITLE_GAP : 0);
+      // Zeilen der Überschrift sind höher als die übrigen
+      const blockH = (f, ls) => ls.reduce((a, l) => a + f * LH * (state.title && l.p === 0 ? titleF : 1), 0);
+      const fitsHeight = (f, ls) => blockH(f, ls) + gapOf(f) + 2 * pad + inset <= noteH;
 
       let fs = Math.round(noteW / 7), lines;
       // 1) Kein Wort wird hart getrennt: Schrift so weit verkleinern, bis das längste Wort in eine Zeile passt.
       while (!wordFits(fs) && fs > minFs) fs = Math.round(fs * 0.94);
       // 2) Jeder Absatz möglichst auf einer Zeile, aber nicht unter paraFloor.
+      //    Die Überschrift zählt hier nicht mit: sie darf lieber umbrechen, als den ganzen Text zu verkleinern.
+      const ueberzaehlig = ls => ls.filter(l => !(state.title && l.p === 0)).length - (paras.length - (state.title ? 1 : 0));
       lines = measure(fs);
-      while (lines.length > paras.length && fs > paraFloor) { fs = Math.round(fs * 0.95); lines = measure(fs); }
+      while (ueberzaehlig(lines) > 0 && fs > paraFloor) { fs = Math.round(fs * 0.95); lines = measure(fs); }
       // 3) Nutzer-Regler (Prozent der Automatik), danach erneut: kein hartes Trennen.
       fs = Math.round(fs * ((state.fontScale || 100) / 100));
       while (!wordFits(fs) && fs > minFs) fs = Math.round(fs * 0.94);
@@ -996,7 +1041,7 @@
       const lh = fs * LH;
       // Textblock: oben beginnen, unterhalb des Einschubs der Befestigung (wie von Hand geschrieben)
       const textTop = pad + inset;
-      return { layout, noteW, pad, textW, family, weight, LH, fs, lh, lines, noteH, inset, textTop, titleGap: gapOf(fs) };
+      return { layout, noteW, pad, textW, family, weight, LH, fs, lh, lines, noteH, inset, textTop, titleGap: gapOf(fs), titleF };
     }
 
     // Vorschau in der App: der Zettel wird proportional zum Hintergrundbild skaliert,
@@ -1105,7 +1150,7 @@
       ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
 
       const c = COLORS[state.color];
-      const { layout, noteW, pad, family, weight, fs, lh, lines, noteH, textTop, titleGap } = fitNote(w, h, layoutName, noteText() || '…');
+      const { layout, noteW, pad, family, weight, fs, lh, lines, noteH, textTop, titleGap, titleF } = fitNote(w, h, layoutName, noteText() || '…');
       const m = pad * 2.2;
       const fastener = await svgImage(fastenerSvg(state.fastener, noteW, noteH, pad, fastenerLook())).catch(() => null);
 
@@ -1147,13 +1192,15 @@
       let y = -noteH / 2 + textTop;
       lines.forEach((line, i) => {
         const isTitle = state.title && line.p === 0;                      // ganzer erster Absatz, auch mehrzeilig
+        const f = isTitle ? Math.round(fs * titleF) : fs;
+        ctx.font = `${weight} ${f}px ${family}`;
         if (line.mk) ctx.fillText(line.mk, -noteW / 2 + pad, y);          // Markierung links
         const tx = -noteW / 2 + pad + line.x;
         ctx.fillText(line.t, tx, y);                                      // Text eingerückt
         // Unterstrich von Hand: Canvas kennt keine Textdekoration
-        if (isTitle && line.t) ctx.fillRect(tx, y + fs * 0.98, ctx.measureText(line.t).width, Math.max(1, fs / 20));
+        if (isTitle && line.t) ctx.fillRect(tx, y + f * 0.98, ctx.measureText(line.t).width, Math.max(1, f / 20));
         const letzteTitelzeile = isTitle && (!lines[i + 1] || lines[i + 1].p !== 0);
-        y += lh + (letzteTitelzeile ? titleGap : 0);
+        y += f * (lh / fs) + (letzteTitelzeile ? titleGap : 0);
       });
 
       // Befestigung zuletzt, liegt über Papier und Text
