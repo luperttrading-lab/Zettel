@@ -90,6 +90,10 @@
     /* Listenmarkierung liegt außerhalb des Textflusses (nicht editierbar), die Zeile ist um ihre Breite eingerückt */
     .note .editor .ln[data-mk]::before { content: attr(data-mk); position: absolute; left: 0; top: 0; white-space: pre; }
     .note .editor.empty .ln:first-child::after { content: "Was soll auf den Zettel?"; color: rgba(42,42,46,.35); }
+    /* Überschrift: erste Zeile unterstrichen, mit etwas Luft darunter (Werte auch in fitNote und render.js).
+       Kein fett: die Handschriften haben nur einen Schnitt, der Browser würde künstlich fetten, satori nicht. */
+    .note .editor.titled .ln:first-child { text-decoration: underline; text-underline-offset: .1em;
+      text-decoration-thickness: .05em; margin-bottom: .28em; }
 
     /* --- Auswahl-Schieber: Befestigung · Schrift · Liste ---
        Eine Reihe pro Einstellung, nach links/rechts wischen; das Element in der Mitte ist die Auswahl,
@@ -226,6 +230,10 @@
     .overlay[hidden] { display: none; }
     .overlay img { max-height: 66vh; max-width: 90vw; border-radius: 22px; box-shadow: 0 10px 40px rgba(0,0,0,.7); }
     .overlay p { margin: 0; color: var(--fg); text-align: center; font-size: 15px; max-width: 340px; }
+    /* Schalter „Überschrift“ */
+    .toggle { display: flex; align-items: center; gap: 10px; margin: 2px auto 0; padding: 0 4px;
+      max-width: 520px; width: 100%; font-size: 15px; color: var(--muted, #9a9aa2); cursor: pointer; }
+    .toggle input { width: 20px; height: 20px; accent-color: #6d6df0; flex: 0 0 auto; }
   </style>
 </head>
 <body>
@@ -260,6 +268,8 @@
     <span class="a big">A</span>
     <output id="fontscale-out">100 %</output>
   </label>
+
+  <label class="toggle" for="titleon"><input id="titleon" type="checkbox"> Erste Zeile als Überschrift</label>
 
   <div class="actions">
     <button class="btn primary" id="stick">Aufs Display kleben</button>
@@ -307,7 +317,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.32.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.33.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -344,6 +354,9 @@
     // damit Textfeld, Zeichenfläche und Server dort nie umbrechen.
     const NB = ' ';
     const PREFIX_RE = /^(\d+\.|•|▪|–|☐|☑)\s+/;
+    // Überschrift an? Wird nach dem Laden des Zustands gesetzt. Eigene Variable, weil die
+    // Editor-Klasse vor `state` angelegt wird und `state` dort noch in der TDZ läge.
+    var noteTitleOn = false;
 
     // ---------- Eingabefeld ----------
     // Editierbarer Bereich mit einem <div class="ln"> pro Zeile. Nach außen verhält er sich wie ein
@@ -410,6 +423,7 @@
           const body = m ? l.slice(m[0].length) : l;
           return `<div class="ln"${m ? ` data-mk="${esc(m[0].trim())}"` : ''}>${body ? esc(body) : '<br>'}</div>`;
         }).join('');
+        this.el.classList.toggle('titled', noteTitleOn);
         this.applyIndents();
       }
       applyIndents() {
@@ -475,7 +489,7 @@
 
     // ---------- Zustand ----------
     // autoRun standardmäßig aus: Start per URL bringt die Kurzbefehle-App in den Vordergrund.
-    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fastenerLook: {}, paper: 'plain', pen: 'black', font: 'caveat', list: 'none', updated: null, pinned: null };
+    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fastenerLook: {}, paper: 'plain', pen: 'black', font: 'caveat', list: 'none', title: false, updated: null, pinned: null };
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) state = { ...state, ...JSON.parse(raw) };
@@ -499,6 +513,8 @@
     }
     if (!FONTS[state.font]) state.font = 'caveat';
     if (!['none', 'num', 'dot', 'square', 'dash', 'check'].includes(state.list)) state.list = 'none';
+    if (typeof state.title !== 'boolean') state.title = false;
+    noteTitleOn = state.title;
     if (!PAPERS[state.paper]) state.paper = 'plain';
     if (!PENS[state.pen]) state.pen = 'black';
     if (!TEXTURES[state.texture]) state.texture = 'smooth';
@@ -767,10 +783,11 @@
     };
     function relist(text, mode) {
       let n = 0;
-      return text.split('\n').map(line => {
+      return text.split('\n').map((line, i) => {
         const had = PREFIX_RE.test(line);
         const bare = line.replace(PREFIX_RE, '');
         if (mode === 'none') return bare;
+        if (state.title && i === 0) return bare;       // Überschrift trägt keine Listenmarkierung
         if (bare.trim() === '' && !had) return bare;   // Leerzeile ohne Markierung bleibt Leerzeile
         return LISTS[mode].mark(n++) + bare;           // markierte, noch leere Zeile behält ihre Markierung
       }).join('\n');
@@ -785,6 +802,18 @@
     });
     function applyList() { stripList.set(state.list); }
     applyList();
+    // Überschrift an/aus: erste Zeile fett, ohne Listenmarkierung
+    const titleToggle = $('titleon');
+    titleToggle.checked = !!state.title;
+    titleToggle.addEventListener('change', () => {
+      state.title = noteTitleOn = titleToggle.checked;
+      $('text').classList.toggle('titled', noteTitleOn);   // sofort sichtbar, ohne Neuaufbau des Editors
+      if (state.list !== 'none') {                       // Markierung der ersten Zeile setzen oder entfernen
+        const v = relist(textEl.value, state.list);
+        if (v !== textEl.value) textEl.value = v;
+      }
+      onTextChanged(); flush();
+    });
     // Ältere Zettel: Markierungen auf geschütztes Leerzeichen umstellen
     if (state.list !== 'none') { const v = relist(state.text, state.list); if (v !== state.text) { state.text = v; textEl.value = v; persist(); } }
     textEl.addEventListener('keydown', e => {
@@ -869,13 +898,13 @@
     // Die Markierung steht links neben dem eingerückten Textblock; alle Zeilen des Punkts sind gleich breit.
     function wrap(ctx, text, maxW) {
       const lines = [];
-      for (const para of text.replace(/\r/g, '').split('\n')) {
-        if (para.trim() === '') { lines.push({ t: '', x: 0, mk: '' }); continue; }
+      text.replace(/\r/g, '').split('\n').forEach((para, pi) => {
+        if (para.trim() === '') { lines.push({ t: '', x: 0, mk: '', p: pi }); return; }
         const m = para.match(PREFIX_RE);
         const mk = m ? m[0] : '', body = para.slice(mk.length);
         const indent = mk ? ctx.measureText(mk).width : 0, limit = maxW - indent;
         let line = '', first = true;
-        const push = t => { lines.push({ t, x: indent, mk: first ? mk.trim() : '' }); first = false; };
+        const push = t => { lines.push({ t, x: indent, mk: first ? mk.trim() : '', p: pi }); first = false; };
         for (const c of chunksOf(body)) {
           const test = line ? line + c.sep + c.s : c.s;
           if (ctx.measureText(test).width <= limit) { line = test; continue; }
@@ -888,7 +917,7 @@
           }
         }
         push(line);
-      }
+      });
       return lines;
     }
 
@@ -948,7 +977,9 @@
       // Feste Zettelgröße wie ein echter Haftzettel: quadratisch, höchstens so hoch wie das Layout erlaubt.
       // Die Größe hängt nicht vom Text ab – nur die Schrift passt sich an.
       const noteH = Math.round(Math.min(noteW, layout.maxNoteH));
-      const fitsHeight = (f, ls) => ls.length * f * LH + 2 * pad + inset <= noteH;
+      const TITLE_GAP = 0.28;             // em unter der Überschrift, gleicher Wert im CSS und in render.js
+      const gapOf = f => (state.title ? f * TITLE_GAP : 0);
+      const fitsHeight = (f, ls) => ls.length * f * LH + gapOf(f) + 2 * pad + inset <= noteH;
 
       let fs = Math.round(noteW / 7), lines;
       // 1) Kein Wort wird hart getrennt: Schrift so weit verkleinern, bis das längste Wort in eine Zeile passt.
@@ -965,7 +996,7 @@
       const lh = fs * LH;
       // Textblock: oben beginnen, unterhalb des Einschubs der Befestigung (wie von Hand geschrieben)
       const textTop = pad + inset;
-      return { layout, noteW, pad, textW, family, weight, LH, fs, lh, lines, noteH, inset, textTop };
+      return { layout, noteW, pad, textW, family, weight, LH, fs, lh, lines, noteH, inset, textTop, titleGap: gapOf(fs) };
     }
 
     // Vorschau in der App: der Zettel wird proportional zum Hintergrundbild skaliert,
@@ -1074,7 +1105,7 @@
       ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
 
       const c = COLORS[state.color];
-      const { layout, noteW, pad, family, weight, fs, lh, lines, noteH, textTop } = fitNote(w, h, layoutName, noteText() || '…');
+      const { layout, noteW, pad, family, weight, fs, lh, lines, noteH, textTop, titleGap } = fitNote(w, h, layoutName, noteText() || '…');
       const m = pad * 2.2;
       const fastener = await svgImage(fastenerSvg(state.fastener, noteW, noteH, pad, fastenerLook())).catch(() => null);
 
@@ -1114,10 +1145,16 @@
       ctx.font = `${weight} ${fs}px ${family}`;
       ctx.textBaseline = 'top';
       let y = -noteH / 2 + textTop;
-      for (const line of lines) {
+      lines.forEach((line, i) => {
+        const isTitle = state.title && line.p === 0;                      // ganzer erster Absatz, auch mehrzeilig
         if (line.mk) ctx.fillText(line.mk, -noteW / 2 + pad, y);          // Markierung links
-        ctx.fillText(line.t, -noteW / 2 + pad + line.x, y); y += lh;      // Text eingerückt
-      }
+        const tx = -noteW / 2 + pad + line.x;
+        ctx.fillText(line.t, tx, y);                                      // Text eingerückt
+        // Unterstrich von Hand: Canvas kennt keine Textdekoration
+        if (isTitle && line.t) ctx.fillRect(tx, y + fs * 0.98, ctx.measureText(line.t).width, Math.max(1, fs / 20));
+        const letzteTitelzeile = isTitle && (!lines[i + 1] || lines[i + 1].p !== 0);
+        y += lh + (letzteTitelzeile ? titleGap : 0);
+      });
 
       // Befestigung zuletzt, liegt über Papier und Text
       if (fastener) ctx.drawImage(fastener, -noteW / 2 - m, -noteH / 2 - m, noteW + 2 * m, noteH + 2 * m);

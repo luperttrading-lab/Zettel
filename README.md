@@ -52,7 +52,8 @@ Parameter: `text` (Pflicht), `color` (`gelb`, `rosa`, `gruen`, `blau`), `device`
 `blume`, `sonne`, eigene Bild-Motive aus `lib/motifs.js` wie `zwinker`; beim Bildmagneten `fuchs`, `eule`, `panda`, `hase`, `lola`, `lolacomic`, `brunocomic`; Muster und Motiv schließen sich aus, bei beiden gilt das Motiv), `paper` (`glatt`, `liniert`, `kariert`),
 `pen` (Stiftfarbe: `schwarz`, `blau`, `rot`, `gruen`), `texture` (Papierstruktur: `glatt`, `koernig`), `edge` (obere Kante: `gerade`,
 `abgerissen`), `scale` (Schriftgröße 60–140 %), `list` (`num`, `dot`, `square`, `dash`,
-`check`: jede Zeile bekommt eine Nummer bzw. ein Zeichen), optional `w`/`h` in Pixeln. Bei
+`check`: jede Zeile bekommt eine Nummer bzw. ein Zeichen), `title` (`an`/`aus`: erste Zeile als
+Überschrift, fett und ohne Listenmarkierung), optional `w`/`h` in Pixeln. Bei
 quadratischem Bild wird das Tablet-Layout gewählt, sonst das Hochformat-Layout.
 
 Beispiel: `…/api/zettel?device=iphone&color=gelb&font=kalam&fastener=pin&text=…`
