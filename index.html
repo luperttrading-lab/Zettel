@@ -244,6 +244,14 @@
     .tsizes button:nth-child(2) { font-size: 18px; }
     .tsizes button:nth-child(3) { font-size: 23px; }
     .tsizes button[aria-checked="true"] { background: #fff; color: #17171a; }
+    /* Eigenes Hintergrundfoto: Reihe mit zwei kleinen Knöpfen */
+    .bgrow { display: flex; align-items: center; gap: 8px; margin: 2px auto 0; padding: 0 4px;
+      max-width: 520px; width: 100%; }
+    .bgrow .btn { flex: 1 1 auto; padding: 9px 12px; font-size: 14px; }
+    .bgrow .btn.off { flex: 0 0 auto; }
+    /* Vorschau: das gewählte Foto liegt hinter dem Zettel, leicht abgedunkelt wie auf dem Sperrbildschirm */
+    .top.foto { background-size: cover; background-position: center; }
+    .top.foto header h1, .top.foto header small, .top.foto #saved { text-shadow: 0 1px 3px rgba(0,0,0,.8); }
   </style>
 </head>
 <body>
@@ -288,6 +296,12 @@
     </div>
   </div>
 
+  <div class="bgrow">
+    <button class="btn ghost" type="button" id="bgpick">Eigenes Hintergrundfoto</button>
+    <button class="btn ghost off" type="button" id="bgclear" hidden aria-label="Hintergrundfoto entfernen">✕</button>
+    <input id="bgfile" type="file" accept="image/*" hidden>
+  </div>
+
   <div class="actions">
     <button class="btn primary" id="stick">Aufs Display kleben</button>
     <div class="row">
@@ -304,10 +318,11 @@
       <li>App <strong>Kurzbefehle</strong> öffnen → oben rechts <strong>+</strong>.</li>
       <li>In der Aktionssuche <strong>Zwischenablage</strong> eingeben → <strong>Zwischenablage abrufen</strong> antippen.</li>
       <li>Dann <strong>Hintergrund</strong> suchen → <strong>Hintergrundbild-Foto festlegen</strong> antippen (englisch: <em>Set Wallpaper Photo</em>). Die Aktion übernimmt automatisch die Zwischenablage als Bild.</li>
-      <li>Pfeil an dieser Aktion aufklappen: <strong>Sperrbildschirm</strong> und/oder <strong>Home-Bildschirm</strong> anhaken, <strong>Vorschau anzeigen</strong> ausschalten.</li>
+      <li>Pfeil an dieser Aktion aufklappen: nur <strong>Sperrbildschirm</strong> anhaken – dann behält der Home-Bildschirm sein Bild –, <strong>Vorschau anzeigen</strong> ausschalten.</li>
       <li>Optional, damit du das Ergebnis sofort siehst: <strong>sperren</strong> suchen → <strong>Bildschirm sperren</strong> als dritte Aktion anhängen. Das Gerät sperrt sich nach dem Setzen; beim Aufwecken liegt der neue Zettel auf dem Sperrbildschirm.</li>
       <li>Oben auf den Titel „Neuer Kurzbefehl“ tippen → umbenennen in genau <strong>Zettel</strong> → <strong>Fertig</strong>.</li>
       <li>Voraussetzung: dein aktueller Hintergrund ist ein Foto (kein Foto-Shuffle) – das ist nach dem ersten manuellen Setzen der Fall.</li>
+      <li>Soll der Zettel auf deinem gewohnten Bild kleben statt auf schwarzem Grund: oben <strong>Eigenes Hintergrundfoto</strong> wählen und dasselbe Foto nehmen, das dein Hintergrund ist. iOS gibt das aktuelle Hintergrundbild nicht heraus, deshalb dieser eine Handgriff.</li>
     </ol>
     <label>Name des Kurzbefehls <input id="shortcut" type="text" autocapitalize="words" spellcheck="false"></label>
     <label class="row"><input id="autorun" type="checkbox"> Kurzbefehl automatisch öffnen</label>
@@ -334,7 +349,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.34.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.35.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -850,6 +865,67 @@
       }
       onTextChanged(); flush();
     });
+    // ---------- Eigenes Hintergrundfoto ----------
+    // iOS gibt kein Programm an das aktuelle Hintergrundbild heran. Damit der Zettel trotzdem auf dem
+    // gewohnten Bild klebt, wählt man das Foto einmal selbst; es wird auf Displaygröße zugeschnitten
+    // (mittig, formatfüllend) und als JPEG gespeichert – getrennt vom übrigen Zustand, weil es groß ist.
+    const BG_KEY = 'zettel.bg';
+    var bgImage = null;                  // hochgezogen: renderWallpaper liest es, wird aber erst später aufgerufen
+    const bgPick = $('bgpick'), bgClear = $('bgclear'), bgFile = $('bgfile'), topEl = document.querySelector('.top');
+
+    function bgAnzeigen(url) {
+      topEl.classList.toggle('foto', !!url);
+      topEl.style.backgroundImage = url ? `linear-gradient(rgba(0,0,0,.3), rgba(0,0,0,.3)), url(${url})` : '';
+      bgClear.hidden = !url;
+      bgPick.textContent = url ? 'Anderes Hintergrundfoto' : 'Eigenes Hintergrundfoto';
+    }
+
+    function bgLaden() {
+      let url = null;
+      try { url = localStorage.getItem(BG_KEY); } catch {}
+      if (!url) { bgImage = null; bgAnzeigen(null); return; }
+      const img = new Image();
+      img.onload = () => { bgImage = img; bgAnzeigen(url); };
+      img.onerror = () => { bgImage = null; bgAnzeigen(null); try { localStorage.removeItem(BG_KEY); } catch {} };
+      img.src = url;
+    }
+
+    // Datei laden. <img> dreht das Foto anhand der EXIF-Angabe schon selbst, drawImage übernimmt das.
+    function bildAusDatei(file) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file), img = new Image();
+        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = e => { URL.revokeObjectURL(url); reject(e); };
+        img.src = url;
+      });
+    }
+
+    async function bgSetzen(file) {
+      const t = targetCanvas();
+      let img;
+      try { img = await bildAusDatei(file); } catch { showInfo('Foto konnte nicht gelesen werden'); return; }
+      const c = document.createElement('canvas'); c.width = t.w; c.height = t.h;
+      const g = c.getContext('2d');
+      const s = Math.max(t.w / img.naturalWidth, t.h / img.naturalHeight);   // formatfüllend, mittig
+      const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+      g.drawImage(img, (t.w - dw) / 2, (t.h - dh) / 2, dw, dh);
+      // Qualität so weit senken, bis es in den Speicher passt (localStorage ist auf wenige MB begrenzt)
+      let url = '';
+      for (let q = 0.82; ; q -= 0.12) { url = c.toDataURL('image/jpeg', q); if (url.length < 2.4e6 || q <= 0.4) break; }
+      try { localStorage.setItem(BG_KEY, url); }
+      catch { showInfo('Foto passt nicht in den Speicher'); return; }
+      bgLaden();
+      showInfo('Hintergrundfoto gesetzt');
+    }
+
+    bgPick.addEventListener('click', () => bgFile.click());
+    bgFile.addEventListener('change', () => { const f = bgFile.files && bgFile.files[0]; bgFile.value = ''; if (f) bgSetzen(f); });
+    bgClear.addEventListener('click', () => {
+      try { localStorage.removeItem(BG_KEY); } catch {}
+      bgImage = null; bgAnzeigen(null); showInfo('Hintergrundfoto entfernt');
+    });
+    bgLaden();
+
     // Ältere Zettel: Markierungen auf geschütztes Leerzeichen umstellen
     if (state.list !== 'none') { const v = relist(state.text, state.list); if (v !== state.text) { state.text = v; textEl.value = v; persist(); } }
     textEl.addEventListener('keydown', e => {
@@ -1144,10 +1220,16 @@
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
 
-      // Hintergrund: dunkel, damit Uhr/Icons lesbar bleiben
-      const g = ctx.createLinearGradient(0, 0, 0, h);
-      g.addColorStop(0, '#1b1b1f'); g.addColorStop(1, '#09090b');
-      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      // Hintergrund: eigenes Foto, sonst dunkler Verlauf, damit Uhr/Icons lesbar bleiben
+      if (bgImage) {
+        const s = Math.max(w / bgImage.naturalWidth, h / bgImage.naturalHeight);   // formatfüllend, mittig
+        const dw = bgImage.naturalWidth * s, dh = bgImage.naturalHeight * s;
+        ctx.drawImage(bgImage, (w - dw) / 2, (h - dh) / 2, dw, dh);
+      } else {
+        const g = ctx.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, '#1b1b1f'); g.addColorStop(1, '#09090b');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      }
 
       const c = COLORS[state.color];
       const { layout, noteW, pad, family, weight, fs, lh, lines, noteH, textTop, titleGap, titleF } = fitNote(w, h, layoutName, noteText() || '…');

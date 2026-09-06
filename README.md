@@ -54,7 +54,8 @@ Parameter: `text` (Pflicht), `color` (`gelb`, `rosa`, `gruen`, `blau`), `device`
 `abgerissen`), `scale` (Schriftgröße 60–140 %), `list` (`num`, `dot`, `square`, `dash`,
 `check`: jede Zeile bekommt eine Nummer bzw. ein Zeichen), `title` (`an`/`aus`: erste Zeile als
 Überschrift, unterstrichen und ohne Listenmarkierung), `tsize` (`1`, `2`, `3`: Größe der
-Überschrift, 1 = wie der übrige Text), optional `w`/`h` in Pixeln. Bei
+Überschrift, 1 = wie der übrige Text), `bg` (`dunkel` = Standard, `transparent`: PNG mit Alphakanal,
+nur Zettel und Schatten – zum Überlagern über ein vorhandenes Hintergrundbild), optional `w`/`h` in Pixeln. Bei
 quadratischem Bild wird das Tablet-Layout gewählt, sonst das Hochformat-Layout.
 
 Beispiel: `…/api/zettel?device=iphone&color=gelb&font=kalam&fastener=pin&text=…`
@@ -74,6 +75,20 @@ fehlt satori zur Laufzeit die Datei `hb.wasm`.
 
 Dann: Kurzbefehl-Details (ⓘ) → „Zum Home-Bildschirm". Ab jetzt: Icon tippen → Text eingeben oder
 diktieren → fertig. Oder „Hey Siri, Zettel".
+
+In Aktion 4 nur **Sperrbildschirm** anhaken; der Home-Bildschirm behält dann sein Bild.
+
+### Zettel auf das vorhandene Hintergrundbild kleben
+
+iOS gibt das gesetzte Hintergrundbild an keine App und an keinen Kurzbefehl heraus. Der Zettel lässt sich
+deshalb nur auf ein Foto legen, das man selbst benennt. Zwei Wege:
+
+- **Web-App:** „Eigenes Hintergrundfoto" wählen. Das Foto wird auf Displaygröße zugeschnitten, gespeichert
+  und der Zettel darauf gezeichnet. „Aufs Display kleben" liefert dann Foto samt Zettel in einem Bild.
+- **Kurzbefehl:** `&bg=transparent` an die URL hängen – der Server liefert ein PNG mit Alphakanal, nur
+  Zettel und Schatten. Im Kurzbefehl zwischen Aktion 3 und 4 das eigene Foto laden (z. B. „Neuestes Foto
+  aus Album" oder eine feste Datei) und mit der Aktion **Bild überlagern** (englisch *Overlay Image*) den
+  Zettel darüberlegen; das Ergebnis geht an „Hintergrundbild-Foto festlegen".
 
 Hinweis: Der Text wird bei jedem Aufruf als URL an Vercel geschickt und kann dort in Logs auftauchen.
 
