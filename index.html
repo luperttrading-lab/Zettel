@@ -357,7 +357,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.35.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.35.3'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -575,16 +575,31 @@
       updatePinBadge();
     }
 
-    // Angeheftet-Status: Text und Farbe, die zuletzt aufs Display geklebt wurden.
+    // Angeheftet-Status: alles, was das Bild bestimmt und zuletzt aufs Display geklebt wurde – Text, Papier,
+    // Schrift, Befestigung, Überschrift und das Hintergrundfoto (als Kennung, nicht als Bild).
     // Solange der Zettel dem entspricht, bleibt die Markierung stehen; jede Änderung hebt sie auf.
+    // Einträge älterer Versionen ohne die Felder title und bg gelten als veraltet.
     function fmtTime(ts) { return new Date(ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); }
+    // Kennung des gespeicherten Hintergrundfotos: Länge und FNV-1a-Hash der Data-URL (leer = kein Foto).
+    // Wird in bgLaden/bgClear gesetzt; das Bild selbst hat im Zustand nichts verloren (zu groß).
+    let bgKennung = '';
+    function fotoKennung(url) {
+      if (!url) return '';
+      let h = 0x811c9dc5;
+      for (let i = 0; i < url.length; i++) { h ^= url.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+      return url.length + ':' + h.toString(16);
+    }
     function isPinnedCurrent() {
-      return !!(state.pinned && state.pinned.text === state.text && state.pinned.color === state.color
-        && (state.pinned.fontScale || 100) === (state.fontScale || 100)
-        && (state.pinned.fastener || 'tape') === state.fastener && (state.pinned.font || 'caveat') === state.font
-        && (state.pinned.fastenerLook || lookKey(fastenerLook())) === lookKey(fastenerLook())
-        && (state.pinned.paper || 'plain') === state.paper && (state.pinned.pen || 'black') === state.pen
-        && (state.pinned.texture || 'smooth') === state.texture && (state.pinned.edge || 'straight') === state.edge);
+      const p = state.pinned;
+      if (!p || typeof p.title !== 'boolean' || typeof p.bg !== 'string') return false;
+      return p.text === state.text && p.color === state.color
+        && (p.fontScale || 100) === (state.fontScale || 100)
+        && (p.fastener || 'tape') === state.fastener && (p.font || 'caveat') === state.font
+        && (p.fastenerLook || lookKey(fastenerLook())) === lookKey(fastenerLook())
+        && (p.paper || 'plain') === state.paper && (p.pen || 'black') === state.pen
+        && (p.texture || 'smooth') === state.texture && (p.edge || 'straight') === state.edge
+        && p.title === state.title && (!state.title || p.titleSize === state.titleSize)   // Größe zählt nur mit Überschrift
+        && p.bg === bgKennung;
     }
     // Hinweis „Bild liegt bereit …“ gilt nur, solange der Zettel dem angehefteten Stand entspricht
     const READY_HINT = 'Bild liegt bereit. Jetzt den Kurzbefehl „%s“ starten: Icon neben der App, Kontrollzentrum oder Rückseite doppelt tippen.';
@@ -607,7 +622,7 @@
       }
     }
     function markPinned() {
-      state.pinned = { text: state.text, color: state.color, fontScale: state.fontScale, fastener: state.fastener, fastenerLook: lookKey(fastenerLook()), paper: state.paper, pen: state.pen, texture: state.texture, edge: state.edge, font: state.font, at: Date.now() };
+      state.pinned = { text: state.text, color: state.color, fontScale: state.fontScale, fastener: state.fastener, fastenerLook: lookKey(fastenerLook()), paper: state.paper, pen: state.pen, texture: state.texture, edge: state.edge, font: state.font, title: state.title, titleSize: state.titleSize, bg: bgKennung, at: Date.now() };
       persist();
     }
 
@@ -891,10 +906,11 @@
     function bgLaden() {
       let url = null;
       try { url = localStorage.getItem(BG_KEY); } catch {}
+      bgKennung = fotoKennung(url); updatePinBadge();   // Kennung sofort, das Bild selbst kommt asynchron
       if (!url) { bgImage = null; bgAnzeigen(null); return; }
       const img = new Image();
       img.onload = () => { bgImage = img; bgAnzeigen(url); };
-      img.onerror = () => { bgImage = null; bgAnzeigen(null); try { localStorage.removeItem(BG_KEY); } catch {} };
+      img.onerror = () => { bgImage = null; bgKennung = ''; bgAnzeigen(null); try { localStorage.removeItem(BG_KEY); } catch {} updatePinBadge(); };
       img.src = url;
     }
 
@@ -930,7 +946,7 @@
     bgFile.addEventListener('change', () => { const f = bgFile.files && bgFile.files[0]; bgFile.value = ''; if (f) bgSetzen(f); });
     bgClear.addEventListener('click', () => {
       try { localStorage.removeItem(BG_KEY); } catch {}
-      bgImage = null; bgAnzeigen(null); showInfo('Hintergrundfoto entfernt');
+      bgImage = null; bgKennung = ''; bgAnzeigen(null); updatePinBadge(); showInfo('Hintergrundfoto entfernt');
     });
     bgLaden();
 
