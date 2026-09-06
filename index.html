@@ -210,7 +210,7 @@
     header h1 { cursor: pointer; }
     .update .btn { width: auto; padding: 8px 14px; font-size: 15px; background: #06240e; color: #fff; }
 
-    /* --- Banner „Angeheftet“ --- */
+    /* --- Banner „Bild bereit“ --- */
     .toast {
       position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.88);
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
@@ -342,7 +342,7 @@
 
   <div class="toast" id="toast" hidden>
     <div class="check">✓</div>
-    <h2 id="toast-title">Angeheftet</h2>
+    <h2 id="toast-title">Bild bereit</h2>
     <p id="toast-sub"></p>
   </div>
 
@@ -357,7 +357,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.35.3'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.35.4'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -601,18 +601,23 @@
         && p.title === state.title && (!state.title || p.titleSize === state.titleSize)   // Größe zählt nur mit Überschrift
         && p.bg === bgKennung;
     }
-    // Hinweis „Bild liegt bereit …“ gilt nur, solange der Zettel dem angehefteten Stand entspricht
-    const READY_HINT = 'Bild liegt bereit. Jetzt den Kurzbefehl „%s“ starten: Icon neben der App, Kontrollzentrum oder Rückseite doppelt tippen.';
+    // Wortlaut: Die App legt das Bild nur in die Zwischenablage (und ruft höchstens den Kurzbefehl auf);
+    // ob es wirklich auf dem Sperrbildschirm gelandet ist, kann sie nie wissen. Darum „Bild bereit“ bzw.
+    // „Kurzbefehl angefordert“ – in Marke, Kopfzeile, Statuszeile und Banner gleich – und nie „angeheftet“.
+    function pinWortlaut(p = state.pinned) { return p && p.requested ? 'Kurzbefehl angefordert' : 'Bild bereit'; }
+    // Hinweis in der Statuszeile gilt nur, solange der Zettel dem bereitgestellten Stand entspricht
+    const READY_HINT = 'Bild bereit. Jetzt den Kurzbefehl „%s“ starten: Icon neben der App, Kontrollzentrum oder Rückseite doppelt tippen.';
+    const REQUESTED_HINT = 'Kurzbefehl „%s“ angefordert. Ob er gelaufen ist, zeigt nur der Sperrbildschirm.';
     function updatePinBadge() {
       const pin = $('pin');
-      if (!isPinnedCurrent() && statusEl.textContent.startsWith('Bild liegt bereit')) statusEl.textContent = '';
+      if (!isPinnedCurrent() && /^(Bild bereit|Kurzbefehl „)/.test(statusEl.textContent)) statusEl.textContent = '';
       if (isPinnedCurrent()) {
-        savedEl.textContent = 'angeheftet ' + fmtTime(state.pinned.at);
+        savedEl.textContent = pinWortlaut() + ' ' + fmtTime(state.pinned.at);
         savedEl.className = 'ok';
-        pin.textContent = '✓ angeheftet ' + fmtTime(state.pinned.at);
+        pin.textContent = '✓ ' + pinWortlaut() + ' ' + fmtTime(state.pinned.at);
         pin.hidden = false;
       } else if (state.pinned) {
-        savedEl.textContent = 'geändert · nicht angeheftet';
+        savedEl.textContent = 'geändert · Bild veraltet';
         savedEl.className = 'warn';
         pin.hidden = true;
       } else {
@@ -621,8 +626,9 @@
         pin.hidden = true;
       }
     }
-    function markPinned() {
-      state.pinned = { text: state.text, color: state.color, fontScale: state.fontScale, fastener: state.fastener, fastenerLook: lookKey(fastenerLook()), paper: state.paper, pen: state.pen, texture: state.texture, edge: state.edge, font: state.font, title: state.title, titleSize: state.titleSize, bg: bgKennung, at: Date.now() };
+    // requested: der Kurzbefehl wurde per URL aufgerufen (sonst liegt das Bild nur in der Zwischenablage)
+    function markPinned({ requested = false } = {}) {
+      state.pinned = { text: state.text, color: state.color, fontScale: state.fontScale, fastener: state.fastener, fastenerLook: lookKey(fastenerLook()), paper: state.paper, pen: state.pen, texture: state.texture, edge: state.edge, font: state.font, title: state.title, titleSize: state.titleSize, bg: bgKennung, requested, at: Date.now() };
       persist();
     }
 
@@ -991,7 +997,7 @@
       state.text = ''; textEl.value = ''; persist(); syncPreview(); textEl.focus();
     });
 
-    // Banner „Angeheftet“ – groß, kurz, verschwindet von selbst
+    // Banner „Bild bereit“ – groß, kurz, verschwindet von selbst
     function showToast(title, sub) {
       const el = $('toast');
       $('toast-title').textContent = title; $('toast-sub').textContent = sub;
@@ -1365,14 +1371,16 @@
       try { write = navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]); }
       catch (e) { write = Promise.reject(e); }
       write.then(() => {
-        markPinned();
+        // Das Bild liegt jetzt in der Zwischenablage – mehr weiß die App nicht. Der Kurzbefehl läuft erst danach,
+        // und ob er das Hintergrundbild wirklich gesetzt hat, erfährt die App nie.
+        markPinned({ requested: !!state.autoRun });
         if (state.autoRun) {
-          statusEl.textContent = 'Kurzbefehl „' + state.shortcut + '“ läuft …';
+          statusEl.textContent = REQUESTED_HINT.replace('%s', state.shortcut);
           location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(state.shortcut) + '&input=clipboard';
         } else {
           // Kurzbefehl nicht per URL starten: vom Icon/Kontrollzentrum gestartet öffnet er die Kurzbefehle-App nicht.
           statusEl.textContent = READY_HINT.replace('%s', state.shortcut);
-          showToast('Angeheftet', 'Jetzt „' + state.shortcut + '“ starten:\nIcon neben der App · Kontrollzentrum · Rückseite doppelt tippen');
+          showToast('Bild bereit', 'Jetzt „' + state.shortcut + '“ starten:\nIcon neben der App · Kontrollzentrum · Rückseite doppelt tippen');
         }
       }, async () => {
         statusEl.textContent = 'Zwischenablage verweigert – Teilen stattdessen.';
