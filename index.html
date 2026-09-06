@@ -357,7 +357,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.35.4'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.35.5'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -900,6 +900,12 @@
     // (mittig, formatfüllend) und als JPEG gespeichert – getrennt vom übrigen Zustand, weil es groß ist.
     const BG_KEY = 'zettel.bg';
     var bgImage = null;                  // hochgezogen: renderWallpaper liest es, wird aber erst später aufgerufen
+    // Das Foto wird asynchron dekodiert. Jede Ausgabe (Kleben, Teilen) wartet auf bgReady, sonst käme im
+    // ersten Moment nach dem Start der dunkle Verlauf statt des Fotos. Scheitert das Laden, ist bgFehler
+    // gesetzt: dann wird gemeldet und nichts ausgegeben, bis ein neues Foto gewählt oder ✕ getippt wurde.
+    let bgReady = Promise.resolve(), bgFehler = false;
+    const BG_FEHLER = 'Hintergrundfoto ließ sich nicht laden – neu wählen, oder ✕ tippen und ohne Foto weitermachen.';
+    async function fotoAbwarten() { await bgReady; if (bgFehler) throw new Error(BG_FEHLER); }
     const bgPick = $('bgpick'), bgClear = $('bgclear'), bgFile = $('bgfile'), topEl = document.querySelector('.top');
 
     function bgAnzeigen(url) {
@@ -912,11 +918,20 @@
     function bgLaden() {
       let url = null;
       try { url = localStorage.getItem(BG_KEY); } catch {}
-      bgKennung = fotoKennung(url); updatePinBadge();   // Kennung sofort, das Bild selbst kommt asynchron
-      if (!url) { bgImage = null; bgAnzeigen(null); return; }
+      bgKennung = fotoKennung(url); bgFehler = false; updatePinBadge();   // Kennung sofort, das Bild selbst kommt asynchron
+      if (!url) { bgImage = null; bgAnzeigen(null); bgReady = Promise.resolve(); return; }
       const img = new Image();
-      img.onload = () => { bgImage = img; bgAnzeigen(url); };
-      img.onerror = () => { bgImage = null; bgKennung = ''; bgAnzeigen(null); try { localStorage.removeItem(BG_KEY); } catch {} updatePinBadge(); };
+      bgReady = new Promise(resolve => {
+        img.onload = () => { bgImage = img; bgAnzeigen(url); resolve(); };
+        img.onerror = () => {
+          // Gespeicherte Daten unbrauchbar: entfernen, aber nicht stumm – der Nutzer erwartet sein Foto im Bild
+          bgImage = null; bgKennung = ''; bgFehler = true; bgAnzeigen(null);
+          try { localStorage.removeItem(BG_KEY); } catch {}
+          bgClear.hidden = false;   // ✕ bleibt: „ohne Foto weitermachen“
+          updatePinBadge(); showInfo(BG_FEHLER);
+          resolve();
+        };
+      });
       img.src = url;
     }
 
@@ -952,7 +967,9 @@
     bgFile.addEventListener('change', () => { const f = bgFile.files && bgFile.files[0]; bgFile.value = ''; if (f) bgSetzen(f); });
     bgClear.addEventListener('click', () => {
       try { localStorage.removeItem(BG_KEY); } catch {}
-      bgImage = null; bgKennung = ''; bgAnzeigen(null); updatePinBadge(); showInfo('Hintergrundfoto entfernt');
+      bgImage = null; bgKennung = ''; bgFehler = false; bgReady = Promise.resolve(); bgAnzeigen(null); updatePinBadge();
+      if (!updateEl.hidden && $('update-text').textContent === BG_FEHLER) updateEl.hidden = true;
+      showInfo('Hintergrundfoto entfernt');
     });
     bgLaden();
 
@@ -1332,6 +1349,7 @@
     }
 
     async function renderPng() {
+      await fotoAbwarten();   // wirft bei Ladefehler – die Aufrufer melden das statt stumm den Verlauf zu nehmen
       try { await ensureFont(); if (document.fonts) await document.fonts.ready; } catch (_) {}
       const t = targetCanvas();
       const canvas = await renderWallpaper(t.w, t.h, t.layout);
@@ -1363,6 +1381,7 @@
       if (!state.text.trim()) { statusEl.textContent = 'Erst was draufschreiben.'; textEl.focus(); return; }
       statusEl.textContent = 'Rendere …';
       const png = renderPng();
+      png.catch(() => {});   // Ablehnung (Hintergrundfoto) wird unten behandelt; ohne diesen Haken meldet der Browser sie voreilig als unbehandelt
       if (!(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem)) {
         statusEl.textContent = 'Zwischenablage nicht verfügbar – Teilen stattdessen.';
         png.then(share); return;
@@ -1383,8 +1402,10 @@
           showToast('Bild bereit', 'Jetzt „' + state.shortcut + '“ starten:\nIcon neben der App · Kontrollzentrum · Rückseite doppelt tippen');
         }
       }, async () => {
+        let blob;
+        try { blob = await png; } catch (e) { statusEl.textContent = e.message; return; }   // Rendern selbst scheiterte (Hintergrundfoto)
         statusEl.textContent = 'Zwischenablage verweigert – Teilen stattdessen.';
-        share(await png);
+        share(blob);
       });
     }
 
@@ -1392,7 +1413,9 @@
     async function stickViaShare() {
       if (!state.text.trim()) { statusEl.textContent = 'Erst was draufschreiben.'; textEl.focus(); return; }
       statusEl.textContent = 'Rendere …';
-      await share(await renderPng());
+      let blob;
+      try { blob = await renderPng(); } catch (e) { statusEl.textContent = e.message; return; }
+      await share(blob);
     }
 
     $('stick').addEventListener('click', () => { try { stickViaShortcut(); } catch (e) { statusEl.textContent = 'Fehler: ' + e.message; } });
