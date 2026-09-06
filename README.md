@@ -21,8 +21,16 @@ So ist die Notiz sichtbar, ohne die App zu öffnen.
 
 1. Seite öffnen (GitHub Pages) und „Zum Home-Bildschirm" hinzufügen.
 2. Text schreiben, Farbe wählen.
-3. „Aufs Display kleben" → Teilen-Dialog → „Bild sichern".
-4. Einstellungen → Hintergrundbild → gesichertes Bild als Sperrbildschirm wählen.
+3. „Aufs Display kleben" legt das Bild in die Zwischenablage; der Kurzbefehl „Zettel" (siehe die Anleitung in der
+   App) setzt es als Sperrbildschirm. Alternativ „Teilen / sichern" → „Bild sichern" → Einstellungen → Hintergrundbild.
+4. „Zettel ausblenden" legt nur das eigene Hintergrundfoto in die Zwischenablage – ohne Zettel; Text und
+   Einstellungen bleiben in der App. Ohne hinterlegtes Foto gibt es nur einen Hinweis.
+
+Die App meldet nach dem Kleben „Bild bereit" bzw. „Kurzbefehl angefordert" (jeweils „mit Zettel" oder „nur
+Hintergrund"), nie „angeheftet": ob das Bild wirklich auf dem Sperrbildschirm gelandet ist, kann sie nicht wissen.
+Nach jeder Änderung, die das Bild beträfe (Text, Papier, Schrift, Befestigung, Überschrift, Hintergrundfoto),
+steht dort „geändert · Bild veraltet". Passt der Text auch in kleinster Schrift nicht auf den Zettel, warnt die
+App („Zu viel Text") und klebt nicht – das Bild würde sonst abschneiden.
 
 ## Variante 2: reiner Kurzbefehl (empfohlen)
 
@@ -89,8 +97,9 @@ gelöscht, entsteht beim nächsten Lauf wieder ein leerer.
 iOS gibt das gesetzte Hintergrundbild an keine App und an keinen Kurzbefehl heraus. Der Zettel lässt sich
 deshalb nur auf ein Foto legen, das man selbst benennt. Zwei Wege:
 
-- **Web-App:** „Eigenes Hintergrundfoto" wählen. Das Foto wird auf Displaygröße zugeschnitten, gespeichert
-  und der Zettel darauf gezeichnet. „Aufs Display kleben" liefert dann Foto samt Zettel in einem Bild.
+- **Web-App:** „Eigenes Hintergrundfoto" wählen. Gespeichert wird ein auf Displaygröße zugeschnittener
+  JPEG-Abzug (nicht das Original), getrennt vom übrigen Zustand; der Zettel wird darauf gezeichnet.
+  „Aufs Display kleben" liefert dann Foto samt Zettel in einem Bild, „Zettel ausblenden" nur das Foto.
 - **Kurzbefehl:** `&bg=transparent` an die URL hängen – der Server liefert ein PNG mit Alphakanal, nur
   Zettel und Schatten. Im Kurzbefehl zwischen Aktion 3 und 4 das eigene Foto laden (z. B. „Neuestes Foto
   aus Album" oder eine feste Datei) und mit der Aktion **Bild überlagern** (englisch *Overlay Image*) den
@@ -112,5 +121,6 @@ Hinweis: Der Text wird bei jedem Aufruf als URL an Vercel geschickt und kann dor
 | `lib/motifs.js` | Eigene Magnet-Motive als Bild (Data-URI): runde Motive (JPEG) und Bildmagnete (WebP, freigestellt) |
 | `lib/motifs/*.png` | Bildmagnete als PNG für den Server (resvg kann kein WebP) |
 | `lib/prep_motif.mjs`, `lib/prep_photo.mjs` | Vorbereitung neuer Motive bzw. Bildmagnete aus Vorlagen |
+| `tests/app_*.mjs`, `tests/srv_*.mjs` | Prüfskripte: App im Browser (Playwright) und Server-Renderer; Aufruf steht im Kopf jeder Datei |
 | `fonts/Caveat-500.ttf` | Handschrift für den Server (SIL Open Font License, siehe `fonts/OFL-Caveat.txt`) |
 | `vercel.json` | Vercel-Konfiguration (Schrift wird mitgepackt) |
