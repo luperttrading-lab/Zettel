@@ -71,7 +71,7 @@ check('Kennung leer', (await page.evaluate(() => bgKennung)) === '');
 // Alter Eintrag ohne Felder
 await page.evaluate(() => { state.pinned = { text: state.text, color: state.color, fontScale: state.fontScale, fastener: state.fastener, fastenerLook: lookKey(fastenerLook()), paper: state.paper, pen: state.pen, texture: state.texture, edge: state.edge, font: state.font, at: Date.now() }; updatePinBadge(); });
 check('alter Eintrag gilt als veraltet', !(await cur()), await saved());
-check('Status „geändert“', (await saved()) === 'geändert · Bild veraltet', await saved());
+check('Status alter Eintrag „Bild veraltet · neu kleben“', (await saved()) === 'Bild veraltet · neu kleben', await saved());
 // Hash-Laufzeit bei 2,4 MB
 const ms = await page.evaluate(() => { const s = 'x'.repeat(2400000); const t0 = performance.now(); fotoKennung(s); return performance.now() - t0; });
 check('Hash 2,4 MB unter 100 ms', ms < 100, ms.toFixed(1) + ' ms');

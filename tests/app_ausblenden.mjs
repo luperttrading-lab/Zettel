@@ -45,20 +45,20 @@ check('Bild in der Zwischenablage', !!p2, JSON.stringify(p2));
 check('Mitte zeigt das Foto, keinen Zettel', p2 && p2.mitte[2] > 100 && p2.mitte[0] < 60, JSON.stringify(p2 && p2.mitte));
 check('Toast „Bild bereit“ mit Hinweis', (await txt('#toast-title')) === 'Bild bereit' && (await txt('#toast-sub')).startsWith('Nur Hintergrund, ohne Zettel.'), await txt('#toast-sub'));
 check('Status „Bild bereit · nur Hintergrund.“', (await txt('#status')).startsWith('Bild bereit · nur Hintergrund. Jetzt den Kurzbefehl „Zettel“'), await txt('#status'));
-check('Kopfzeile nur Hintergrund', /^Bild bereit · nur Hintergrund \d\d:\d\d$/.test(await txt('#saved')), await txt('#saved'));
-check('Marke nur Hintergrund', /^✓ Bild bereit · nur Hintergrund \d\d:\d\d$/.test(await txt('#pin')), await txt('#pin'));
+check('Kopfzeile „Hintergrund bereit“', /^Hintergrund bereit \d\d:\d\d$/.test(await txt('#saved')), await txt('#saved'));
+check('Marke „✓ Hintergrund bereit“', /^✓ Hintergrund bereit \d\d:\d\d$/.test(await txt('#pin')), await txt('#pin'));
 check('pinned.bgOnly', await page.evaluate(() => state.pinned.bgOnly === true && state.pinned.bg !== ''));
 check('Text und Einstellungen bleiben', (await page.evaluate(() => state.text)) === 'Milch kaufen' && (await page.evaluate(() => textEl.value)) === 'Milch kaufen');
 await page.screenshot({ path: out + '/t2_toast.png' });
 // Textänderung ändert am ausgeblendeten Stand nichts (der Zettel ist ja nicht im Bild)
 await page.evaluate(() => { document.getElementById('toast').hidden = true; textEl.insertText(' und Brot'); }); await page.waitForTimeout(400);
-check('Textänderung: Stand bleibt „nur Hintergrund“', /^Bild bereit · nur Hintergrund/.test(await txt('#saved')), await txt('#saved'));
+check('Textänderung: Stand bleibt „Hintergrund bereit“', /^Hintergrund bereit/.test(await txt('#saved')), await txt('#saved'));
 // 3) Danach „Aufs Display kleben“: mit Zettel, Mitte gelb
 await page.click('#stick'); await page.waitForTimeout(1500);
 const p3 = await clipPixels();
 check('mit Zettel: Mitte gelb (Papier)', p3 && p3.mitte[0] > 200 && p3.mitte[1] > 200 && p3.mitte[2] < 200, JSON.stringify(p3 && p3.mitte));
 check('mit Zettel: Ecke Foto', p3 && p3.ecke[2] > 100, JSON.stringify(p3 && p3.ecke));
-check('Kopfzeile mit Zettel', /^Bild bereit · mit Zettel \d\d:\d\d$/.test(await txt('#saved')), await txt('#saved'));
+check('Kopfzeile mit Zettel', /^Bild bereit \d\d:\d\d$/.test(await txt('#saved')), await txt('#saved'));
 check('pinned.bgOnly false', await page.evaluate(() => state.pinned.bgOnly === false));
 await page.evaluate(() => { document.getElementById('toast').hidden = true; textEl.insertText('!'); }); await page.waitForTimeout(400);
 check('mit Zettel: Textänderung → veraltet', (await txt('#saved')) === 'geändert · Bild veraltet', await txt('#saved'));
@@ -82,7 +82,7 @@ await page.evaluate(async () => {
 });
 await page.click('#hide'); await page.waitForTimeout(1500);
 check('autoRun: Status angefordert · nur Hintergrund', (await txt('#status')).startsWith('Kurzbefehl „Zettel“ angefordert · nur Hintergrund.'), await txt('#status'));
-check('autoRun: Kopfzeile', /^Kurzbefehl angefordert · nur Hintergrund \d\d:\d\d$/.test(await txt('#saved')), await txt('#saved'));
+check('autoRun: Kopfzeile', /^Hintergrund angefordert \d\d:\d\d$/.test(await txt('#saved')), await txt('#saved'));
 const relevant = errors.filter(e => !/ERR_UNKNOWN_URL_SCHEME|ERR_ABORTED|shortcuts:/.test(e));
 check('keine Fehler', relevant.length === 0, JSON.stringify(errors));
 await b.close();

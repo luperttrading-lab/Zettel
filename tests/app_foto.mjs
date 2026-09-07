@@ -40,7 +40,8 @@ const r2 = await page.evaluate(async () => {
   return { fehler: bgFehler, gespeichert: localStorage.getItem('zettel.bg'), clearSichtbar: !document.getElementById('bgclear').hidden, banner: document.getElementById('update').hidden ? '' : document.getElementById('update-text').textContent, kennung: bgKennung, bild: !!bgImage };
 });
 check('bgFehler gesetzt', r2.fehler === true);
-check('Daten entfernt', r2.gespeichert === null, String(r2.gespeichert));
+check('Daten bleiben bis ✕ liegen', r2.gespeichert !== null, String(r2.gespeichert));
+check('Statuszeile meldet Fehler', (await txt('#status')).startsWith('Hintergrundfoto ließ sich nicht laden'), await txt('#status'));
 check('✕ sichtbar', r2.clearSichtbar);
 check('Banner meldet Fehler', r2.banner.startsWith('Hintergrundfoto ließ sich nicht laden'), r2.banner);
 check('Kennung leer, kein Bild', r2.kennung === '' && !r2.bild);
@@ -54,7 +55,8 @@ check('Vorschau-Overlay bleibt zu', await page.evaluate(() => document.getElemen
 await page.screenshot({ path: out + '/t4_fehler.png' });
 // ✕ → Sperre weg, Banner weg, Kleben geht wieder
 await page.click('#bgclear'); await page.waitForTimeout(300);
-check('nach ✕ kein Fehler mehr', await page.evaluate(() => bgFehler === false && document.getElementById('bgclear').hidden));
+check('nach ✕ kein Fehler mehr, Daten weg', await page.evaluate(() => bgFehler === false && document.getElementById('bgclear').hidden && localStorage.getItem('zettel.bg') === null));
+check('nach ✕ Statuszeile leer', (await txt('#status')) === '', await txt('#status'));
 check('Banner jetzt „entfernt“', (await txt('#update-text')) === 'Hintergrundfoto entfernt', await txt('#update-text'));
 await page.click('#stick'); await page.waitForTimeout(1500);
 check('Kleben geht wieder', (await txt('#status')).startsWith('Bild bereit'), await txt('#status'));

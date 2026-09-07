@@ -23,8 +23,8 @@ await page.click('#stick'); await page.waitForTimeout(1500);
 check('Toast-Titel „Bild bereit“', (await txt('#toast-title')) === 'Bild bereit', await txt('#toast-title'));
 check('Toast sichtbar', await page.evaluate(() => !document.getElementById('toast').hidden));
 check('Statuszeile beginnt mit „Bild bereit.“', (await txt('#status')).startsWith('Bild bereit · mit Zettel. Jetzt den Kurzbefehl „Zettel“'), await txt('#status'));
-check('Kopfzeile „Bild bereit HH:MM“', /^Bild bereit · mit Zettel \d\d:\d\d$/.test(await txt('#saved')), await txt('#saved'));
-check('Marke „✓ Bild bereit HH:MM“', /^✓ Bild bereit · mit Zettel \d\d:\d\d$/.test(await txt('#pin')), await txt('#pin'));
+check('Kopfzeile „Bild bereit HH:MM“', /^Bild bereit \d\d:\d\d$/.test(await txt('#saved')), await txt('#saved'));
+check('Marke „✓ Bild bereit HH:MM“', /^✓ Bild bereit \d\d:\d\d$/.test(await txt('#pin')), await txt('#pin'));
 check('pinned.requested false', await page.evaluate(() => state.pinned.requested === false));
 const clip = await page.evaluate(async () => { try { const items = await navigator.clipboard.read(); return items.map(i => i.types.join(',')).join(';'); } catch (e) { return 'err ' + e.message; } });
 check('Zwischenablage enthält PNG', clip.includes('image/png'), clip);
@@ -39,8 +39,8 @@ check('Marke versteckt', await page.evaluate(() => document.getElementById('pin'
 await page.evaluate(() => { state.autoRun = true; persist(); });
 await page.click('#stick'); await page.waitForTimeout(1500);
 check('Status „Kurzbefehl „Zettel“ angefordert.“', (await txt('#status')).startsWith('Kurzbefehl „Zettel“ angefordert · mit Zettel.'), await txt('#status'));
-check('Kopfzeile „Kurzbefehl angefordert HH:MM“', /^Kurzbefehl angefordert · mit Zettel \d\d:\d\d$/.test(await txt('#saved')), await txt('#saved'));
-check('Marke „✓ Kurzbefehl angefordert“', /^✓ Kurzbefehl angefordert · mit Zettel \d\d:\d\d$/.test(await txt('#pin')), await txt('#pin'));
+check('Kopfzeile „Kurzbefehl angefordert HH:MM“', /^Kurzbefehl angefordert \d\d:\d\d$/.test(await txt('#saved')), await txt('#saved'));
+check('Marke „✓ Kurzbefehl angefordert“', /^✓ Kurzbefehl angefordert \d\d:\d\d$/.test(await txt('#pin')), await txt('#pin'));
 check('pinned.requested true', await page.evaluate(() => state.pinned.requested === true));
 check('kein Toast bei autoRun', await page.evaluate(() => document.getElementById('toast').hidden));
 await page.evaluate(() => textEl.insertText('!')); await page.waitForTimeout(400);   // nach der shortcuts://-Navigation nimmt Chromium keine Tastatur mehr an
@@ -49,7 +49,7 @@ check('Status nach Änderung wieder leer', (await txt('#status')) === '', await 
 // Nach Neuladen bleibt der Wortlaut (requested gespeichert)
 await page.evaluate(() => { state.text = state.text.slice(0, -1); textEl.value = state.text; persist(); }); await page.waitForTimeout(100);
 await page.reload(); await page.waitForTimeout(800);
-check('nach Neuladen „Kurzbefehl angefordert“', /^Kurzbefehl angefordert · mit Zettel \d\d:\d\d$/.test(await txt('#saved')), await txt('#saved'));
+check('nach Neuladen „Kurzbefehl angefordert“', /^Kurzbefehl angefordert \d\d:\d\d$/.test(await txt('#saved')), await txt('#saved'));
 check('nirgends mehr „angeheftet“ sichtbar', !/angeheftet/i.test(await page.evaluate(() => document.body.innerText)));
 const sw = await page.evaluate(() => document.documentElement.scrollWidth);
 check('scrollWidth ≤ 448', sw <= 448, String(sw));
