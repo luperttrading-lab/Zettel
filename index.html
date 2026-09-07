@@ -63,6 +63,16 @@
     /* Warnung „Zu viel Text“: links unten, orange – das Bild würde abschneiden, die Ausgabe ist gesperrt */
     .note .pin.over { left: -6px; right: auto; background: #ff9f0a; color: #1a1200; transform: rotate(-1.5deg); }
     .note #pin:not([hidden]) ~ .pin.over { bottom: 26px; }   /* beide sichtbar (Hintergrund bereit + zu viel Text): eine Stufe höher */
+    /* Zettel ausgeblendet: in der Vorschau bleibt nur das Foto (bzw. der dunkle Grund), dazu ein Hinweis zum Bearbeiten;
+       die Marke „Hintergrund bereit“ bleibt lesbar. Die Fläche behält ihre Größe, nichts springt. */
+    .note.weg { visibility: hidden; }
+    .note.weg .pin, .note.weg .weghint { visibility: visible; }
+    .note.weg .pin.over { visibility: hidden; }
+    .note .weghint { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+      background: transparent; border: 2px dashed rgba(255,255,255,.35); border-radius: 6px; color: var(--fg); cursor: pointer; padding: 0;
+      font: 500 16px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+    .note .weghint small { font-size: 13px; color: var(--muted); }
+    .note .weghint[hidden] { display: none; }
     .btn.blocked { opacity: .45; }
 
     /* --- der Zettel --- */
@@ -273,6 +283,8 @@
       <div class="fastener" id="fastener-preview" aria-hidden="true"></div>
       <span class="pin" id="pin" hidden></span>
       <span class="pin over" id="overpin" hidden>⚠ Zu viel Text</span>
+      <!-- Zettel ausgeblendet: Tipp zeigt ihn zum Bearbeiten, ohne etwas hochzuladen -->
+      <button class="weghint" id="weghint" type="button" hidden>Zettel ausgeblendet<small>antippen zum Bearbeiten</small></button>
     </section>
     <!-- Aussehen der Befestigung: erscheint beim Antippen der Befestigung, Farben · Muster · Motive -->
     <div class="fcolors" id="fcolors" hidden role="radiogroup" aria-label="Aussehen der Befestigung"></div>
@@ -314,7 +326,8 @@
       <button class="btn ghost" id="share">Teilen / sichern</button>
       <button class="btn ghost" id="clear">Zettel leeren</button>
     </div>
-    <!-- Nur das gespeicherte Hintergrundfoto aufs Display, ohne Zettel – Text und Einstellungen bleiben -->
+    <!-- Umschalter: „Zettel ausblenden“ legt nur das Hintergrundfoto aufs Display (Text und Einstellungen bleiben),
+         „Zettel einblenden“ lädt das Zettelbild wieder hoch. Beschriftung setzt zeigeZettel(). -->
     <div class="row">
       <button class="btn ghost" id="hide" title="Nur das Hintergrundfoto aufs Display, der Zettel bleibt in der App">Zettel ausblenden</button>
     </div>
@@ -367,7 +380,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.36.4'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.37.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -544,7 +557,7 @@
 
     // ---------- Zustand ----------
     // autoRun standardmäßig aus: Start per URL bringt die Kurzbefehle-App in den Vordergrund.
-    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fastenerLook: {}, paper: 'plain', pen: 'black', font: 'caveat', list: 'none', title: false, titleSize: 1, updated: null, pinned: null };
+    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fastenerLook: {}, paper: 'plain', pen: 'black', font: 'caveat', list: 'none', title: false, titleSize: 1, hidden: false, updated: null, pinned: null };
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) state = { ...state, ...JSON.parse(raw) };
@@ -569,6 +582,7 @@
     if (!FONTS[state.font]) state.font = 'caveat';
     if (!['none', 'num', 'dot', 'square', 'dash', 'check'].includes(state.list)) state.list = 'none';
     if (typeof state.title !== 'boolean') state.title = false;
+    if (typeof state.hidden !== 'boolean') state.hidden = false;   // Zettel ausgeblendet (auf dem Display nur das Foto)
     if (![1, 2, 3].includes(state.titleSize)) state.titleSize = 1;
     noteTitleOn = state.title; noteTitleF = TITLE_F[state.titleSize];
     if (!PAPERS[state.paper]) state.paper = 'plain';
@@ -1441,13 +1455,15 @@
       if (nurHintergrund) {
         if (bgFehler) { statusEl.textContent = BG_FEHLER; return; }
         if (!bgKennung) { statusEl.textContent = 'Kein Hintergrundfoto hinterlegt – erst „Eigenes Hintergrundfoto“ wählen. Ohne Foto gäbe es nur den dunklen Verlauf.'; return; }
-      } else if (!state.text.trim()) { statusEl.textContent = 'Erst was draufschreiben.'; textEl.focus(); return; }
+      } else if (!state.text.trim()) { if (state.hidden) { peek = true; zeigeZettel(); } statusEl.textContent = 'Erst was draufschreiben.'; textEl.focus(); return; }
       else if (ueberlauf()) { statusEl.textContent = OVERFLOW_HINT; return; }   // das Bild schnitte ab
       statusEl.textContent = 'Rendere …';
       const was = nurHintergrund ? 'nur Hintergrund' : 'mit Zettel';
       const snap = pinSnapshot({ requested: !!state.autoRun, bgOnly: nurHintergrund });   // Stand im Moment des Tipps
       const png = renderPng({ nurHintergrund, snap });
       png.catch(() => {});   // Ablehnung (Hintergrundfoto, Überlauf, Änderung) wird unten behandelt; ohne diesen Haken meldet der Browser sie voreilig als unbehandelt
+      // Sobald das Bild da ist, zeigt die App denselben Zustand wie das Display: ohne Zettel bzw. mit Zettel
+      png.then(() => { state.hidden = nurHintergrund; peek = false; zeigeZettel(); persist(); }, () => {});   // Ablehnung: siehe unten
       if (!(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem)) {
         statusEl.textContent = 'Zwischenablage nicht verfügbar – Teilen stattdessen.';
         png.then(share, e => { statusEl.textContent = e.message; }); return;
@@ -1487,8 +1503,23 @@
       await share(blob);
     }
 
+    // ---------- Zettel ausblenden / einblenden ----------
+    // state.hidden = auf dem Display soll nur das Foto sein. In der App verschwindet der Zettel dann ebenfalls; ein Tipp
+    // auf die leere Fläche zeigt ihn zum Bearbeiten (peek), ohne etwas hochzuladen. „Zettel einblenden“ und „Aufs
+    // Display kleben“ laden das Zettelbild hoch und beenden den Zustand – ein weiteres Hochladen ist nicht nötig.
+    let peek = false;
+    function zeigeZettel() {
+      const weg = state.hidden && !peek;
+      noteEl.classList.toggle('weg', weg);
+      $('weghint').hidden = !weg;
+      $('hide').textContent = state.hidden ? 'Zettel einblenden' : 'Zettel ausblenden';
+      $('hide').title = state.hidden ? 'Zettel wieder aufs Display: lädt das Zettelbild hoch' : 'Nur das Hintergrundfoto aufs Display, der Zettel bleibt in der App';
+    }
+    $('weghint').addEventListener('click', () => { peek = true; zeigeZettel(); textEl.focus(); });
+    zeigeZettel();
+
     $('stick').addEventListener('click', () => { try { stickViaShortcut(); } catch (e) { statusEl.textContent = 'Fehler: ' + e.message; } });
-    $('hide').addEventListener('click', () => { try { stickViaShortcut({ nurHintergrund: true }); } catch (e) { statusEl.textContent = 'Fehler: ' + e.message; } });
+    $('hide').addEventListener('click', () => { try { stickViaShortcut({ nurHintergrund: !state.hidden }); } catch (e) { statusEl.textContent = 'Fehler: ' + e.message; } });
     $('share').addEventListener('click', () => stickViaShare().catch(e => { statusEl.textContent = 'Fehler: ' + e.message; }));
 
     const shortcutEl = $('shortcut');

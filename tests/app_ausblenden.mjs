@@ -78,7 +78,7 @@ await page.screenshot({ path: out + '/t2_unten.png' });
 // 5) Ausblenden mit autoRun (zuletzt: nach der shortcuts://-Navigation nimmt Chromium keine Klicks mehr an)
 await page.evaluate(async () => {
   const c = document.createElement('canvas'); c.width = 1179; c.height = 2556; const g = c.getContext('2d'); g.fillStyle = '#204080'; g.fillRect(0, 0, 1179, 2556);
-  localStorage.setItem('zettel.bg', c.toDataURL('image/jpeg', 0.9)); bgLaden(); await bgReady; state.autoRun = true; persist();
+  localStorage.setItem('zettel.bg', c.toDataURL('image/jpeg', 0.9)); bgLaden(); await bgReady; state.autoRun = true; state.hidden = false; zeigeZettel(); persist();   // Umschalter: erst sichtbar, dann ausblenden
 });
 await page.click('#hide'); await page.waitForTimeout(1500);
 check('autoRun: Status angefordert · nur Hintergrund', (await txt('#status')).startsWith('Kurzbefehl „Zettel“ angefordert · nur Hintergrund.'), await txt('#status'));

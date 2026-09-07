@@ -23,8 +23,10 @@ So ist die Notiz sichtbar, ohne die App zu öffnen.
 2. Text schreiben, Farbe wählen.
 3. „Aufs Display kleben" legt das Bild in die Zwischenablage; der Kurzbefehl „Zettel" (siehe die Anleitung in der
    App) setzt es als Sperrbildschirm. Alternativ „Teilen / sichern" → „Bild sichern" → Einstellungen → Hintergrundbild.
-4. „Zettel ausblenden" legt nur das eigene Hintergrundfoto in die Zwischenablage – ohne Zettel; Text und
-   Einstellungen bleiben in der App. Ohne hinterlegtes Foto gibt es nur einen Hinweis.
+4. „Zettel ausblenden" legt nur das eigene Hintergrundfoto in die Zwischenablage – ohne Zettel; der Zettel
+   verschwindet auch in der App, Text und Einstellungen bleiben. Der Knopf wird zu „Zettel einblenden", das lädt das
+   Zettelbild wieder hoch (ein weiteres „Aufs Display kleben" ist dann nicht nötig). Ein Tipp auf die leere Fläche
+   zeigt den Zettel nur zum Bearbeiten, ohne etwas hochzuladen. Ohne hinterlegtes Foto gibt es nur einen Hinweis.
 
 Die App meldet nach dem Kleben „Bild bereit" bzw. „Kurzbefehl angefordert" (in der Statuszeile mit „mit Zettel"
 oder „nur Hintergrund", in Kopfzeile und Marke kurz „Bild …" bzw. „Hintergrund …"), nie „angeheftet": ob das Bild

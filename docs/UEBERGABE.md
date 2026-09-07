@@ -3,7 +3,7 @@
 **Repository: `luperttrading-lab/Zettel`.** Diese Datei liegt dort unter `docs/UEBERGABE.md`. Eine neue Sitzung
 muss in diesem Repository laufen, sonst fehlen Skripte, Motive, Schriften und Kontext.
 
-Stand: 7. September 2026, App-Version **1.36.4**, Branch `claude/docs-uebergabe-readme-e8bkvo` (nach Abschluss per
+Stand: 7. September 2026, App-Version **1.37.0**, Branch `claude/docs-uebergabe-readme-e8bkvo` (nach Abschluss per
 Fast-Forward auf `main` gebracht; Vercel und GitHub Pages bauen aus `main`).
 
 ## 0. Arbeitsweise mit dem Auftraggeber
@@ -96,6 +96,7 @@ Zweite Sitzung (Auftrag aus 6b, alle sechs Punkte umgesetzt, Reihenfolge 1 · 3 
 | 1.36.2 | Punkt 6: Beschriftung „zugeschnittener JPEG-Abzug, nicht das Original“ in Anleitung, Knopf-Titel und Bestätigung | Trennung `zettel.bg` / `zettel.v1` unverändert; `pinned` trägt nur die Kennung; Test prüft, dass Leeren das Foto stehen lässt |
 | 1.36.3 | Altfehler: `.tsizes` hatte `display:flex`, das schlug das `hidden`-Attribut – die drei A-Knöpfe waren seit 1.34 immer sichtbar | Regel `.tsizes[hidden] { display: none }` |
 | 1.36.4 | Neun Befunde aus einem Review (Abschnitt 7): Schnappschuss des Stands im Tipp (`pinSnapshot`/`gleicherStand`, Meldung `GEAENDERT` statt „bereit“, wenn währenddessen geändert), Laufnummer `bgGen` gegen überholte `Image`-Rückrufe, Überlauf in `renderPng` mit geladener Schrift erneut geprüft, Fallback ohne Zwischenablage meldet Fehler, kaputtes Foto bleibt bis ✕ liegen (Meldung in Banner **und** Statuszeile), kurzer Wortlaut in Kopfzeile/Marke („Bild bereit“, „Kurzbefehl angefordert“, „Hintergrund bereit“, „Hintergrund angefordert“ – die lange Form „· mit Zettel / · nur Hintergrund“ nur in Statuszeile und Banner), Marken stapeln sich, `OVERFLOW_HINT` nur beim Übergang, alter Eintrag „Bild veraltet · neu kleben“, Server-Header `X-Zettel-Overflow` | `renderWallpaper` liest alles Bildbestimmende **vor** dem ersten `await`. Wer neue bildbestimmende Felder einführt: `SNAP_FIELDS`, `pinSnapshot` und `isPinnedCurrent` gemeinsam pflegen. Test: `tests/app_review.mjs` bei 375 px |
+| 1.37.0 | Auftraggeber-Wunsch nach dem ersten Test auf dem iPhone („Ausblenden klappt, aber der Zettel klebt in der App noch genauso“): „Zettel ausblenden“ ist jetzt ein **Umschalter** mit Zustand `state.hidden`. Ausgeblendet: `.note.weg` (visibility hidden, Fläche bleibt), Hinweis `#weghint` „Zettel ausgeblendet · antippen zum Bearbeiten“, Knopf heißt „Zettel einblenden“. Einblenden **lädt das Zettelbild hoch** (gleicher Weg wie Kleben) – kein weiteres Hochladen nötig. Tipp auf die Fläche = `peek` (nur in der App sichtbar, nichts hochgeladen, Zustand bleibt) | Der Zustand wechselt erst, wenn das Bild fertig ist (`png.then`), bei Ablehnung nicht. „Aufs Display kleben“ beendet das Ausblenden ebenfalls. Leerer Zettel + einblenden → Zettel erscheint zum Schreiben mit Hinweis. Test: `tests/app_umschalter.mjs` |
 
 **Parität App ↔ Server ist die wichtigste Regel.** Für denselben Text müssen `fitNote` (App) und die
 Schriftgrößenwahl in `render.js` dieselbe Größe und Zeilenzahl ergeben (zuletzt geprüft: 135 px / 105 px bei
@@ -181,7 +182,8 @@ Skripte: `node tools/gen_image.mjs <out.png> <modell> "<prompt>" [--dump] [--noc
 - **Prüfskripte im Repo** (Chromium, Aufruf im Kopf jeder Datei, Ausgabeverzeichnis als Argument): `tests/app_status.mjs`
   (Punkt 1), `app_wortlaut.mjs` (3), `app_foto.mjs` (4), `app_ausblenden.mjs` (2), `app_ueberlauf.mjs` (5, inkl.
   Parität mit `lib/render.js`), `app_trennung.mjs` (6 + Größenknöpfe), `app_review.mjs` (Befunde 1.36.4, Viewport 375 px:
-  verzögertes `toBlob` für die Änderung während des Renderns, ✕ während des Dekodierens, Marken ohne Überlappung).
+  verzögertes `toBlob` für die Änderung während des Renderns, ✕ während des Dekodierens, Marken ohne Überlappung),
+  `app_umschalter.mjs` (1.37.0: ausblenden/einblenden, Neuladen, Bearbeiten-Tipp, leerer Zettel).
   Jedes endet mit „ALLE TESTS OK“ oder „n FEHLER“. Der lokale Server auf 8766 stirbt bei längerer Pause – vor dem Lauf `curl` prüfen.
   `tests/app_photo.mjs` und `app_paper.mjs` sind für WebKit geschrieben; für Chromium die zwei `webkit`-Zeilen ersetzen.
 - Zwischenablage im Test: `context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin })`, Klick per
@@ -216,10 +218,10 @@ Skripte: `node tools/gen_image.mjs <out.png> <modell> "<prompt>" [--dump] [--noc
 ### 6b. Sechs Verbesserungen an der App – **erledigt** (1.35.3 bis 1.36.2, Nacharbeit 1.36.4; Tabelle in Abschnitt 2)
 
 Vorlage einer anderen KI, vom Auftraggeber gebilligt. Der ursprüngliche Auftrag zum Nachlesen; was daraus wurde,
-steht in Abschnitt 2. **Auf dem iPhone noch offen** (hier nur Chromium): Zwischenablage-Weg mit `png.catch`, Banner
-`BG_FEHLER` und ✕ nach Ladefehler, Toast-Wortlaut, Marke „⚠ Zu viel Text“ links unten neben der Befestigung, und
-ob „Zettel ausblenden“ mit dem Kurzbefehl das Paar 10 genauso an Ort und Stelle überschreibt (dasselbe PNG-Format,
-also [Wahrscheinlich] ja).
+steht in Abschnitt 2. **Vom Auftraggeber auf dem iPhone bestätigt (7.9.):** „Zettel ausblenden“ funktioniert mit dem Kurzbefehl.
+**Noch offen** (hier nur Chromium): Banner `BG_FEHLER` und ✕ nach Ladefehler, Toast-Wortlaut, Marke „⚠ Zu viel Text“
+links unten neben der Befestigung, und der neue Umschalter 1.37.0 (leere Fläche mit gestricheltem Rahmen, Tipp zum
+Bearbeiten, „Zettel einblenden“ lädt hoch).
 
 1. **Status erfasst nicht alles** – `isPinnedCurrent()` prüft `title`, `titleSize` und das Hintergrundfoto nicht;
    nach dem Umschalten steht trotzdem „✓ angeheftet“. Für das Foto eine kurze Kennung (z. B. Länge + Hash der
