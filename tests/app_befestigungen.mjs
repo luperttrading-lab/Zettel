@@ -156,6 +156,22 @@ for (const f of [...faelle.map(x => ({ ...x, text: TEXT })), ...faelle.map(x => 
 await page.evaluate(() => { state.fasteners = [{ art: 'magnet', x: 0.2, y: 0.15 }, { art: 'magnet', x: 0.8, y: 0.6 }]; aktiveBef = 0; applyFastener(); });
 await page.waitForTimeout(300);
 await page.screenshot({ path: out + '/befestigungen.png' });
+// 9) Die Auswahlkarte verdeckt weder den Zettel noch den Befestigungs-Schieber
+await page.evaluate(() => {
+  state.fasteners = [{ art: 'pin', x: 0.12, y: 0.9 }, { art: 'pin', x: 0.88, y: 0.9 }];
+  state.fastener = 'pin'; aktiveBef = 0; applyFastener(); if ($('fcolors').hidden) toggleFcolors(true);
+});
+await page.waitForTimeout(400);
+const lage = await page.evaluate(() => {
+  const n = document.querySelector('.note').getBoundingClientRect(), k = $('fcolors').getBoundingClientRect();
+  const s = $('strip-fastener').getBoundingClientRect();
+  return { zettel: n.bottom, schieber: s.bottom, karte: k.top,
+    griffe: [...document.querySelectorAll('.griff')].map(g => g.getBoundingClientRect().bottom) };
+});
+check('Karte lässt den Zettel frei', lage.karte >= lage.zettel, JSON.stringify(lage));
+check('Karte lässt den Befestigungs-Schieber frei', lage.karte >= lage.schieber);
+check('kein Griff unter der Karte', lage.griffe.every(y => y <= lage.karte));
+
 check('scrollWidth ≤ 408 bei 390 px', await page.evaluate(() => document.documentElement.scrollWidth) <= 408, String(await page.evaluate(() => document.documentElement.scrollWidth)));
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();
