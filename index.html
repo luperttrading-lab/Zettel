@@ -380,7 +380,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.37.4'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.38.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -732,9 +732,22 @@
       }, setHtml(v, html) { const d = inner.querySelector(`.item[data-value="${v}"]`); if (d) d.innerHTML = html; } };
     }
     const fastenerItemHtml = name => fastenerIcon(name, fastenerLook(name)) + `<span>${FASTENERS[name].short}</span>`;
+    // Beim Wechseln der Befestigung erscheint ihre Auswahl (Farben, Muster bzw. Motive) von selbst – sonst
+    // sieht man nie, dass es zum Bildmagneten außer dem Fuchs noch andere Tiere gibt. Ein Tipp auf die bereits
+    // gewählte Befestigung schließt sie wieder, ebenso ein Tipp irgendwo sonst.
     const stripFastener = makeStrip($('strip-fastener'), Object.keys(FASTENERS).map(name => ({
       value: name, html: fastenerItemHtml(name),
-    })), v => { state.fastener = v; applyFastener(); persist(); }, () => toggleFcolors());
+    })), v => { state.fastener = v; applyFastener(); persist(); zeigeAuswahl(); }, () => toggleFcolors());
+    // Hat diese Befestigung überhaupt etwas zu wählen? (Farben, oder Muster/Motive über die eine Standardwahl hinaus)
+    function hatAuswahl(kind = state.fastener) { return hasColor(kind) || decorsFor(kind).length > (kind === 'photo' ? 0 : 1); }
+    function zeigeAuswahl() {
+      if (!hatAuswahl()) { if (!fcolorsEl.hidden && cardMode === 'fastener') toggleFcolors(false); return; }
+      cardMode = 'fastener';
+      if (fcolorsEl.hidden) toggleFcolors(true);
+      else { buildPalette(); placePalette(); }   // schon offen (auch die Papier-Karte): auf die Befestigung umstellen
+      $('fastener-preview').classList.add('picking');
+      document.body.classList.remove('picking-paper');
+    }
 
     // ---------- Aussehen der Befestigung wählen ----------
     // Leiste direkt unter dem Zettel: Farben, dann (je nach Befestigung) Muster und Motive; nach rechts wischen.
@@ -830,7 +843,9 @@
     $('fastener-preview').addEventListener('click', e => { e.preventDefault(); toggleFcolors(); });
     document.addEventListener('pointerdown', e => {
       if (fcolorsEl.hidden) return;
-      if (e.target.closest && e.target.closest('#fcolors, #fastener-preview, #strip-fastener .item.active, #colors button[aria-pressed="true"], #colors button.edit')) return;
+      // Der ganze Befestigungs-Schieber zählt als Bedienung der Auswahl: Wischen und Tippen darin schließt sie nicht,
+      // es baut sie nur neu auf (zeigeAuswahl). Sonst verschwände sie beim ersten Wisch wieder.
+      if (e.target.closest && e.target.closest('#fcolors, #fastener-preview, #strip-fastener, #colors button[aria-pressed="true"], #colors button.edit')) return;
       toggleFcolors(false);
     }, true);
     const stripFont = makeStrip($('strip-font'), Object.entries(FONTS).map(([name, f]) => ({

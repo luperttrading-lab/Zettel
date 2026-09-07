@@ -126,5 +126,6 @@ Hinweis: Der Text wird bei jedem Aufruf als URL an Vercel geschickt und kann dor
 | `lib/motifs/*.png` | Bildmagnete als PNG für den Server (resvg kann kein WebP) |
 | `lib/prep_motif.mjs`, `lib/prep_photo.mjs` | Vorbereitung neuer Motive bzw. Bildmagnete aus Vorlagen |
 | `tests/app_*.mjs`, `tests/srv_*.mjs` | Prüfskripte: App im Browser (Playwright) und Server-Renderer; Aufruf steht im Kopf jeder Datei |
+| `docs/UEBERGABE.md` | Arbeitsstand, Erkenntnisse zu iOS, Prüfwege, offene Punkte |
 | `fonts/Caveat-500.ttf` | Handschrift für den Server (SIL Open Font License, siehe `fonts/OFL-Caveat.txt`) |
 | `vercel.json` | Vercel-Konfiguration (Schrift wird mitgepackt) |
