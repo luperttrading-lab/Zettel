@@ -380,7 +380,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.37.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.37.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -1489,6 +1489,7 @@
       else if (ueberlauf()) { statusEl.textContent = OVERFLOW_HINT; return; }   // das Bild schnitte ab
       statusEl.textContent = 'Rendere …';
       const was = nurHintergrund ? 'nur Hintergrund' : 'mit Zettel';
+      const tc = targetCanvas(), masse = ' Bild ' + tc.w + ' × ' + tc.h + ' px.';   // zum Nachprüfen: iOS zeigt das Bild zuweilen vergrößert (Zuschnitt des Paars)
       const snap = pinSnapshot({ requested: !!state.autoRun, bgOnly: nurHintergrund });   // Stand im Moment des Tipps
       const png = renderPng({ nurHintergrund, snap });
       png.catch(() => {});   // Ablehnung (Hintergrundfoto, Überlauf, Änderung) wird unten behandelt; ohne diesen Haken meldet der Browser sie voreilig als unbehandelt
@@ -1508,11 +1509,11 @@
         if (!gleicherStand(snap, pinSnapshot({ bgOnly: nurHintergrund }))) { statusEl.textContent = GEAENDERT; return; }
         markPinned(snap);
         if (snap.requested) {
-          statusEl.textContent = REQUESTED_HINT.replace('%s', state.shortcut).replace('%w', was);
+          statusEl.textContent = REQUESTED_HINT.replace('%s', state.shortcut).replace('%w', was) + masse;
           location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(state.shortcut) + '&input=clipboard';
         } else {
           // Kurzbefehl nicht per URL starten: vom Icon/Kontrollzentrum gestartet öffnet er die Kurzbefehle-App nicht.
-          statusEl.textContent = READY_HINT.replace('%s', state.shortcut).replace('%w', was);
+          statusEl.textContent = READY_HINT.replace('%s', state.shortcut).replace('%w', was) + masse;
           showToast('Bild bereit', (nurHintergrund ? 'Nur Hintergrund, ohne Zettel.\n' : '') + 'Jetzt „' + state.shortcut + '“ starten:\nIcon neben der App · Kontrollzentrum · Rückseite doppelt tippen');
         }
       }, async () => {

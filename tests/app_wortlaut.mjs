@@ -23,6 +23,7 @@ await page.click('#stick'); await page.waitForTimeout(1500);
 check('Toast-Titel „Bild bereit“', (await txt('#toast-title')) === 'Bild bereit', await txt('#toast-title'));
 check('Toast sichtbar', await page.evaluate(() => !document.getElementById('toast').hidden));
 check('Statuszeile beginnt mit „Bild bereit.“', (await txt('#status')).startsWith('Bild bereit · mit Zettel. Jetzt den Kurzbefehl „Zettel“'), await txt('#status'));
+check('Statuszeile nennt die Bildmaße', /Bild \d+ × \d+ px\.$/.test(await txt('#status')), await txt('#status'));
 check('Kopfzeile „Bild bereit HH:MM“', /^Bild bereit \d\d:\d\d$/.test(await txt('#saved')), await txt('#saved'));
 check('Marke „✓ Bild bereit HH:MM“', /^✓ Bild bereit \d\d:\d\d$/.test(await txt('#pin')), await txt('#pin'));
 check('pinned.requested false', await page.evaluate(() => state.pinned.requested === false));

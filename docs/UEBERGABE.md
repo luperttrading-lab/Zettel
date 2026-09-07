@@ -3,7 +3,7 @@
 **Repository: `luperttrading-lab/Zettel`.** Diese Datei liegt dort unter `docs/UEBERGABE.md`. Eine neue Sitzung
 muss in diesem Repository laufen, sonst fehlen Skripte, Motive, Schriften und Kontext.
 
-Stand: 7. September 2026, App-Version **1.37.1**, Branch `claude/docs-uebergabe-readme-e8bkvo` (nach Abschluss per
+Stand: 7. September 2026, App-Version **1.37.2**, Branch `claude/docs-uebergabe-readme-e8bkvo` (nach Abschluss per
 Fast-Forward auf `main` gebracht; Vercel und GitHub Pages bauen aus `main`).
 
 ## 0. Arbeitsweise mit dem Auftraggeber
@@ -218,6 +218,13 @@ Skripte: `node tools/gen_image.mjs <out.png> <modell> "<prompt>" [--dump] [--noc
 
 1. Neuen Text anheften, Kurzbefehl laufen lassen: **bleiben Widgets, Uhrstil und Home-Foto auf Paar 10?**
    Der Screenshot vom 7.9., 00:31 sagt ja. Wenn nein → Notausgang A testen, B als Netz.
+   **Neu am 7.9., 07:21:** Nach „Zettel ausblenden“ und wieder „einblenden“ zeigte der Sperrbildschirm den Zettel
+   ≈ 1,35-fach vergrößert und nach oben verschoben (Zettel breiter als das Display). Die App rendert unverändert
+   1179 × 2556 mit Zettel auf 80 % Breite; seit 1.37.2 steht die Bildgröße in der Statuszeile. Vermutung [Wahrscheinlich]:
+   ein Zuschnitt des Paars, den iOS beim Überschreiben an Ort und Stelle beibehält (entstanden beim reinen Foto oder
+   durch Zwei-Finger-Geste unter „Anpassen“). Abhilfe zu prüfen: Anpassen → Foto zusammenziehen, bis das ganze Bild
+   sichtbar ist → Fertig → Kurzbefehl erneut. Falls es nach jedem Ausblenden wiederkehrt: Bild für „nur Hintergrund“
+   mit unsichtbarem Rand versehen oder das Foto im Kurzbefehl per „Bild überlagern“ auf das Zettelbild legen.
 2. Falls der Home-Bildschirm den Zettel zeigt (unscharf oder scharf): Home-Hälfte steht auf „Paar“ oder der
    Kurzbefehl hat „Home-Bildschirm“ angehakt. Beides in Ordnung; „Nebel ohne Zettel“ nur über Anpassen → Foto.
 
