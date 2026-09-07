@@ -16,12 +16,12 @@ der Zahl um). Cent-Beträge sind immer RouteLLM, Dollar-Beträge immer Claude; d
 jedes Mal erklärt:
 
 ```
-Seit deiner letzten Nachricht: 0,9 ct · 1,20 $
+Diese Frage: 0,9 ct · 1,20 $
 Heute gesamt: 78,0 ct · 167,9 $
 ```
 
 Regeln:
-- **Gemessen, nicht geschätzt.** Die erste Zeile umfasst alles seit der letzten Nachricht des Auftraggebers:
+- **Gemessen, nicht geschätzt.** „Diese Frage“ umfasst alles seit der letzten Nachricht des Auftraggebers:
   jeden Befehl, jedes Bild, jeden Zwischentext. Nur die letzten Sätze der Antwort selbst sind noch nicht
   im Zähler; das sind Cent-Beträge.
 - Ist eine Zahl doch geschätzt (z. B. nach einem Kontextwechsel), Tilde davor: `~0,40 $`.
