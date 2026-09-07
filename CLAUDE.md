@@ -11,12 +11,23 @@ Zustimmungsfloskeln, unbequeme Wahrheit zuerst).
 ## Kostenzeile am Ende jeder Antwort – Pflicht
 
 Der Auftraggeber will nach **jeder** Antwort wissen, was sie gekostet hat. Ganz am Ende der Antwort, genau
-einmal, **zwei fette Zeilen** mit den Dienstnamen dahinter – dieses Format hat sich auf dem iPhone bewährt,
-keine Tabelle, keine anderen Beschriftungen:
+einmal, als **Codeblock mit zwei Zeilen** – Festbreitenschrift, damit „RouteLLM“ und „Claude“ in beiden Zeilen
+genau untereinander stehen (Wunsch vom 7.9.2026). Keine Tabelle (passt nicht aufs iPhone), keine Fettschrift,
+Zahlen rechtsbündig, Cent mit einer, Dollar mit zwei Nachkommastellen, Breite 46 Zeichen:
 
 ```
-**Diese Frage: 0,9 ct RouteLLM · 1,20 $ Claude**
-**Heute gesamt: 78,0 ct RouteLLM · 168,9 $ Claude**
+Diese Frage:   0,0 ct RouteLLM   0,56 $ Claude
+Heute gesamt: 78,0 ct RouteLLM 169,63 $ Claude
+```
+
+Erzeugen mit (Python, Komma als Dezimaltrenner):
+
+```
+def kosten(frage_ct, frage_usd, tag_ct, tag_usd):
+    de = lambda x, n: f"{x:.{n}f}".replace('.', ',')
+    z1 = f"{'Diese Frage:':<13}{de(frage_ct,1):>5} ct RouteLLM {de(frage_usd,2):>6} $ Claude"
+    z2 = f"{'Heute gesamt:':<13}{de(tag_ct,1):>5} ct RouteLLM {de(tag_usd,2):>6} $ Claude"
+    return z1, z2
 ```
 
 Regeln:
