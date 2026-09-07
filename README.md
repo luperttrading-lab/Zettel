@@ -58,7 +58,11 @@ Parameter: `text` (Pflicht), `color` (`gelb`, `rosa`, `gruen`, `blau`), `device`
 1179×2556, sonst iPad-Quadrat 2360×2360), `font` (`caveat`, `patrick`, `kalam`, `marker`, `indie`, `shadows`, `gloria`), `fastener`
 (`tape`, `tape2`, `thumbtack`, `pushpin`, `pin`, `pin2`, `clip`, `magnet`, `photo`; deutsch auch `klebestreifen`, `ecken`,
 `reisszwecke`, `pinnadel`, `nadel`, `nadeln`, `klammer`, `bildmagnet`), `fcolor` (Farbe der Befestigung: `rot`, `blau`, `gruen`,
-`gelb`, `silber`, `schwarz`; Standard: Streifen und Klammer silber, Nadeln rot), `fpattern` (Muster: `streifen`,
+`gelb`, `silber`, `schwarz`; Standard: Streifen und Klammer silber, Nadeln rot), `fpos` (Plätze **mehrerer**
+Befestigungen derselben Sorte: `x,y[,farbe]` in Prozent der Zettelbreite, mit Semikolon getrennt, z. B.
+`fpos=25,10;75,60`; ohne Angabe eine am Standardplatz wie bisher. Die Plätze werden auf die Regel der Art
+gezwungen: Nadeln und Magnete überall, Klebestreifen nur waagerecht an Ober- oder Unterkante, Büroklammer nur
+an der Oberkante, Eckstreifen fest), `fvier` (`1`: beim Eckstreifen vier statt zwei), `fpattern` (Muster: `streifen`,
 `punkte`, `karo`; Klammer nur Streifen/Punkte), `fdesign` (Motiv auf dem Magneten: `smiley`, `herz`, `stern`, `pfote`,
 `blume`, `sonne`, eigene Bild-Motive aus `lib/motifs.js` wie `zwinker`; beim Bildmagneten `fuchs`, `eule`, `panda`, `hase`, `lola`, `lolacomic`, `brunocomic`, `melody`, `melodycomic`; Muster und Motiv schließen sich aus, bei beiden gilt das Motiv), `paper` (`glatt`, `liniert`, `kariert`),
 `pen` (Stiftfarbe: `schwarz`, `blau`, `rot`, `gruen`), `texture` (Papierstruktur: `glatt`, `koernig`), `edge` (obere Kante: `gerade`,

@@ -138,6 +138,13 @@
     .strip .item.active span { font-weight: 600; }
     .strip .item svg { width: 60px; height: 40px; overflow: visible; display: block; }
     .strip-fastener { --iw: 92px; } .strip-fastener .item { height: 62px; }
+    .strip-fastener .item.gesperrt { opacity: .3; }
+    /* Zeile „Anzahl“ in der Auswahlkarte: zwei Knöpfe und die Zahl daneben */
+    #fcolors .chip.plus, #fcolors .chip.minus { font-size: 20px; line-height: 1; font-weight: 600; }
+    #fcolors .chip.plus { color: #ffd60a; }
+    #fcolors .chip.minus { color: #ff6b5e; }
+    #fcolors .chip:disabled { opacity: .3; }
+    #fcolors .zahl { align-self: center; margin-left: 8px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
     .strip-font { --iw: 112px; } .strip-font .item { height: 46px; font-size: 24px; }
     .strip-list { --iw: 104px; } .strip-list .item { height: 40px; font-size: 15px; }
 
@@ -165,6 +172,18 @@
       to   { filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 0 10px #fff) drop-shadow(0 0 18px #fff); }
     }
     .note .fastener.picking svg { animation: pickpulse .75s ease-in-out infinite alternate; }
+    /* Ein unsichtbarer Griff je Befestigung: antippen wählt sie aus, ziehen verschiebt sie.
+       touch-action: none hält iOS davon ab, die Geste als Scrollen zu deuten; touch-callout und
+       user-select verhindern Lupe, Markierung und Halte-Menü auf dem Zettel. */
+    .note .griff {
+      position: absolute; z-index: 3; border: 0; padding: 0; background: none; cursor: grab;
+      touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+      -webkit-tap-highlight-color: transparent; border-radius: 10px;
+    }
+    .note .griff.zieht { cursor: grabbing; }
+    .note .griff.aktiv { box-shadow: 0 0 0 2px rgba(255,214,10,.6); }
+    .note .griff:focus-visible { outline: 2px solid #ffd60a; outline-offset: 2px; }
+    .note.weg .griff { display: none; }   /* Zettel ausgeblendet: nichts zu greifen */
     body.picking .strip-fastener .item.active { box-shadow: inset 0 0 0 2px var(--fg); border-radius: 11px; }
     body.picking .colors, body.picking .strips > :not(.strip-fastener), body.picking .scale, body.picking .actions, body.picking .status, body.picking .setup { opacity: .35; transition: opacity .2s; }
     .colors, .strips > *, .scale, .actions, .status, .setup { transition: opacity .2s; }
@@ -445,7 +464,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.42.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.43.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -476,7 +495,8 @@
     const FALLBACK = '"Segoe Print", "Bradley Hand", "Comic Sans MS", cursive';
 
     // Befestigungen (Zeichnung, Farben, Muster, Motive) kommen aus lib/fasteners.js – dieselbe Datei nutzt der Server.
-    const { FASTENERS, FASTENER_INSET, FCOLORS, DECOR_LABEL, decorsFor, normalizeLook, lookKey, fastenerIcon, fastenerSvg, hasColor } = ZettelFasteners;
+    const { FASTENERS, FASTENER_INSET, FASTENER_RULE, FASTENER_MAX, FCOLORS, DECOR_LABEL, decorsFor, normalizeLook, lookKey, fastenerIcon, fastenerSvg, hasColor,
+            fastenerHome, fastenerPlace, fastenerInset, fastenersSvg } = ZettelFasteners;
     if (window.ZettelMotifs) ZettelFasteners.setMotifs(ZettelMotifs);   // eigene Magnet-Motive
 
     const $ = id => document.getElementById(id);
@@ -628,7 +648,7 @@
 
     // ---------- Zustand ----------
     // autoRun standardmäßig aus: Start per URL bringt die Kurzbefehle-App in den Vordergrund.
-    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fastenerLook: {}, paper: 'plain', pen: 'black', font: 'caveat', list: 'none', title: false, titleSize: 1, hidden: false, updated: null, pinned: null };
+    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fasteners: null, fastenerLook: {}, paper: 'plain', pen: 'black', font: 'caveat', list: 'none', title: false, titleSize: 1, hidden: false, updated: null, pinned: null };
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) state = { ...state, ...JSON.parse(raw) };
@@ -638,6 +658,23 @@
     if (typeof state.fontScale !== 'number' || state.fontScale < 60 || state.fontScale > 140) state.fontScale = 100;
     if (!FASTENERS[state.fastener]) state.fastener = 'tape';
     if (!state.fastenerLook || typeof state.fastenerLook !== 'object') state.fastenerLook = {};
+    // Auf dem Zettel liegt eine Liste von Befestigungen, alle von derselben Sorte. Je Stück die Art,
+    // der Platz in Anteilen der Zettelbreite (fehlt = Standardplatz) und die Farbe nur, wenn sie vom
+    // Grundton abweicht. Ältere Installationen hatten genau ein Feld `fastener`.
+    if (!Array.isArray(state.fasteners) || !state.fasteners.length) {
+      // „Zwei Nadeln“ gibt es nicht mehr – sie werden in zwei einzelne umgeschrieben, die zweite
+      // in der Gegenfarbe wie bisher. Die Nadeln stehen dabei minimal anders (Größe und Neigung).
+      if (state.fastener === 'pin2') {
+        const grund = normalizeLook('pin2', state.fastenerLook.pin2).color;
+        state.fasteners = [{ art: 'pin', x: 0.14, y: -0.02 },
+                           { art: 'pin', x: 0.86, y: -0.02, color: grund === 'red' ? 'blue' : 'red' }];
+        state.fastener = 'pin';
+      } else state.fasteners = [{ art: state.fastener }];
+    }
+    state.fasteners = state.fasteners.filter(b => b && FASTENERS[b.art]);
+    if (!state.fasteners.length) state.fasteners = [{ art: 'tape' }];
+    state.fastener = state.fasteners[0].art;                                   // die Sorte des Zettels
+    state.fasteners = state.fasteners.filter(b => b.art === state.fastener).slice(0, FASTENER_MAX[state.fastener] || 1);
     // Ältere Installationen: nur Farbe gespeichert
     if (state.fastenerColors && typeof state.fastenerColors === 'object') {
       for (const [k, c] of Object.entries(state.fastenerColors)) if (!state.fastenerLook[k]) state.fastenerLook[k] = { color: c };
@@ -648,7 +685,41 @@
     function setFastenerLook(patch) {
       const cur = fastenerLook();
       state.fastenerLook[state.fastener] = { color: cur.color, decor: cur.decor, ...patch };
+      // Eine Farbe gilt für das angetippte Stück; der Grundton wandert mit, damit die nächste ihn erbt.
+      if (patch.color && state.fasteners[aktiveBef]) state.fasteners[aktiveBef].color = patch.color;
       applyFastener(); persist();
+    }
+    // ---------- Mehrere Befestigungen ----------
+    let aktiveBef = 0;                       // welche gerade angetippt ist (Rahmen, Farbe, ✕)
+    const befAnzahl = () => state.fasteners.length;
+    const befVoll = () => (state.fastener === 'tape2' ? !!state.fasteners[0].vier : befAnzahl() >= (FASTENER_MAX[state.fastener] || 1));
+    // Gespeichert sind Anteile der Zettelbreite – zum Zeichnen in Zettel-Pixel umrechnen.
+    function befPixel(W, H, p) {
+      return state.fasteners.map(b => {
+        const home = fastenerHome(b.art, W, H, p);
+        return { art: b.art, vier: !!b.vier, color: b.color,
+          x: typeof b.x === 'number' ? b.x * W : home.x,
+          y: typeof b.y === 'number' ? b.y * W : home.y };
+      });
+    }
+    // Kennung für den Vergleich mit dem angehefteten Stand und als Cache-Schlüssel
+    function befKennung() {
+      return state.fasteners.map(b => [b.art, b.x ?? '', b.y ?? '', b.vier ? '4' : '', b.color || ''].join(',')).join(';');
+    }
+    // Einen freien Platz für eine neue Befestigung suchen – nie auf einer schon liegenden.
+    function befFreierPlatz(W, H, p) {
+      const regel = FASTENER_RULE[state.fastener], liegt = befPixel(W, H, p);
+      const kandidaten = regel === 'frei'
+        ? [[W * 0.20, H * 0.16], [W * 0.80, H * 0.16], [W * 0.20, H * 0.72], [W * 0.80, H * 0.72], [W * 0.5, H * 0.46]]
+        : regel === 'oben'
+          ? [[W * 0.14, 0], [W * 0.86, 0], [W * 0.5, 0], [W * 0.32, 0], [W * 0.68, 0]]
+          : [[W * 0.18, 0], [W * 0.82, 0], [W * 0.18, H], [W * 0.82, H], [W * 0.5, H]];
+      const abstand = regel === 'frei' ? W * 0.24 : W * 0.13;
+      for (const [x, y] of kandidaten) {
+        const q = fastenerPlace(state.fastener, x, y, W, H, p);
+        if (liegt.every(b => Math.hypot(b.x - q.x, b.y - q.y) > abstand)) return q;
+      }
+      return fastenerPlace(state.fastener, kandidaten[0][0], kandidaten[0][1], W, H, p);
     }
     if (!FONTS[state.font]) state.font = 'caveat';
     if (!['none', 'num', 'dot', 'square', 'dash', 'check'].includes(state.list)) state.list = 'none';
@@ -692,7 +763,7 @@
       if (p.bgOnly) return p.bg === bgKennung;   // Zettel ausgeblendet: nur das Foto ist im Bild, der Zettel selbst zählt nicht
       return p.text === state.text && p.color === state.color
         && (p.fontScale || 100) === (state.fontScale || 100)
-        && (p.fastener || 'tape') === state.fastener && (p.font || 'caveat') === state.font
+        && (p.fastener || 'tape') === befKennung() && (p.font || 'caveat') === state.font
         && (p.fastenerLook || lookKey(fastenerLook())) === lookKey(fastenerLook())
         && (p.paper || 'plain') === state.paper && (p.pen || 'black') === state.pen
         && (p.texture || 'smooth') === state.texture && (p.edge || 'straight') === state.edge
@@ -760,7 +831,7 @@
     // bgOnly: „Zettel ausblenden“ – im Bild ist nur das Hintergrundfoto
     const SNAP_FIELDS = ['text', 'color', 'fontScale', 'fastener', 'fastenerLook', 'paper', 'pen', 'texture', 'edge', 'font', 'title', 'titleSize', 'bg'];
     function pinSnapshot({ requested = false, bgOnly = false } = {}) {
-      return { text: state.text, color: state.color, fontScale: state.fontScale, fastener: state.fastener, fastenerLook: lookKey(fastenerLook()), paper: state.paper, pen: state.pen, texture: state.texture, edge: state.edge, font: state.font, title: state.title, titleSize: state.titleSize, bg: bgKennung, requested, bgOnly };
+      return { text: state.text, color: state.color, fontScale: state.fontScale, fastener: befKennung(), fastenerLook: lookKey(fastenerLook()), paper: state.paper, pen: state.pen, texture: state.texture, edge: state.edge, font: state.font, title: state.title, titleSize: state.titleSize, bg: bgKennung, requested, bgOnly };
     }
     // Gleicher bildbestimmender Stand? Bei „nur Hintergrund“ zählt allein das Foto; die Überschriftgröße nur mit Überschrift.
     function gleicherStand(a, b) { return a.bgOnly ? a.bg === b.bg : SNAP_FIELDS.every(k => (k === 'titleSize' && !a.title) || a[k] === b[k]); }
@@ -824,9 +895,29 @@
     // Beim Wechseln der Befestigung erscheint ihre Auswahl (Farben, Muster bzw. Motive) von selbst – sonst
     // sieht man nie, dass es zum Bildmagneten außer dem Fuchs noch andere Tiere gibt. Ein Tipp auf die bereits
     // gewählte Befestigung schließt sie wieder, ebenso ein Tipp irgendwo sonst.
-    const stripFastener = makeStrip($('strip-fastener'), Object.keys(FASTENERS).map(name => ({
+    // „Zwei Nadeln“ steht nicht mehr zur Wahl – zwei einzelne Nadeln legt man sich jetzt selbst hin.
+    // Die Art bleibt in fasteners.js, damit alte Zettel und alte Server-Aufrufe weiter funktionieren.
+    const stripFastener = makeStrip($('strip-fastener'), Object.keys(FASTENERS).filter(n => n !== 'pin2').map(name => ({
       value: name, html: fastenerItemHtml(name),
-    })), v => { state.fastener = v; applyFastener(); persist(); zeigeAuswahl(); }, () => toggleFcolors());
+    })), v => waehleBefestigung(v), () => toggleFcolors());
+    // Auf dem Zettel liegt immer EINE Sorte. Innerhalb einer Regelgruppe (etwa Magnet ↔ Nadel) tauschen
+    // alle Stücke auf einmal und bleiben liegen. In eine andere Gruppe geht es nur, wenn ein Stück übrig
+    // ist – sonst gingen sorgfältig gelegte Plätze verloren. Das erklärt der Hinweis statt eines Fensters.
+    function waehleBefestigung(v) {
+      const gleicheGruppe = FASTENER_RULE[v] === FASTENER_RULE[state.fastener];
+      if (!gleicheGruppe && befAnzahl() > 1) {
+        stripFastener.set(state.fastener);                     // Auswahl zurückstellen, nichts ändern
+        zeigeMeldung(FASTENERS[v].label + ' geht erst mit nur einer Befestigung – erst eine wegnehmen');
+        return;
+      }
+      const max = FASTENER_MAX[v] || 1;
+      state.fasteners = gleicheGruppe
+        ? state.fasteners.slice(0, max).map(b => ({ ...b, art: v, vier: v === 'tape2' ? b.vier : false }))
+        : [{ art: v, color: state.fasteners[0].color }];
+      state.fastener = v;
+      aktiveBef = Math.min(aktiveBef, state.fasteners.length - 1);
+      applyFastener(); persist(); zeigeAuswahl();
+    }
     // Hat diese Befestigung überhaupt etwas zu wählen? (Farben, oder Muster/Motive über die eine Standardwahl hinaus)
     function hatAuswahl(kind = state.fastener) { return hasColor(kind) || decorsFor(kind).length > (kind === 'photo' ? 0 : 1); }
     function zeigeAuswahl() {
@@ -892,9 +983,23 @@
       // Zeile 1: Farben (passen ohne Scrollen) – entfällt beim Bildmagneten
       if (hasColor(kind)) {
         const r1 = row('Farbe');
-        for (const [key, c] of Object.entries(FCOLORS)) chip(r1, 'color', '', look.color === key, c.label, () => setFastenerLook({ color: key })).style.background = c.main;
+        const jetzt = (state.fasteners[aktiveBef] || {}).color || look.color;   // die Farbe der angetippten, nicht der Grundton
+        for (const [key, c] of Object.entries(FCOLORS)) chip(r1, 'color', '', jetzt === key, c.label, () => setFastenerLook({ color: key })).style.background = c.main;
       }
-      // Zeile 2: Muster bzw. Motiv – genau eine Wahl, wischbar
+      // Zeile 2: wie viele davon auf dem Zettel liegen. Beim Eckstreifen macht ＋ aus zwei vier.
+      const grenze = FASTENER_MAX[kind] || 1;
+      if (grenze > 1 || kind === 'tape2') {
+        const r0 = row('Anzahl');
+        const zahl = document.createElement('span');
+        zahl.className = 'zahl';
+        zahl.textContent = kind === 'tape2' ? (state.fasteners[0].vier ? '4 Ecken' : '2 Ecken') : befAnzahl() + ' von ' + grenze;
+        const b1 = chip(r0, 'icon plus', '＋', false, 'Noch eine dazulegen', () => befDazu());
+        const b2 = chip(r0, 'icon minus', '✕', false, 'Diese wegnehmen', () => befWeg());
+        b1.disabled = befVoll();
+        b2.disabled = befAnzahl() <= 1 && !(kind === 'tape2' && state.fasteners[0].vier);
+        r0.appendChild(zahl);
+      }
+      // Zeile 3: Muster bzw. Motiv – genau eine Wahl, wischbar
       const decors = decorsFor(kind);
       if (decors.length > (kind === 'photo' ? 0 : 1)) {
         const r2 = row(kind === 'magnet' ? 'Motiv' : kind === 'photo' ? 'Bild' : 'Muster');
@@ -940,9 +1045,131 @@
     const stripFont = makeStrip($('strip-font'), Object.entries(FONTS).map(([name, f]) => ({
       value: name, html: f.label, style: `font-family:"${f.family}",${FALLBACK};font-weight:${f.weight}`,
     })), v => { state.font = v; applyFont(); persist(); });
+    // ＋ legt noch eine der aktuellen Sorte auf einen freien Platz; beim Eckstreifen werden aus zwei vier.
+    function befDazu() {
+      const f = letzteMasse; if (!f) return;
+      if (state.fastener === 'tape2') { state.fasteners[0].vier = true; applyFastener(); persist(); return; }
+      if (befVoll()) return;
+      const q = befFreierPlatz(f.noteW, f.noteH, f.pad);
+      state.fasteners.push({ art: state.fastener, x: q.x / f.noteW, y: q.y / f.noteW, color: state.fasteners[aktiveBef].color });
+      aktiveBef = state.fasteners.length - 1;
+      applyFastener(); persist();
+      zeigeMeldung('Dazugelegt – jetzt hinziehen, wo sie hin soll');
+    }
+    function befWeg() {
+      if (state.fastener === 'tape2' && state.fasteners[0].vier) { state.fasteners[0].vier = false; applyFastener(); persist(); return; }
+      if (befAnzahl() <= 1) return;
+      state.fasteners.splice(aktiveBef, 1);
+      aktiveBef = Math.min(aktiveBef, befAnzahl() - 1);
+      applyFastener(); persist();
+    }
+    // Griffflächen je Befestigung, in Vielfachen des Innenabstands p (so bleiben sie proportional).
+    const GRIFF = { magnet: [3, 3], photo: [3, 3], thumbtack: [2.4, 2.3], pushpin: [2.4, 3.1], pin: [2.1, 2.6],
+                    tape: [3.8, 1.9], tape2: [2.75, 2.75], clip: [2.2, 3.2], pin2: [2.1, 2.6] };
+    // Wo die Griffe einer Befestigung sitzen. Eckstreifen haben zwei bzw. vier, alle für dasselbe Stück.
+    function griffPunkte(b, i, W, H, p) {
+      const [gw, gh] = GRIFF[b.art] || [3, 3];
+      if (b.art === 'tape2') {
+        const e = p * 0.7, pts = [[e, e], [W - e, e]];
+        if (b.vier) pts.push([e, H - e], [W - e, H - e]);
+        return pts.map(([x, y]) => ({ i, x, y, w: gw * p, h: gh * p }));
+      }
+      return [{ i, x: b.x, y: b.y, w: gw * p, h: gh * p }];
+    }
+    let letzteMasse = null;               // die zuletzt gerechneten Zettelmaße, für ＋ und die Griffe
+    // Die Griffe werden nur neu gebaut, wenn sich die Struktur ändert. Wer sie beim Ziehen neu erzeugt,
+    // entfernt das Element, das gerade den Zeiger gefangen hält – dann bliebe die Befestigung
+    // nach den ersten Pixeln stehen.
+    let griffSig = null;
+    function zeichneGriffe(f, scale) {
+      const liste = befPixel(f.noteW, f.noteH, f.pad);
+      const punkte = liste.flatMap((b, i) => griffPunkte(b, i, f.noteW, f.noteH, f.pad));
+      const sig = liste.map(b => b.art + (b.vier ? '4' : '')).join('|') + '@' + Math.round(scale * 1000);
+      if (griffSig !== sig) {
+        noteEl.querySelectorAll('.griff').forEach(g => g.remove());
+        punkte.forEach((pkt, n) => {
+          const g = document.createElement('button');
+          g.type = 'button'; g.className = 'griff'; g.dataset.n = n;
+          g.setAttribute('aria-label', FASTENERS[liste[pkt.i].art].label + ' ' + (pkt.i + 1) + ' verschieben');
+          greifbar(g, pkt.i);
+          noteEl.appendChild(g);
+        });
+        griffSig = sig;
+      }
+      const gs = noteEl.querySelectorAll('.griff');
+      punkte.forEach((pkt, n) => {
+        const g = gs[n]; if (!g) return;
+        const w = pkt.w * scale, h = pkt.h * scale;
+        g.style.width = w + 'px'; g.style.height = h + 'px';
+        g.style.left = (pkt.x * scale - w / 2) + 'px'; g.style.top = (pkt.y * scale - h / 2) + 'px';
+        // Der Rahmen zeigt, welche gerade gemeint ist: nötig, sobald mehrere liegen oder die Karte
+        // offen ist. Bei einer einzigen und geschlossener Karte wäre er nur Deko auf dem Zettel.
+        g.classList.toggle('aktiv', pkt.i === aktiveBef && (liste.length > 1 || (!fcolorsEl.hidden && cardMode === 'fastener')));
+      });
+    }
+    const ZIEH_SCHWELLE = 8;              // px, darunter gilt es als Tipp
+    function greifbar(g, i) {
+      let start = null;
+      g.addEventListener('pointerdown', e => {
+        e.preventDefault(); g.setPointerCapture(e.pointerId);
+        aktiveBef = Math.min(i, befAnzahl() - 1);
+        const f = letzteMasse; if (!f) return;
+        const b = befPixel(f.noteW, f.noteH, f.pad)[aktiveBef];
+        const r = noteEl.getBoundingClientRect();
+        start = { px: e.clientX, py: e.clientY, sx: b.x, sy: b.y, k: f.noteW / r.width, zieht: false, weg: 0 };
+      });
+      g.addEventListener('pointermove', e => {
+        if (!start || FASTENER_RULE[state.fastener] === 'fest') return;
+        e.preventDefault();
+        const dx = e.clientX - start.px, dy = e.clientY - start.py;
+        start.weg = Math.max(start.weg, Math.hypot(dx, dy));
+        if (!start.zieht && start.weg < ZIEH_SCHWELLE) return;
+        if (!start.zieht) { start.zieht = true; g.classList.add('zieht'); }
+        const f = letzteMasse;
+        const q = fastenerPlace(state.fastener, start.sx + dx * start.k, start.sy + dy * start.k, f.noteW, f.noteH, f.pad);
+        const b = state.fasteners[aktiveBef];
+        b.x = q.x / f.noteW; b.y = q.y / f.noteW;
+        syncPreview();
+      });
+      const ende = () => {
+        if (!start) return;
+        const gezogen = start.zieht; start = null; g.classList.remove('zieht');
+        if (gezogen) { persist(); updatePinBadge(); }
+        else zeigeAuswahl();                    // kurzer Tipp: Auswahl für dieses Stück öffnen
+        syncPreview();
+      };
+      g.addEventListener('pointerup', ende);
+      g.addEventListener('pointercancel', ende);
+      // Safari nimmt touch-action nicht immer ernst: solange der Finger auf dem Griff liegt,
+      // wird das Scrollen zusätzlich hart abgelehnt (muss passive: false sein).
+      for (const typ of ['touchstart', 'touchmove']) g.addEventListener(typ, e => { if (e.cancelable) e.preventDefault(); }, { passive: false });
+      g.addEventListener('contextmenu', e => e.preventDefault());
+      g.addEventListener('keydown', e => {
+        if (FASTENER_RULE[state.fastener] === 'fest') return;
+        const f = letzteMasse; if (!f) return;
+        const s = e.shiftKey ? f.noteW / 12 : f.noteW / 100;
+        const d = { ArrowLeft: [-s, 0], ArrowRight: [s, 0], ArrowUp: [0, -s], ArrowDown: [0, s] }[e.key];
+        if (!d) return;
+        e.preventDefault();
+        aktiveBef = Math.min(i, befAnzahl() - 1);
+        const b0 = befPixel(f.noteW, f.noteH, f.pad)[aktiveBef];
+        const q = fastenerPlace(state.fastener, b0.x + d[0], b0.y + d[1], f.noteW, f.noteH, f.pad);
+        const b = state.fasteners[aktiveBef];
+        b.x = q.x / f.noteW; b.y = q.y / f.noteW;
+        syncPreview(); persist();
+      });
+    }
+
     function applyFastener() {
       stripFastener.set(state.fastener);
       stripFastener.setHtml(state.fastener, fastenerItemHtml(state.fastener));
+      // Solange mehrere liegen, geht nur der Wechsel innerhalb derselben Regelgruppe. Die anderen
+      // Arten blenden ab – sobald nur noch eine übrig ist, werden sie von selbst wieder hell.
+      // Ein Fenster bräuchte es dafür nicht, man sieht den Weg.
+      $('strip-fastener').querySelectorAll('.item').forEach(el => {
+        const art = el.dataset.value;
+        el.classList.toggle('gesperrt', befAnzahl() > 1 && FASTENER_RULE[art] !== FASTENER_RULE[state.fastener]);
+      });
       if (!fcolorsEl.hidden && cardMode === 'fastener') buildPalette();
       syncPreview(); updatePinBadge();
     }
@@ -1298,10 +1525,12 @@
         measureCtx.font = fontOf(f, i);
         return measureCtx.measureText(pi.longest).width <= wrapW - (pi.mk ? measureCtx.measureText(pi.mk).width : 0);
       });
-      const inset = Math.round(pad * (FASTENER_INSET[state.fastener] || 0));
       // Feste Zettelgröße wie ein echter Haftzettel: quadratisch, höchstens so hoch wie das Layout erlaubt.
       // Die Größe hängt nicht vom Text ab – nur die Schrift passt sich an.
       const noteH = Math.round(Math.min(noteW, layout.maxNoteH));
+      // Nur was oben an der Kante sitzt, drückt den Text nach unten – ein Magnet in der Blattmitte
+      // nicht, der Text läuft unter ihm durch. Dieselbe Funktion nutzt der Server (lib/fasteners.js).
+      const inset = Math.round(pad * fastenerInset(befPixel(noteW, noteH, pad), noteW, noteH, pad));
       const TITLE_GAP = 0.28;             // em unter der Überschrift, gleicher Wert im CSS und in render.js
       // Auf liniertem/kariertem Papier belegt jede Überschriftzeile **eine** Linienzeile, ohne Abstand darunter –
       // wie von Hand geschrieben: die Grundlinie liegt auf der Linie, die große Schrift ragt nach oben über die Zeile
@@ -1440,11 +1669,12 @@
       else if (!textUeberlauf && meldung === OVERFLOW_HINT) zeigeMeldung('');
       // Befestigung als Overlay, gleiche Zeichnung und Proportion wie im Bild
       const m = f.pad * 2.2, fp = $('fastener-preview');
+      letzteMasse = f;                 // ＋ und die Griffe rechnen mit denselben Maßen
       fp.style.left = (-m * scale) + 'px'; fp.style.top = (-m * scale) + 'px';
       fp.style.width = ((f.noteW + 2 * m) * scale) + 'px'; fp.style.height = ((f.noteH + 2 * m) * scale) + 'px';
-      const key = state.fastener + '|' + lookKey(fastenerLook()) + '|' + f.noteW + '|' + f.noteH;
+      const key = befKennung() + '|' + lookKey(fastenerLook()) + '|' + f.noteW + '|' + f.noteH;
       if (fp.dataset.key !== key) {
-        fp.innerHTML = fastenerSvg(state.fastener, f.noteW, f.noteH, f.pad, fastenerLook()); fp.dataset.key = key;
+        fp.innerHTML = fastenersSvg(befPixel(f.noteW, f.noteH, f.pad), f.noteW, f.noteH, f.pad, fastenerLook()); fp.dataset.key = key;
         // Unsichtbare Tipp-Fläche über der ganzen Befestigung (auch hohle Formen wie die Klammer sind so leicht zu treffen)
         try {
           const svg = fp.querySelector('svg'), bb = svg.getBBox(), g = f.pad * 0.4;
@@ -1456,6 +1686,7 @@
           noteEl.style.marginTop = Math.max(0, Math.ceil(-bb.y * scale) - 6) + 'px';
         } catch (_) {}
       }
+      zeichneGriffe(f, scale);
     }
 
     // SVG der Befestigung als Bild fürs Canvas
@@ -1489,7 +1720,7 @@
       const c = COLORS[state.color], edge = state.edge, paper = state.paper, texture = state.texture, ink = inkColor(), titleOn = state.title;
       const { layout, noteW, pad, family, weight, fs, lh, lines, noteH, textTop, titleGap, titleF, raster, ueber } = fitNote(w, h, layoutName, noteText() || '…');
       const m = pad * 2.2;
-      const fastener = await svgImage(fastenerSvg(state.fastener, noteW, noteH, pad, fastenerLook())).catch(() => null);
+      const fastener = await svgImage(fastenersSvg(befPixel(noteW, noteH, pad), noteW, noteH, pad, fastenerLook())).catch(() => null);
 
       // Position: Mitte leicht unterhalb der Bildmitte – oben bleibt Platz für die Uhr
       const cx = w / 2, cy = layout.cy;
