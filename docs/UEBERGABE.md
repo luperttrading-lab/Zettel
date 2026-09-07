@@ -3,7 +3,7 @@
 **Repository: `luperttrading-lab/Zettel`.** Diese Datei liegt dort unter `docs/UEBERGABE.md`. Eine neue Sitzung
 muss in diesem Repository laufen, sonst fehlen Skripte, Motive, Schriften und Kontext.
 
-Stand: 7. September 2026, App-Version **1.38.0**, Branch `claude/docs-uebergabe-readme-e8bkvo` (nach Abschluss per
+Stand: 7. September 2026, App-Version **1.39.0**, Branch `claude/docs-uebergabe-readme-e8bkvo` (nach Abschluss per
 Fast-Forward auf `main` gebracht; Vercel und GitHub Pages bauen aus `main`).
 
 ## 0. Arbeitsweise mit dem Auftraggeber
@@ -101,6 +101,7 @@ Zweite Sitzung (Auftrag aus 6b, alle sechs Punkte umgesetzt, Reihenfolge 1 · 3 
 | 1.37.3 | Auftraggeber nach dem Test auf dem iPhone: bei Größe 2 und 3 klaffte oben eine Lücke, weil die Überschrift zwei Rasterzeilen belegte und unten bündig saß. Jetzt belegt sie **eine** Linienzeile und ragt mit der größeren Schrift nach oben darüber hinaus (`ueber = (titleF − 1) · (lh + asc − desc)/2 · fs`), notfalls bis unter die Befestigung – ausdrücklich gewünscht („macht nichts, wenn der Magnet knapp drüber ist“). Grundlinie und Unterstrich bleiben auf der Linie, der Rest im Raster | `raster` ist jetzt immer 1 (Wert bleibt als Schalter „im Linienraster“). Sicherung: `ueber ≤ pad + inset`, sonst schrumpft die Schrift (greift erst bei Regler 140 % und Größe 3). In der Vorschau wird der **Kasten des Textfelds** um `ueber` nach oben erweitert (`marginTop` negativ, `paddingTop` und `height: calc(100% + …)` gegen), sonst schnitte sein `overflow: hidden` die Oberlängen ab |
 | 1.37.4 | Frage des Auftraggebers: „Auf dem Home-Bildschirm erscheint mein Zettel unscharf mit – muss das so?“ Nein. Die Anleitung in der App erklärt jetzt bei Schritt 3 den Unterschied **Paar** (Home übernimmt automatisch das Sperrbildschirm-Bild, Zettel unscharf sichtbar) und **Foto** (eigenes Bild, bleibt dauerhaft) | Kein Code, nur Text. Die Kurzbefehl-Aktion schreibt nur die angehakte Hälfte; ein neu angelegtes Paar startet mit Home auf „Paar“ |
 | 1.38.0 | Auftraggeber-Wunsch: „Wenn man am Schieber vorbeiscrollt, sollte die Auswahl gleich zu sehen sein – sonst merkt man nie, dass es außer dem Fuchs noch andere gibt.“ Jeder Wechsel der Befestigung öffnet jetzt ihre Auswahlleiste von selbst (`zeigeAuswahl` im `onSelect` des Schiebers) | Die Leiste liegt über dem Schieber, der bleibt bedienbar. Der `pointerdown`-Schließer nimmt jetzt den **ganzen** `#strip-fastener` aus (vorher nur `.item.active`), sonst schlösse der erste Wisch sie wieder. Ist die Papier-Karte offen, stellt der Wechsel auf die Befestigung um. Tipp auf die gewählte Befestigung (Schieber oder Zettel) schließt weiterhin. Test: `tests/app_auswahl.mjs` – dort **nicht** `page.click` für Schieber-Elemente: Playwright scrollt den Schieber und trifft dann ein anderes Element (kostete eine Fehlersuche); stattdessen `el.click()` per `evaluate`, echte Mausklicks nur für die `pointerdown`-Fälle |
+| 1.39.0 | **Bedienleiste neu** (Entwurf A aus zwei Artifact-Runden mit dem Auftraggeber, siehe unten): eine **Zustandszeile** (Punkt + ein Satz, einzeilig), darunter **ein** Hauptknopf mit zwei Zeilen, darunter **drei** Symbolknöpfe (ausblenden/einblenden · teilen · leeren). Kopfzeilen-Status, Marke am Zettel und das Toast-Banner sind entfallen — alles steht an einer Stelle | Kern ist `lage()`: `leer` / `alt` / `geaendert` / `wartet` / `fertig`. Neu ist **`wartet`**: Das Bild liegt in der Zwischenablage, der Kurzbefehl fehlt noch (`state.pinned.warten`). Dann ersetzt eine **gelbe Ansage** den Knopf — kein Knopf, weil die App den Kurzbefehl nicht starten kann, ohne die Kurzbefehle-App in den Vordergrund zu holen; ein Tipp darauf zeigt die Erklärung `#hilfe`. `warten` endet bei `visibilitychange` auf sichtbar (Annahme, keine Messung). Wortlaut durchgehend **Sperrbildschirm**, nie „kleben“. Meldungen und Zustand teilen sich die Zeile (`meldung` hat Vorrang, `meldungAufraeumen()` bei Eingaben). Test: `tests/app_leiste.mjs` (ersetzt `app_status`, `app_wortlaut`, `app_ausblenden`, `app_umschalter`) |
 
 **Parität App ↔ Server ist die wichtigste Regel.** Für denselben Text müssen `fitNote` (App) und die
 Schriftgrößenwahl in `render.js` dieselbe Größe und Zeilenzahl ergeben (zuletzt geprüft: 135 px / 105 px bei
@@ -196,9 +197,18 @@ Skripte: `node tools/gen_image.mjs <out.png> <modell> "<prompt>" [--dump] [--noc
   (Punkt 1), `app_wortlaut.mjs` (3), `app_foto.mjs` (4), `app_ausblenden.mjs` (2), `app_ueberlauf.mjs` (5, inkl.
   Parität mit `lib/render.js`), `app_trennung.mjs` (6 + Größenknöpfe), `app_review.mjs` (Befunde 1.36.4, Viewport 375 px:
   verzögertes `toBlob` für die Änderung während des Renderns, ✕ während des Dekodierens, Marken ohne Überlappung),
-  `app_umschalter.mjs` (1.37.0: ausblenden/einblenden, Neuladen, Bearbeiten-Tipp, leerer Zettel).
+  `app_leiste.mjs` (1.39.0: Zustandszeile, Ansage, Erklärung, Symbolreihe, Ausblenden, veralteter Eintrag).
   Jedes endet mit „ALLE TESTS OK“ oder „n FEHLER“. Der lokale Server auf 8766 stirbt bei längerer Pause – vor dem Lauf `curl` prüfen.
   `tests/app_photo.mjs` und `app_paper.mjs` sind für WebKit geschrieben; für Chromium die zwei `webkit`-Zeilen ersetzen.
+- **`[hidden]` und eigene `display`-Regeln:** Eine Klasse mit `display:flex/grid` schlägt das `hidden`-Attribut. Das ist
+  dreimal passiert (Größenknöpfe der Überschrift 1.36.3, Ansage und Hauptknopf 1.39.0); seit 1.39.0 steht ganz oben im
+  CSS `[hidden] { display: none !important; }`. Wer eine neue Komponente mit eigenem `display` anlegt, braucht nichts
+  weiter zu tun – die Regel greift.
+- **Reihenfolge im Skript:** `zeichneLeiste()` läuft schon beim Aufbau der Oberfläche (über `applyColor`). Alles, was es
+  liest (`meldung`, `textUeberlauf`), muss **vor** dieser Stelle deklariert sein, sonst bricht das ganze Skript in der
+  temporalen Totzone ab – und dann fehlt scheinbar `LAYOUTS`, was in die Irre führt.
+- Im Zustand `wartet` gibt es **keinen** Hauptknopf (`#stick` ist `hidden`). Tests, die danach `#stick` klicken, laufen in
+  einen Timeout – vorher `visibilitychange` auf sichtbar auslösen oder ein Symbol der unteren Reihe nehmen.
 - Zwischenablage im Test: `context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin })`, Klick per
   Playwright gilt als Geste. **Nach `location.href = 'shortcuts://…'` nimmt Chromium keine Klicks und Tasten mehr an**
   (Navigation zu unbekanntem Schema) – autoRun-Fälle deshalb ans Ende eines Tests, Textänderungen danach per

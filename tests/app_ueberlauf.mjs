@@ -16,9 +16,15 @@ const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('c
 let fails = 0;
 const check = (name, cond, extra = '') => { console.log((cond ? 'OK  ' : 'FAIL') + ' ' + name + (extra ? ' – ' + extra : '')); if (!cond) fails++; };
 const txt = sel => page.evaluate(s => document.querySelector(s).textContent, sel);
+const zeile = () => page.evaluate(() => meldung);   // seit 1.39 teilen sich Zustand und Meldung eine Zeile
 const zeilen = n => Array.from({ length: n }, (_, i) => 'Zeile ' + (i + 1) + ' Einkauf').join('\n');
 const setText = v => page.evaluate(v => { textEl.value = v; onTextChanged(); flush(); }, v);
-const lage = () => page.evaluate(() => ({ over: textUeberlauf, pin: !document.getElementById('overpin').hidden, blocked: document.getElementById('stick').classList.contains('blocked') && document.getElementById('share').classList.contains('blocked'), status: document.getElementById('status').textContent, h: document.getElementById('note').offsetHeight }));
+// Rückkehr in die App: der Kurzbefehl gilt als gelaufen, der Hauptknopf ist wieder da (statt der Ansage)
+const zurueckInDieApp = () => page.evaluate(() => {
+  Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange'));
+  Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true }); document.dispatchEvent(new Event('visibilitychange'));
+});
+const lage = () => page.evaluate(() => ({ over: textUeberlauf, pin: !document.getElementById('overpin').hidden, blocked: document.getElementById('stick').classList.contains('blocked') && document.getElementById('share').classList.contains('blocked'), status: meldung, h: document.getElementById('note').offsetHeight }));
 await page.goto('http://localhost:8766/index.html?t=' + Date.now()); await page.waitForTimeout(800);
 await page.evaluate(() => { localStorage.clear(); }); await page.reload(); await page.waitForTimeout(800);
 // 1) kurzer Text: nichts gesperrt
@@ -35,23 +41,25 @@ check('lang: Schrift auf Minimum', await page.evaluate(() => { const f = fitNote
 await page.screenshot({ path: out + '/t5_ueberlauf.png' });
 await page.evaluate(() => navigator.clipboard.writeText('unverändert'));
 await page.click('#stick'); await page.waitForTimeout(800);
-check('Kleben gesperrt', (await txt('#status')).startsWith('Zu viel Text'), await txt('#status'));
+check('Kleben gesperrt', (await zeile()).startsWith('Zu viel Text'), await zeile());
 check('nichts kopiert', (await page.evaluate(() => navigator.clipboard.readText())) === 'unverändert');
 check('nichts gemerkt', await page.evaluate(() => state.pinned === null));
 await page.click('#share'); await page.waitForTimeout(800);
-check('Teilen gesperrt', (await txt('#status')).startsWith('Zu viel Text') && (await page.evaluate(() => document.getElementById('overlay').hidden)));
+check('Teilen gesperrt', (await zeile()).startsWith('Zu viel Text') && (await page.evaluate(() => document.getElementById('overlay').hidden)));
 // Ausblenden bleibt möglich (Zettel ist nicht im Bild)
 await page.evaluate(async () => { const c = document.createElement('canvas'); c.width = 1179; c.height = 2556; const g = c.getContext('2d'); g.fillStyle = '#204080'; g.fillRect(0, 0, 1179, 2556); localStorage.setItem('zettel.bg', c.toDataURL('image/jpeg', 0.9)); bgLaden(); await bgReady; });
 await page.click('#hide'); await page.waitForTimeout(1500);
-check('Ausblenden trotz Überlauf möglich', (await txt('#status')).startsWith('Bild bereit · nur Hintergrund'), await txt('#status'));
-await page.evaluate(() => { document.getElementById('toast').hidden = true; });
+check('Ausblenden trotz Überlauf möglich', await page.evaluate(() => state.hidden === true && lage() === 'wartet'), await txt('#satz'));
 // 3) kürzen: alles wieder frei
+await zurueckInDieApp(); await page.waitForTimeout(200);
+await page.click('#hide'); await page.waitForTimeout(1500);   // wieder einblenden
+await zurueckInDieApp(); await page.waitForTimeout(200);
 await setText(zeilen(3)); await page.waitForTimeout(300);
 const l3 = await lage();
 check('gekürzt: frei', !l3.over && !l3.pin && !l3.blocked, JSON.stringify(l3));
 check('gekürzt: Status ohne Warnung', !l3.status.startsWith('Zu viel Text'), l3.status);
 await page.click('#stick'); await page.waitForTimeout(1500);
-check('gekürzt: Kleben geht', (await txt('#status')).startsWith('Bild bereit · mit Zettel'), await txt('#status'));
+check('gekürzt: Kleben geht', await page.evaluate(() => state.hidden === false && lage() === 'wartet'), await txt('#satz'));
 // 4) Grenze suchen und Parität mit dem Server
 let grenze = 0;
 for (let n = 4; n <= 60; n++) { const o = await page.evaluate(v => fitNote(1179, 2556, 'phone', v).overflow, zeilen(n)); if (o) { grenze = n; break; } }

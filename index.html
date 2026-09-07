@@ -31,6 +31,9 @@
       --note-font: 'Caveat', 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
     }
     * { box-sizing: border-box; }
+    /* Muss vor allen display-Regeln stehen: ein eigenes display:flex/grid schlüge sonst das hidden-Attribut.
+       Das ist in dieser Datei schon dreimal passiert (Größenknöpfe der Überschrift, Ansage, Hauptknopf). */
+    [hidden] { display: none !important; }
     html, body { margin: 0; min-height: 100%; }
     body {
       background: var(--bg);
@@ -51,9 +54,7 @@
     header { width: 100%; max-width: 420px; display: flex; justify-content: space-between; align-items: baseline; }
     header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .02em; }
     header h1 small { font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 6px; letter-spacing: 0; }
-    header span { font-size: 13px; color: var(--muted); }
-    header span.ok { color: #34c759; font-weight: 600; }
-    header span.warn { color: #ff9f0a; font-weight: 600; }
+    header span { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
     .note .pin {
       position: absolute; right: -6px; bottom: -12px; transform: rotate(1.5deg);
       background: #34c759; color: #fff; font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -188,7 +189,7 @@
     .scale output { font-size: 13px; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
 
     /* --- Aktionen --- */
-    .actions { display: flex; flex-direction: column; gap: 4px; width: min(86vw, 380px); }
+    .actions { display: flex; flex-direction: column; gap: 10px; width: min(86vw, 380px); }
     .actions .row { display: flex; gap: 10px; }
     .btn {
       appearance: none; border: 0; border-radius: 14px; padding: 16px 20px; font-size: 17px; font-weight: 600;
@@ -196,7 +197,55 @@
     }
     .btn.primary { background: var(--fg); color: var(--bg); }
     .btn.ghost { background: transparent; color: var(--muted); font-weight: 500; padding: 8px; }
-    .status { color: var(--muted); font-size: 13px; text-align: center; min-height: 1.4em; max-width: 380px; }
+
+    /* --- Zustandszeile: eine Zeile, immer gleich gebaut. Zeigt normalerweise, was zuletzt übertragen wurde;
+       liegt eine Meldung an (Fehler, Hinweis), hat die Vorrang. --- */
+    .status {
+      display: flex; align-items: center; gap: 9px; padding: 12px 14px; width: 100%;
+      background: #1e1e21; border-radius: 13px; font-size: 14px; color: var(--muted);
+      white-space: nowrap; overflow: hidden;
+    }
+    .status .satz { overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+    .status .satz b { color: var(--fg); font-weight: 600; }
+    .status.lang { white-space: normal; }                      /* Meldungen dürfen umbrechen */
+    .punkt { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; background: var(--muted); }
+    .punkt.warn { background: #ff9f0a; }
+    .punkt.gelb { background: #ffd60a; }
+    .punkt.gut { background: #34c759; }
+
+    /* Hauptknopf: was passiert, und darunter was danach noch nötig ist */
+    .haupt {
+      appearance: none; border: 0; width: 100%; border-radius: 15px; cursor: pointer; padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 3px; align-items: center; font-family: inherit;
+      background: var(--fg); color: var(--bg);
+    }
+    .haupt .z1 { font-size: 17px; font-weight: 600; line-height: 1.2; text-align: center; }
+    .haupt .z2 { font-size: 12.5px; font-weight: 500; line-height: 1.25; opacity: .72; text-align: center; }
+    .haupt.ruhig { background: #2d2d33; color: var(--fg); }
+    .haupt.zurueck { background: var(--paper); color: #2a2a2e; }
+    .haupt.blocked { opacity: .45; }
+
+    /* Schritt 2 sitzt genau dort, wo sonst der Knopf sitzt – gleiche Größe, aber als Umriss:
+       Hier gibt es nichts zu drücken, den Kurzbefehl kann die App nicht starten. Ein Tipp erklärt nur. */
+    .ansage {
+      border: 2px solid #ffd60a; background: rgba(255,214,10,.07); border-radius: 15px; padding: 12px 16px;
+      width: 100%; font-family: inherit; color: var(--fg); cursor: help;
+      display: flex; flex-direction: column; gap: 3px; align-items: center; text-align: center;
+    }
+    .ansage .z1 { font-size: 17px; font-weight: 600; line-height: 1.2; }
+    .ansage .z2 { font-size: 12.5px; font-weight: 500; line-height: 1.25; color: var(--muted); }
+    .ansage .z2 b { color: var(--fg); font-weight: 600; }
+
+    /* Drei gleich breite Symbolknöpfe – die Reihe bleibt immer dreiteilig, damit nichts springt */
+    .icons { display: flex; gap: 10px; width: 100%; }
+    .icons button {
+      flex: 1; appearance: none; border: 0; background: #1e1e21; color: var(--muted); border-radius: 13px;
+      padding: 11px 4px 9px; cursor: pointer; font: 500 11.5px/1.3 inherit;
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+    }
+    .icons button svg { width: 20px; height: 20px; display: block; }
+    .icons button.blocked { opacity: .45; }
+    .icons button span { text-align: center; }
 
     /* --- Einrichtung --- */
     .setup { width: min(86vw, 380px); color: var(--muted); font-size: 14px; }
@@ -224,16 +273,25 @@
     header h1 { cursor: pointer; }
     .update .btn { width: auto; padding: 8px 14px; font-size: 15px; background: #06240e; color: #fff; }
 
-    /* --- Banner „Bild bereit“ --- */
-    .toast {
+    /* --- Erklärung zu Schritt 2, erscheint auf Tipp auf die Ansage --- */
+    .hilfe {
       position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.88);
-      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-      text-align: center; padding: 24px;
+      display: flex; align-items: center; justify-content: center; padding: 24px; cursor: pointer;
     }
-    .toast[hidden] { display: none; }
-    .toast .check { width: 96px; height: 96px; border-radius: 50%; background: #34c759; color: #fff; font-size: 60px; line-height: 96px; font-weight: 700; }
-    .toast h2 { margin: 6px 0 0; font-size: 34px; }
-    .toast p { margin: 0; color: var(--muted); font-size: 17px; white-space: pre-line; line-height: 1.5; }
+    .hilfe[hidden] { display: none; }
+    .hilfe .karte {
+      background: #141416; border: 2px solid #ffd60a; border-radius: 22px; padding: 22px 24px;
+      max-width: 380px; width: 100%; display: flex; flex-direction: column; gap: 14px; text-align: left;
+    }
+    .hilfe h2 { margin: 0; font-size: 19px; font-weight: 600; color: #ffd60a; }
+    .hilfe ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; }
+    .hilfe li { display: flex; gap: 11px; align-items: flex-start; font-size: 16px; line-height: 1.35; }
+    .hilfe li .nr {
+      width: 25px; height: 25px; flex: 0 0 auto; border-radius: 50%; background: #ffd60a; color: #2a2a06;
+      font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    }
+    .hilfe .warum { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--muted); }
+    .hilfe .zu { margin: 0; font-size: 12.5px; color: var(--muted); text-align: center; }
 
     /* --- Vorschau, wenn Teilen nicht geht --- */
     .overlay {
@@ -273,7 +331,7 @@
   <div class="top">
     <header>
       <h1>Zettel <small id="ver"></small></h1>
-      <span id="saved"></span>
+      <span id="uhr"></span>
     </header>
 
     <section class="note" id="note" aria-label="Zettel">
@@ -281,10 +339,9 @@
       <div class="paper" aria-hidden="true"><div class="paper-in" id="paper"></div></div>
       <div class="editor" id="text" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Zettel-Text" spellcheck="false" autocapitalize="sentences" enterkeyhint="enter"></div>
       <div class="fastener" id="fastener-preview" aria-hidden="true"></div>
-      <span class="pin" id="pin" hidden></span>
       <span class="pin over" id="overpin" hidden>⚠ Zu viel Text</span>
       <!-- Zettel ausgeblendet: Tipp zeigt ihn zum Bearbeiten, ohne etwas hochzuladen -->
-      <button class="weghint" id="weghint" type="button" hidden>Zettel ausgeblendet<small>antippen zum Bearbeiten</small></button>
+      <button class="weghint" id="weghint" type="button" hidden>Zettel ausgeblendet<small>antippen zum Einblenden</small></button>
     </section>
     <!-- Aussehen der Befestigung: erscheint beim Antippen der Befestigung, Farben · Muster · Motive -->
     <div class="fcolors" id="fcolors" hidden role="radiogroup" aria-label="Aussehen der Befestigung"></div>
@@ -320,19 +377,21 @@
     <input id="bgfile" type="file" accept="image/*" hidden>
   </div>
 
+  <!-- Untere Leiste: Zustand, ein Hauptknopf (bzw. die Ansage für Schritt 2), drei Symbolknöpfe.
+       Höhe und Anordnung bleiben in jedem Zustand gleich – es springt nichts. -->
   <div class="actions">
-    <button class="btn primary" id="stick">Aufs Display kleben</button>
-    <div class="row">
-      <button class="btn ghost" id="share">Teilen / sichern</button>
-      <button class="btn ghost" id="clear">Zettel leeren</button>
+    <p class="status" id="status"><span class="punkt" id="punkt"></span><span class="satz" id="satz"></span></p>
+    <button class="haupt" id="stick" type="button"><span class="z1" id="stick1"></span><span class="z2" id="stick2"></span></button>
+    <div class="ansage" id="ansage" role="button" tabindex="0" hidden>
+      <span class="z1">Jetzt bist du dran</span>
+      <span class="z2">App schließen · Icon <b>„%s“</b> antippen</span>
     </div>
-    <!-- Umschalter: „Zettel ausblenden“ legt nur das Hintergrundfoto aufs Display (Text und Einstellungen bleiben),
-         „Zettel einblenden“ lädt das Zettelbild wieder hoch. Beschriftung setzt zeigeZettel(). -->
-    <div class="row">
-      <button class="btn ghost" id="hide" title="Nur das Hintergrundfoto aufs Display, der Zettel bleibt in der App">Zettel ausblenden</button>
+    <div class="icons">
+      <button type="button" id="hide"><svg id="hide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></svg><span id="hide-text"></span></button>
+      <button type="button" id="share" title="Bild teilen oder in Fotos sichern"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg><span>Teilen /<br>sichern</span></button>
+      <button type="button" id="clear" title="Den Text auf dem Zettel löschen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg><span>Zettel<br>leeren</span></button>
     </div>
   </div>
-  <p class="status" id="status"></p>
 
   <details class="setup">
     <summary>Kurzbefehl einrichten (einmalig)</summary>
@@ -363,10 +422,16 @@
 
   <div class="update" id="update" hidden><span id="update-text"></span><button class="btn" id="update-go">Jetzt laden</button></div>
 
-  <div class="toast" id="toast" hidden>
-    <div class="check">✓</div>
-    <h2 id="toast-title">Bild bereit</h2>
-    <p id="toast-sub"></p>
+  <div class="hilfe" id="hilfe" hidden role="dialog" aria-label="So geht Schritt 2">
+    <div class="karte">
+      <h2>So geht Schritt 2</h2>
+      <ol>
+        <li><span class="nr">1</span><span>Diese App schließen — von unten nach oben wischen.</span></li>
+        <li><span class="nr">2</span><span>Auf dem Home-Bildschirm <b id="hilfe-name">„Zettel“</b> antippen.<br>Oder in der App <b>Kurzbefehle</b> denselben Kurzbefehl starten.</span></li>
+      </ol>
+      <p class="warum">Der Kurzbefehl nimmt das fertige Bild aus der Zwischenablage und setzt damit den Sperrbildschirm. Nur er darf das — eine Web-App nicht.</p>
+      <p class="zu">Antippen zum Schließen</p>
+    </div>
   </div>
 
   <div class="overlay" id="overlay" hidden>
@@ -380,7 +445,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.38.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.39.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -544,7 +609,7 @@
         this.el.dispatchEvent(new Event('input', { bubbles: true }));
       }
     }
-    const noteEl = $('note'), textEl = new Editor($('text')), colorsEl = $('colors'), statusEl = $('status'), savedEl = $('saved');
+    const noteEl = $('note'), textEl = new Editor($('text')), colorsEl = $('colors'), statusEl = $('status');
     const paperEl = $('paper');
     // Körnung: eine Kachel aus zufälligen hellen und dunklen Körnern (meist schwach), einmal erzeugt, als Muster wiederholt
     const GRAIN_TILE = 96;
@@ -634,38 +699,61 @@
         && p.title === state.title && (!state.title || p.titleSize === state.titleSize)   // Größe zählt nur mit Überschrift
         && p.bg === bgKennung;
     }
-    // Wortlaut: Die App legt das Bild nur in die Zwischenablage (und ruft höchstens den Kurzbefehl auf);
-    // ob es wirklich auf dem Sperrbildschirm gelandet ist, kann sie nie wissen. Darum „Bild bereit“ bzw.
-    // „Kurzbefehl angefordert“ – in Marke, Kopfzeile, Statuszeile und Banner gleich – und nie „angeheftet“.
-    // Dazu, was im Bild war: Statuszeile und Banner sagen „mit Zettel“ / „nur Hintergrund“ ausführlich; Kopfzeile und
-    // Marke müssen auf 375 px passen und sagen kurz „Bild …“ (mit Zettel) bzw. „Hintergrund …“ (ausgeblendet).
-    function pinWortlaut(p = state.pinned) {
-      if (!p) return '';
-      if (p.bgOnly) return p.requested ? 'Hintergrund angefordert' : 'Hintergrund bereit';
-      return p.requested ? 'Kurzbefehl angefordert' : 'Bild bereit';
+    // Die Lage, in der die App gerade ist. Der zweite Schritt (der Kurzbefehl) läuft außerhalb der App;
+    // dass er gelaufen ist, nimmt die App an, sobald sie wieder in den Vordergrund kommt (siehe visibilitychange).
+    //   leer      – noch nie etwas übertragen
+    //   alt       – Eintrag einer älteren App-Version, nicht mehr vergleichbar
+    //   geaendert – seit dem letzten Übertragen wurde am Zettel etwas geändert
+    //   wartet    – Bild liegt in der Zwischenablage, der Kurzbefehl fehlt noch
+    //   fertig    – übertragen und seitdem unverändert
+    function lage() {
+      const p = state.pinned;
+      if (!p) return 'leer';
+      if (!pinnedGueltig(p)) return 'alt';
+      if (!isPinnedCurrent()) return 'geaendert';
+      return p.warten ? 'wartet' : 'fertig';
     }
-    // Hinweis in der Statuszeile gilt nur, solange der Zettel dem bereitgestellten Stand entspricht
-    const READY_HINT = 'Bild bereit · %w. Jetzt den Kurzbefehl „%s“ starten: Icon neben der App, Kontrollzentrum oder Rückseite doppelt tippen.';
-    const REQUESTED_HINT = 'Kurzbefehl „%s“ angefordert · %w. Ob er gelaufen ist, zeigt nur der Sperrbildschirm.';
-    function updatePinBadge() {
-      const pin = $('pin');
-      if (!isPinnedCurrent() && /^(Bild bereit|Kurzbefehl „)/.test(statusEl.textContent)) statusEl.textContent = '';
-      if (isPinnedCurrent()) {
-        savedEl.textContent = pinWortlaut() + ' ' + fmtTime(state.pinned.at);
-        savedEl.className = 'ok';
-        pin.textContent = '✓ ' + pinWortlaut() + ' ' + fmtTime(state.pinned.at);
-        pin.hidden = false;
-      } else if (state.pinned) {
-        // Eintrag einer älteren Version: nichts „geändert“, aber der Stand ist nicht mehr nachprüfbar
-        savedEl.textContent = pinnedGueltig(state.pinned) ? 'geändert · Bild veraltet' : 'Bild veraltet · neu kleben';
-        savedEl.className = 'warn';
-        pin.hidden = true;
-      } else {
-        savedEl.textContent = state.updated ? 'gespeichert ' + fmtTime(state.updated) : '';
-        savedEl.className = '';
-        pin.hidden = true;
+    // Wortlaut: „Sperrbildschirm“ statt „kleben“ – der Nutzer will nichts kleben, er will seine Notiz dort sehen.
+    // Die App behauptet nie, dass ein Bild angekommen ist; sie sagt, was sie übertragen hat und was seitdem gilt.
+    function zustandZeile() {
+      const foto = state.hidden;
+      switch (lage()) {
+        case 'leer':      return { punkt: '', text: 'Noch nichts auf dem Sperrbildschirm' };
+        case 'alt':       return { punkt: 'warn', text: 'Stand unbekannt · <b>neu übertragen</b>' };
+        case 'geaendert': return { punkt: 'warn', text: foto ? 'Sperrbildschirm: <b>noch das alte Foto</b>' : 'Sperrbildschirm: <b>noch der alte Zettel</b>' };
+        case 'wartet':    return { punkt: 'gelb', text: (foto ? 'Foto' : 'Bild') + ' fertig · <b>wartet auf den Kurzbefehl</b>' };
+        default:          return { punkt: 'gut', text: foto ? 'Sperrbildschirm: <b>nur dein Foto</b>' : '<b>Sperrbildschirm zeigt diesen Zettel</b>' };
       }
     }
+    // Meldungen (Fehler, Hinweise) teilen sich die Zeile mit dem Zustand und haben Vorrang.
+    let meldung = '';
+    // Zu viel Text für den Zettel? Wird in syncPreview gesetzt; hier deklariert, weil zeichneLeiste es schon
+    // beim Aufbau der Oberfläche liest (sonst greift es in die temporale Totzone).
+    let textUeberlauf = false;
+    function zeigeMeldung(text) { meldung = text || ''; zeichneLeiste(); }
+    // Hinweise zu einer Aktion („Erst was draufschreiben“) gelten nur bis zur nächsten Eingabe.
+    // Der Foto-Fehler und die Überlaufwarnung bleiben – sie beschreiben einen Zustand, keinen Fehlgriff.
+    function meldungAufraeumen() { if (meldung && meldung !== BG_FEHLER && meldung !== OVERFLOW_HINT) zeigeMeldung(''); }
+    function zeichneLeiste() {
+      const z = meldung ? { punkt: 'warn', text: meldung } : zustandZeile();
+      $('punkt').className = 'punkt ' + z.punkt;
+      $('satz').innerHTML = meldung ? z.text.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c])) : z.text;
+      statusEl.classList.toggle('lang', !!meldung);
+      // Schritt 2 offen: statt des Knopfes die Ansage – dort kann die App nichts tun
+      const wartet = lage() === 'wartet';
+      $('stick').hidden = wartet;
+      $('ansage').hidden = !wartet;
+      if (!wartet) {
+        const fertig = lage() === 'fertig';
+        $('stick').className = 'haupt' + (state.hidden ? ' zurueck' : fertig ? ' ruhig' : '') + (textUeberlauf && !state.hidden ? ' blocked' : '');
+        $('stick1').textContent = state.hidden ? 'Zettel wieder einblenden'
+          : fertig ? 'Noch einmal auf Sperrbildschirm' : 'Neuen Zettel auf Sperrbildschirm';
+        $('stick2').textContent = fertig && !state.hidden ? 'falls der Sperrbildschirm etwas anderes zeigt'
+          : state.autoRun ? 'legt das Bild bereit und startet den Kurzbefehl' : 'Schritt 1 von 2 · legt das Bild bereit';
+      }
+      $('uhr').textContent = state.pinned ? fmtTime(state.pinned.at) : '';
+    }
+    const updatePinBadge = zeichneLeiste;   // Name aus früheren Versionen, überall im Code verwendet
     // Schnappschuss des bildbestimmenden Stands. Wird im Moment des Tipps genommen, nicht erst, wenn das Bild fertig ist:
     // Rendern und Zwischenablage brauchen Zeit, und was in dieser Zeit geändert wird, ist nicht im Bild.
     // requested: der Kurzbefehl wurde per URL aufgerufen (sonst liegt das Bild nur in der Zwischenablage)
@@ -677,7 +765,8 @@
     // Gleicher bildbestimmender Stand? Bei „nur Hintergrund“ zählt allein das Foto; die Überschriftgröße nur mit Überschrift.
     function gleicherStand(a, b) { return a.bgOnly ? a.bg === b.bg : SNAP_FIELDS.every(k => (k === 'titleSize' && !a.title) || a[k] === b[k]); }
     const GEAENDERT = 'Der Zettel wurde währenddessen geändert – das Bild zeigt den alten Stand. Bitte noch einmal kleben.';
-    function markPinned(snap = pinSnapshot()) { state.pinned = { ...snap, at: Date.now() }; persist(); }
+    // warten = der Kurzbefehl muss noch von Hand gestartet werden (bei autoRun ruft die App ihn selbst auf)
+    function markPinned(snap = pinSnapshot()) { state.pinned = { ...snap, warten: !snap.requested, at: Date.now() }; persist(); }
 
     function applyColor() {
       const c = COLORS[state.color];
@@ -892,6 +981,7 @@
 
     let t = null;
     function onTextChanged() {
+      meldungAufraeumen();
       state.text = textEl.value;
       syncPreview();
       updatePinBadge();
@@ -994,7 +1084,7 @@
             // App den Fehler bei jedem Start erneut (Banner und Statuszeile) und gibt nie stumm den Verlauf aus.
             bgImage = null; bgKennung = ''; bgFehler = true; bgAnzeigen(null);
             bgClear.hidden = false;   // ✕: Daten löschen und ohne Foto weitermachen
-            updatePinBadge(); showInfo(BG_FEHLER); statusEl.textContent = BG_FEHLER;
+            updatePinBadge(); showInfo(BG_FEHLER); zeigeMeldung(BG_FEHLER);
           }
           resolve();
         };
@@ -1027,7 +1117,7 @@
       try { localStorage.setItem(BG_KEY, url); }
       catch { showInfo('Foto passt nicht in den Speicher'); return; }
       bgLaden();
-      if (/^(Kein Hintergrundfoto|Hintergrundfoto ließ)/.test(statusEl.textContent)) statusEl.textContent = '';   // erledigte Hinweise
+      if (/^(Kein Hintergrundfoto|Hintergrundfoto ließ)/.test(meldung)) zeigeMeldung('');   // erledigte Hinweise
       showInfo('Hintergrundfoto gesetzt – als zugeschnittener JPEG-Abzug, nicht das Original');
     }
 
@@ -1038,7 +1128,7 @@
       try { localStorage.removeItem(BG_KEY); } catch {}
       bgImage = null; bgKennung = ''; bgFehler = false; bgReady = Promise.resolve(); bgAnzeigen(null); updatePinBadge();
       if (!updateEl.hidden && $('update-text').textContent === BG_FEHLER) updateEl.hidden = true;
-      if (statusEl.textContent === BG_FEHLER) statusEl.textContent = '';
+      if (meldung === BG_FEHLER) zeigeMeldung('');
       showInfo('Hintergrundfoto entfernt');
     });
     bgLaden();
@@ -1084,15 +1174,16 @@
       state.text = ''; textEl.value = ''; persist(); syncPreview(); textEl.focus();
     });
 
-    // Banner „Bild bereit“ – groß, kurz, verschwindet von selbst
-    function showToast(title, sub) {
-      const el = $('toast');
-      $('toast-title').textContent = title; $('toast-sub').textContent = sub;
-      el.hidden = false;
-      clearTimeout(showToast.t);
-      showToast.t = setTimeout(() => { el.hidden = true; }, 2600);
+    // Erklärung zu Schritt 2: erscheint auf Tipp auf die Ansage (die selbst nichts tut), geht von allein wieder weg
+    let hilfeUhr = null;
+    function zeigeHilfe() {
+      $('hilfe-name').textContent = '„' + state.shortcut + '“';
+      $('hilfe').hidden = false;
+      clearTimeout(hilfeUhr); hilfeUhr = setTimeout(() => { $('hilfe').hidden = true; }, 9000);
     }
-    $('toast').addEventListener('click', () => { $('toast').hidden = true; });
+    $('hilfe').addEventListener('click', () => { clearTimeout(hilfeUhr); $('hilfe').hidden = true; });
+    $('ansage').addEventListener('click', zeigeHilfe);
+    $('ansage').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); zeigeHilfe(); } });
 
     $('close').addEventListener('click', () => { $('overlay').hidden = true; });
 
@@ -1250,7 +1341,6 @@
     // Zu viel Text: die Vorschau wächst nach unten, damit man weiter sieht, was man tippt – das Bild hat aber
     // feste Maße und schnitte ab. Darum Warnung in Vorschau und Statuszeile, und Kleben/Teilen sind gesperrt.
     const OVERFLOW_HINT = 'Zu viel Text: passt auch in kleinster Schrift nicht auf den Zettel. Bitte kürzen – so wird nichts geklebt.';
-    let textUeberlauf = false;
     function ueberlauf() { const t = targetCanvas(); return !!noteText() && fitNote(t.w, t.h, t.layout, noteText()).overflow; }
 
     // Vorschau in der App: der Zettel wird proportional zum Hintergrundbild skaliert,
@@ -1342,11 +1432,12 @@
       const vorher = textUeberlauf;
       textUeberlauf = f.overflow && !!noteText();
       $('overpin').hidden = !textUeberlauf;
-      $('stick').classList.toggle('blocked', textUeberlauf); $('share').classList.toggle('blocked', textUeberlauf);
+      $('share').classList.toggle('blocked', textUeberlauf);
+      zeichneLeiste();   // der Hauptknopf bekommt seine Klassen dort, samt Sperre
       // Hinweis nur beim Übergang setzen (syncPreview läuft auch bei resize und Schriftereignissen) – sonst
       // überschriebe er den Hinweis „… nur Hintergrund“, den „Zettel ausblenden“ trotz Überlauf setzen darf
-      if (textUeberlauf && (!vorher || !statusEl.textContent)) statusEl.textContent = OVERFLOW_HINT;
-      else if (!textUeberlauf && statusEl.textContent === OVERFLOW_HINT) statusEl.textContent = '';
+      if (textUeberlauf && (!vorher || !meldung)) zeigeMeldung(OVERFLOW_HINT);
+      else if (!textUeberlauf && meldung === OVERFLOW_HINT) zeigeMeldung('');
       // Befestigung als Overlay, gleiche Zeichnung und Proportion wie im Bild
       const m = f.pad * 2.2, fp = $('fastener-preview');
       fp.style.left = (-m * scale) + 'px'; fp.style.top = (-m * scale) + 'px';
@@ -1489,16 +1580,16 @@
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title: 'Zettel' });
-          statusEl.textContent = 'Jetzt in den Einstellungen als Sperrbildschirm setzen.';
+          zeigeMeldung('Jetzt in den Einstellungen als Sperrbildschirm setzen.');
           return;
         } catch (e) {
-          if (e.name === 'AbortError') { statusEl.textContent = ''; return; }
+          if (e.name === 'AbortError') { zeigeMeldung(''); return; }
         }
       }
       // Fallback: Vorschau, zum Langdrücken
       $('preview').src = URL.createObjectURL(blob);
       $('overlay').hidden = false;
-      statusEl.textContent = '';
+      zeigeMeldung('');
     }
 
     // Weg 1 (automatisch): Bild in die Zwischenablage, dann den Kurzbefehl starten,
@@ -1508,21 +1599,19 @@
     // Ohne Foto gibt es nichts Sinnvolles auszugeben (der dunkle Verlauf wäre eine Überraschung) – dann nur ein Hinweis.
     function stickViaShortcut({ nurHintergrund = false } = {}) {
       if (nurHintergrund) {
-        if (bgFehler) { statusEl.textContent = BG_FEHLER; return; }
-        if (!bgKennung) { statusEl.textContent = 'Kein Hintergrundfoto hinterlegt – erst „Eigenes Hintergrundfoto“ wählen. Ohne Foto gäbe es nur den dunklen Verlauf.'; return; }
-      } else if (!state.text.trim()) { if (state.hidden) { peek = true; zeigeZettel(); } statusEl.textContent = 'Erst was draufschreiben.'; textEl.focus(); return; }
-      else if (ueberlauf()) { statusEl.textContent = OVERFLOW_HINT; return; }   // das Bild schnitte ab
-      statusEl.textContent = 'Rendere …';
-      const was = nurHintergrund ? 'nur Hintergrund' : 'mit Zettel';
-      const tc = targetCanvas(), masse = ' Bild ' + tc.w + ' × ' + tc.h + ' px.';   // zum Nachprüfen: iOS zeigt das Bild zuweilen vergrößert (Zuschnitt des Paars)
+        if (bgFehler) { zeigeMeldung(BG_FEHLER); return; }
+        if (!bgKennung) { zeigeMeldung('Kein Hintergrundfoto hinterlegt – erst „Eigenes Hintergrundfoto“ wählen. Ohne Foto gäbe es nur den dunklen Verlauf.'); return; }
+      } else if (!state.text.trim()) { if (state.hidden) { peek = true; zeigeZettel(); } zeigeMeldung('Erst was draufschreiben.'); textEl.focus(); return; }
+      else if (ueberlauf()) { zeigeMeldung(OVERFLOW_HINT); return; }   // das Bild schnitte ab
+      zeigeMeldung('Rendere …');
       const snap = pinSnapshot({ requested: !!state.autoRun, bgOnly: nurHintergrund });   // Stand im Moment des Tipps
       const png = renderPng({ nurHintergrund, snap });
       png.catch(() => {});   // Ablehnung (Hintergrundfoto, Überlauf, Änderung) wird unten behandelt; ohne diesen Haken meldet der Browser sie voreilig als unbehandelt
       // Sobald das Bild da ist, zeigt die App denselben Zustand wie das Display: ohne Zettel bzw. mit Zettel
       png.then(() => { state.hidden = nurHintergrund; peek = false; zeigeZettel(); persist(); }, () => {});   // Ablehnung: siehe unten
       if (!(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem)) {
-        statusEl.textContent = 'Zwischenablage nicht verfügbar – Teilen stattdessen.';
-        png.then(share, e => { statusEl.textContent = e.message; }); return;
+        zeigeMeldung('Zwischenablage nicht verfügbar – Teilen stattdessen.');
+        png.then(share, e => { zeigeMeldung(e.message); }); return;
       }
       let write;
       try { write = navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]); }
@@ -1531,31 +1620,27 @@
         // Das Bild liegt jetzt in der Zwischenablage – mehr weiß die App nicht. Der Kurzbefehl läuft erst danach,
         // und ob er das Hintergrundbild wirklich gesetzt hat, erfährt die App nie.
         // Wurde der Zettel seit dem Tipp geändert, zeigt das Bild den alten Stand: nicht als bereit melden, keinen Kurzbefehl.
-        if (!gleicherStand(snap, pinSnapshot({ bgOnly: nurHintergrund }))) { statusEl.textContent = GEAENDERT; return; }
+        if (!gleicherStand(snap, pinSnapshot({ bgOnly: nurHintergrund }))) { zeigeMeldung(GEAENDERT); return; }
+        zeigeMeldung('');        // ab hier spricht die Zustandszeile: „wartet auf den Kurzbefehl“ bzw. „zeigt diesen Zettel“
         markPinned(snap);
-        if (snap.requested) {
-          statusEl.textContent = REQUESTED_HINT.replace('%s', state.shortcut).replace('%w', was) + masse;
-          location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(state.shortcut) + '&input=clipboard';
-        } else {
-          // Kurzbefehl nicht per URL starten: vom Icon/Kontrollzentrum gestartet öffnet er die Kurzbefehle-App nicht.
-          statusEl.textContent = READY_HINT.replace('%s', state.shortcut).replace('%w', was) + masse;
-          showToast('Bild bereit', (nurHintergrund ? 'Nur Hintergrund, ohne Zettel.\n' : '') + 'Jetzt „' + state.shortcut + '“ starten:\nIcon neben der App · Kontrollzentrum · Rückseite doppelt tippen');
-        }
+        // Kurzbefehl nur bei „automatisch öffnen“ per URL starten – sonst holt er die Kurzbefehle-App in den Vordergrund.
+        // Ohne das übernimmt die Ansage: sie sagt, dass jetzt der Nutzer dran ist.
+        if (snap.requested) location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(state.shortcut) + '&input=clipboard';
       }, async () => {
         let blob;
-        try { blob = await png; } catch (e) { statusEl.textContent = e.message; return; }   // Rendern selbst scheiterte (Hintergrundfoto)
-        statusEl.textContent = 'Zwischenablage verweigert – Teilen stattdessen.';
+        try { blob = await png; } catch (e) { zeigeMeldung(e.message); return; }   // Rendern selbst scheiterte (Hintergrundfoto)
+        zeigeMeldung('Zwischenablage verweigert – Teilen stattdessen.');
         share(blob);
       });
     }
 
     // Weg 2 (manuell): Teilen-Dialog → Bild sichern → Einstellungen.
     async function stickViaShare() {
-      if (!state.text.trim()) { statusEl.textContent = 'Erst was draufschreiben.'; textEl.focus(); return; }
-      if (ueberlauf()) { statusEl.textContent = OVERFLOW_HINT; return; }
-      statusEl.textContent = 'Rendere …';
+      if (!state.text.trim()) { zeigeMeldung('Erst was draufschreiben.'); textEl.focus(); return; }
+      if (ueberlauf()) { zeigeMeldung(OVERFLOW_HINT); return; }
+      zeigeMeldung('Rendere …');
       let blob;
-      try { blob = await renderPng({ snap: pinSnapshot() }); } catch (e) { statusEl.textContent = e.message; return; }
+      try { blob = await renderPng({ snap: pinSnapshot() }); } catch (e) { zeigeMeldung(e.message); return; }
       await share(blob);
     }
 
@@ -1564,23 +1649,30 @@
     // auf die leere Fläche zeigt ihn zum Bearbeiten (peek), ohne etwas hochzuladen. „Zettel einblenden“ und „Aufs
     // Display kleben“ laden das Zettelbild hoch und beenden den Zustand – ein weiteres Hochladen ist nicht nötig.
     let peek = false;
+    const AUGE = '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="2.6"/>';
+    const AUGE_ZU = '<path d="M3 3l18 18M10.6 5.1A9 9 0 0 1 12 5c5 0 9 4.5 9 7a11 11 0 0 1-2.4 3.5M6.4 6.4C3.9 8 2 10.4 2 12c0 2.5 4 7 10 7a10 10 0 0 0 3.6-.7"/>';
     function zeigeZettel() {
       const weg = state.hidden && !peek;
       noteEl.classList.toggle('weg', weg);
       $('weghint').hidden = !weg;
-      $('hide').textContent = state.hidden ? 'Zettel einblenden' : 'Zettel ausblenden';
-      $('hide').title = state.hidden ? 'Zettel wieder aufs Display: lädt das Zettelbild hoch' : 'Nur das Hintergrundfoto aufs Display, der Zettel bleibt in der App';
+      // Die Symbolreihe bleibt immer dreiteilig – nur die Beschriftung wechselt, sonst springt die Anordnung
+      $('hide-icon').innerHTML = state.hidden ? AUGE : AUGE_ZU;
+      $('hide-text').innerHTML = state.hidden ? 'Zettel<br>einblenden' : 'Zettel<br>ausblenden';
+      $('hide').title = state.hidden ? 'Zettel wieder auf den Sperrbildschirm' : 'Nur das Hintergrundfoto auf den Sperrbildschirm, der Zettel bleibt in der App';
+      $('ansage').querySelector('.z2').innerHTML = 'App schließen · Icon <b>„' + state.shortcut.replace(/[<>&]/g, '') + '“</b> antippen';
+      zeichneLeiste();
     }
-    $('weghint').addEventListener('click', () => { peek = true; zeigeZettel(); textEl.focus(); });
+    // Der Platzhalter tut dasselbe wie der Knopf: einblenden. Zum Bearbeiten gibt es dort nichts.
+    $('weghint').addEventListener('click', () => { try { stickViaShortcut({ nurHintergrund: false }); } catch (e) { zeigeMeldung('Fehler: ' + e.message); } });
     zeigeZettel();
 
-    $('stick').addEventListener('click', () => { try { stickViaShortcut(); } catch (e) { statusEl.textContent = 'Fehler: ' + e.message; } });
-    $('hide').addEventListener('click', () => { try { stickViaShortcut({ nurHintergrund: !state.hidden }); } catch (e) { statusEl.textContent = 'Fehler: ' + e.message; } });
-    $('share').addEventListener('click', () => stickViaShare().catch(e => { statusEl.textContent = 'Fehler: ' + e.message; }));
+    $('stick').addEventListener('click', () => { try { stickViaShortcut(); } catch (e) { zeigeMeldung('Fehler: ' + e.message); } });
+    $('hide').addEventListener('click', () => { try { stickViaShortcut({ nurHintergrund: !state.hidden }); } catch (e) { zeigeMeldung('Fehler: ' + e.message); } });
+    $('share').addEventListener('click', () => stickViaShare().catch(e => { zeigeMeldung('Fehler: ' + e.message); }));
 
     const shortcutEl = $('shortcut');
     shortcutEl.value = state.shortcut;
-    shortcutEl.addEventListener('input', () => { state.shortcut = shortcutEl.value.trim() || 'Zettel'; persist(); });
+    shortcutEl.addEventListener('input', () => { state.shortcut = shortcutEl.value.trim() || 'Zettel'; zeigeZettel(); persist(); });
     const scaleEl = $('fontscale'), scaleOut = $('fontscale-out');
     scaleEl.value = state.fontScale; scaleOut.value = state.fontScale + ' %';
     scaleEl.addEventListener('input', () => {
@@ -1643,7 +1735,12 @@
     const titleEl = document.querySelector('header h1');
     titleEl.setAttribute('role', 'button'); titleEl.title = 'Auf neue Version prüfen';
     titleEl.addEventListener('click', () => checkForUpdate(true));
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      // Wer die App verlassen hat und zurückkommt, hat den Kurzbefehl gestartet – sicher wissen kann die App es nicht.
+      if (state.pinned && state.pinned.warten) { state.pinned.warten = false; persist(); }
+      checkForUpdate();
+    });
     window.addEventListener('pageshow', () => setTimeout(checkForUpdate, 800));
     setInterval(checkForUpdate, 60000);
   </script>

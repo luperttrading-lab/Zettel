@@ -15,6 +15,8 @@ const errors = []; page.on('pageerror', e => errors.push(e.message + ' @ ' + (e.
 let fails = 0;
 const check = (name, cond, extra = '') => { console.log((cond ? 'OK  ' : 'FAIL') + ' ' + name + (extra ? ' – ' + extra : '')); if (!cond) fails++; };
 const txt = sel => page.evaluate(s => document.querySelector(s).textContent, sel);
+const zeile = () => txt('#satz');
+const meldungText = () => page.evaluate(() => meldung);   // Zustand und Meldung teilen sich seit 1.39 eine Zeile
 await page.goto('http://localhost:8766/index.html?t=' + Date.now()); await page.waitForTimeout(800);
 await page.evaluate(() => { localStorage.clear(); }); await page.reload(); await page.waitForTimeout(800);
 await page.click('#text'); await page.keyboard.type('Milch kaufen'); await page.waitForTimeout(400);
@@ -41,36 +43,36 @@ const r2 = await page.evaluate(async () => {
 });
 check('bgFehler gesetzt', r2.fehler === true);
 check('Daten bleiben bis ✕ liegen', r2.gespeichert !== null, String(r2.gespeichert));
-check('Statuszeile meldet Fehler', (await txt('#status')).startsWith('Hintergrundfoto ließ sich nicht laden'), await txt('#status'));
+check('Statuszeile meldet Fehler', (await zeile()).startsWith('Hintergrundfoto ließ sich nicht laden'), await zeile());
 check('✕ sichtbar', r2.clearSichtbar);
 check('Banner meldet Fehler', r2.banner.startsWith('Hintergrundfoto ließ sich nicht laden'), r2.banner);
 check('Kennung leer, kein Bild', r2.kennung === '' && !r2.bild);
 await page.click('#stick'); await page.waitForTimeout(1200);
-check('Kleben gesperrt mit Meldung', (await txt('#status')).startsWith('Hintergrundfoto ließ sich nicht laden'), await txt('#status'));
+check('Kleben gesperrt mit Meldung', (await zeile()).startsWith('Hintergrundfoto ließ sich nicht laden'), await zeile());
 check('kein Bild bereit', !(await page.evaluate(() => isPinnedCurrent())));
 check('Zwischenablage unverändert', (await page.evaluate(() => navigator.clipboard.readText())) === 'unverändert');
 await page.click('#share'); await page.waitForTimeout(800);
-check('Teilen gesperrt mit Meldung', (await txt('#status')).startsWith('Hintergrundfoto ließ sich nicht laden'), await txt('#status'));
+check('Teilen gesperrt mit Meldung', (await zeile()).startsWith('Hintergrundfoto ließ sich nicht laden'), await zeile());
 check('Vorschau-Overlay bleibt zu', await page.evaluate(() => document.getElementById('overlay').hidden));
 await page.screenshot({ path: out + '/t4_fehler.png' });
 // ✕ → Sperre weg, Banner weg, Kleben geht wieder
 await page.click('#bgclear'); await page.waitForTimeout(300);
 check('nach ✕ kein Fehler mehr, Daten weg', await page.evaluate(() => bgFehler === false && document.getElementById('bgclear').hidden && localStorage.getItem('zettel.bg') === null));
-check('nach ✕ Statuszeile leer', (await txt('#status')) === '', await txt('#status'));
+check('nach ✕ keine Meldung mehr', (await meldungText()) === '', await zeile());
 check('Banner jetzt „entfernt“', (await txt('#update-text')) === 'Hintergrundfoto entfernt', await txt('#update-text'));
 await page.click('#stick'); await page.waitForTimeout(1500);
-check('Kleben geht wieder', (await txt('#status')).startsWith('Bild bereit'), await txt('#status'));
+check('Kleben geht wieder', (await page.evaluate(() => lage() === 'wartet')), await zeile());
 // 3) Bild MIT Foto bereitgestellt, danach ist das Foto kaputt: Banner beim Start, Status „Bild veraltet“
 await page.evaluate(async () => {
   const c = document.createElement('canvas'); c.width = 1179; c.height = 2556; const g = c.getContext('2d'); g.fillStyle = '#204080'; g.fillRect(0, 0, 1179, 2556);
   localStorage.setItem('zettel.bg', c.toDataURL('image/jpeg', 0.9)); bgLaden(); await bgReady;
 });
 await page.click('#stick'); await page.waitForTimeout(1500);
-check('mit Foto bereit', /^Bild bereit/.test(await txt('#saved')) && (await page.evaluate(() => state.pinned.bg !== '')), await txt('#saved'));
+check('mit Foto bereit', (await page.evaluate(() => lage() === 'wartet' && state.pinned.bg !== '')), await zeile());
 await page.evaluate(() => { localStorage.setItem('zettel.bg', 'data:image/jpeg;base64,AAAAAAAA'); });
 await page.reload(); await page.waitForTimeout(800);
 check('Banner beim Start', (await page.evaluate(() => !document.getElementById('update').hidden)) && (await txt('#update-text')).startsWith('Hintergrundfoto ließ sich nicht laden'), await txt('#update-text'));
-check('Kopfzeile „geändert · Bild veraltet“', (await txt('#saved')) === 'geändert · Bild veraltet', await txt('#saved'));
+check('Zustand: Foto-Fehler hat Vorrang', (await zeile()).startsWith('Hintergrundfoto ließ sich nicht laden') && (await page.evaluate(() => lage())) === 'geaendert', await zeile());
 // 4) Ohne Foto: Ausgabe sofort möglich (bgReady erfüllt), Verlauf im Bild
 await page.click('#bgclear'); await page.waitForTimeout(200);
 const r4 = await page.evaluate(async () => { const blob = await renderPng(); const bmp = await createImageBitmap(blob); const c = document.createElement('canvas'); c.width = 20; c.height = 20; const g = c.getContext('2d'); g.drawImage(bmp, 0, 0); return [...g.getImageData(10, 10, 1, 1).data].slice(0, 3); });

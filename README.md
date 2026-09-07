@@ -28,12 +28,12 @@ So ist die Notiz sichtbar, ohne die App zu öffnen.
    Zettelbild wieder hoch (ein weiteres „Aufs Display kleben" ist dann nicht nötig). Ein Tipp auf die leere Fläche
    zeigt den Zettel nur zum Bearbeiten, ohne etwas hochzuladen. Ohne hinterlegtes Foto gibt es nur einen Hinweis.
 
-Die App meldet nach dem Kleben „Bild bereit" bzw. „Kurzbefehl angefordert" (in der Statuszeile mit „mit Zettel"
-oder „nur Hintergrund", in Kopfzeile und Marke kurz „Bild …" bzw. „Hintergrund …"), nie „angeheftet": ob das Bild
-wirklich auf dem Sperrbildschirm gelandet ist, kann sie nicht wissen.
-Nach jeder Änderung, die das Bild beträfe (Text, Papier, Schrift, Befestigung, Überschrift, Hintergrundfoto),
-steht dort „geändert · Bild veraltet". Passt der Text auch in kleinster Schrift nicht auf den Zettel, warnt die
-App („Zu viel Text") und klebt nicht – das Bild würde sonst abschneiden.
+Unten steht immer eine Zustandszeile: „Sperrbildschirm zeigt diesen Zettel", „Sperrbildschirm: noch der alte
+Zettel", „Bild fertig · wartet auf den Kurzbefehl" oder „Sperrbildschirm: nur dein Foto". Darunter ein Knopf für
+den nächsten Schritt — und solange der Kurzbefehl aussteht, an seiner Stelle die Ansage „Jetzt bist du dran"
+(App schließen, Icon antippen; ein Tipp darauf erklärt es ausführlich). Die App behauptet nie, dass ein Bild
+angekommen ist: Sie weiß nur, was sie übertragen hat. Passt der Text auch in kleinster Schrift nicht auf den
+Zettel, warnt sie („Zu viel Text") und überträgt nicht — das Bild würde sonst abschneiden.
 
 ## Variante 2: reiner Kurzbefehl (empfohlen)
 
