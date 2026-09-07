@@ -11,13 +11,12 @@ Zustimmungsfloskeln, unbequeme Wahrheit zuerst).
 ## Kostenzeile am Ende jeder Antwort – Pflicht
 
 Der Auftraggeber will nach **jeder** Antwort wissen, was sie gekostet hat. Ganz am Ende der Antwort, genau
-einmal, **zwei kurze Zeilen** – keine Tabelle (passt nicht auf das iPhone), keine lange Zeile (bricht mitten in
-der Zahl um). Cent-Beträge sind immer RouteLLM, Dollar-Beträge immer Claude; das ist vereinbart und wird nicht
-jedes Mal erklärt:
+einmal, **zwei fette Zeilen** mit den Dienstnamen dahinter – dieses Format hat sich auf dem iPhone bewährt,
+keine Tabelle, keine anderen Beschriftungen:
 
 ```
-Diese Frage: 0,9 ct · 1,20 $
-Heute gesamt: 78,0 ct · 167,9 $
+**Diese Frage: 0,9 ct RouteLLM · 1,20 $ Claude**
+**Heute gesamt: 78,0 ct RouteLLM · 168,9 $ Claude**
 ```
 
 Regeln:
