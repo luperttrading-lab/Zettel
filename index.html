@@ -138,6 +138,7 @@
     .strip .item.active span { font-weight: 600; }
     .strip .item svg { width: 60px; height: 40px; overflow: visible; display: block; }
     .strip-fastener { --iw: 92px; } .strip-fastener .item { height: 62px; }
+    .strip-fastener .item.gesperrt { opacity: .3; }
     /* Zeile „Anzahl“ in der Auswahlkarte: zwei Knöpfe und die Zahl daneben */
     #fcolors .chip.plus, #fcolors .chip.minus { font-size: 20px; line-height: 1; font-weight: 600; }
     #fcolors .chip.plus { color: #ffd60a; }
@@ -465,7 +466,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.44.3'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.45.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -871,41 +872,45 @@
       }
       el.appendChild(inner);
       let timer = null, current = null, target = null, targetTimer = null;
-      // Ausgeblendete Einträge zählen nicht mit: der Schieber rechnet mit den sichtbaren, sonst
-      // könnte man auf etwas scrollen, das gerade gar nicht gewählt werden darf.
-      let sichtbar = items.map(it => it.value);
-      const sichtbareEls = () => [...inner.children].filter(d => !d.hidden);
-      const itemW = () => (sichtbareEls()[0] || inner.children[0]).offsetWidth || 1;
-      const indexAt = () => Math.max(0, Math.min(sichtbar.length - 1, Math.round(el.scrollLeft / itemW())));
-      const highlight = (i = indexAt()) => { const els = sichtbareEls(); [...inner.children].forEach(d => d.classList.remove('active')); if (els[i]) els[i].classList.add('active'); };
+      // Gesperrte Einträge bleiben **sichtbar** – sonst sucht man eine Art und findet sie nicht mehr.
+      // Sie rasten nur nicht ein: der Schieber gleitet zum vorigen zurück und sagt, warum.
+      let gesperrt = new Set(), onBlocked = null;
+      const itemW = () => inner.children[0].offsetWidth || 1;
+      const indexAt = () => Math.max(0, Math.min(items.length - 1, Math.round(el.scrollLeft / itemW())));
+      const highlight = (i = indexAt()) => { [...inner.children].forEach((d, k) => d.classList.toggle('active', k === i)); };
+      const zurueck = () => {
+        const j = items.findIndex(it => it.value === current); if (j < 0) return;
+        target = j; clearTimeout(targetTimer);
+        targetTimer = setTimeout(() => { if (target !== null) { target = null; el.scrollLeft = j * itemW(); highlight(j); } }, 900);
+        el.scrollTo({ left: j * itemW(), behavior: 'smooth' }); highlight(j);
+      };
       const choose = v => { if (v !== current) { current = v; onSelect(v); } };
       // Auswahl nach dem Wischen: das Element, das in der Mitte liegt. Läuft gerade eine Tipp-Animation
       // zu einem Ziel, zählen Zwischenstände nicht.
       const commit = () => {
         const i = indexAt();
         if (target !== null) { if (i !== target) return; target = null; clearTimeout(targetTimer); }
-        highlight(i); choose(sichtbar[i]);
+        const v = items[i].value;
+        if (gesperrt.has(v)) { if (onBlocked) onBlocked(v); zurueck(); return; }
+        highlight(i); choose(v);
       };
       el.addEventListener('scroll', () => { if (target === null) highlight(); clearTimeout(timer); timer = setTimeout(commit, 120); }, { passive: true });
       if ('onscrollend' in el) el.addEventListener('scrollend', () => { clearTimeout(timer); commit(); });
       // Tipp auf ein Element: sofort auswählen, dann weich hinscrollen; bleibt die Animation hängen, hart setzen
       function scrollToValue(v, smooth) {
-        const i = sichtbar.indexOf(v); if (i < 0) return;
+        if (gesperrt.has(v)) { if (onBlocked) onBlocked(v); return; }
+        const i = items.findIndex(it => it.value === v); if (i < 0) return;
         target = i; clearTimeout(targetTimer);
         targetTimer = setTimeout(() => { if (target !== null) { target = null; el.scrollLeft = i * itemW(); highlight(i); } }, 900);
         el.scrollTo({ left: i * itemW(), behavior: smooth ? 'smooth' : 'auto' });
         highlight(i); choose(v);
       }
-      return { zeige(werte) {
-        // Nur diese Einträge stehen zur Wahl; der Rest verschwindet ganz, damit man nicht hinschieben kann.
-        const alt = sichtbar.join(',');
-        sichtbar = items.map(it => it.value).filter(v => werte.includes(v));
-        if (sichtbar.join(',') === alt) return;
-        [...inner.children].forEach(d => { d.hidden = !sichtbar.includes(d.dataset.value); });
-        const i = Math.max(0, sichtbar.indexOf(current));
-        el.scrollLeft = i * itemW(); highlight(i);
+      return { sperre(werte, melden) {
+        // Diese Einträge bleiben sichtbar, lassen sich aber nicht wählen.
+        gesperrt = new Set(werte); onBlocked = melden || null;
+        [...inner.children].forEach(d => d.classList.toggle('gesperrt', gesperrt.has(d.dataset.value)));
       }, set(v) {
-        const i = sichtbar.indexOf(v); if (i < 0) return;
+        const i = items.findIndex(it => it.value === v); if (i < 0) return;
         current = v;
         if (target === i) { highlight(i); return; }   // Animation dorthin läuft bereits
         target = null; clearTimeout(targetTimer);
@@ -1205,14 +1210,22 @@
       });
     }
 
-    // Nur die Arten zeigen, in die gewechselt werden kann, ohne dass ein Platz verloren geht.
-    // Nimmt man Stücke weg oder schiebt sie zusammen, tauchen die übrigen von selbst wieder auf.
+    // Arten, in die gerade nicht gewechselt werden kann, bleiben sichtbar (sonst sucht man den
+    // Klebestreifen und findet ihn nicht mehr), rasten aber nicht ein: der Schieber gleitet zurück
+    // und die Zustandszeile sagt, warum. Nimmt man Stücke weg, geht es von selbst wieder.
     function aktualisiereArten() {
-      stripFastener.zeige(Object.keys(FASTENERS).filter(n => n !== 'pin2' && (n === state.fastener || wechselMoeglich(n))));
+      stripFastener.sperre(
+        Object.keys(FASTENERS).filter(n => n !== state.fastener && !wechselMoeglich(n)),
+        v => zeigeMeldung(befAnzahl() > (FASTENER_MAX[v] || 1)
+          ? FASTENERS[v].label + ': davon gehen nur ' + (FASTENER_MAX[v] || 1) + ' auf den Zettel'
+          : FASTENERS[v].label + ' passt nicht zu diesen Plätzen – erst eine wegnehmen oder nach oben schieben'));
     }
     function applyFastener() {
       stripFastener.set(state.fastener);
-      stripFastener.setHtml(state.fastener, fastenerItemHtml(state.fastener));
+      // Das Icon der gewählten Art zeigt das **angetippte Stück**, sonst stünde unten etwas anderes
+      // als oben auf dem Zettel liegt (Auftraggeber: „unten wird was angezeigt, das oben ganz anders ist“)
+      const bAkt = state.fasteners[aktiveBef] || state.fasteners[0];
+      stripFastener.setHtml(state.fastener, fastenerIcon(state.fastener, bAkt) + `<span>${FASTENERS[state.fastener].short}</span>`);
       aktualisiereArten();
       if (!fcolorsEl.hidden && cardMode === 'fastener') buildPalette();
       syncPreview(); updatePinBadge();

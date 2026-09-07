@@ -21,7 +21,8 @@ await page.evaluate(t => { $('text').value = t; $('text').dispatchEvent(new Even
 await page.waitForTimeout(300);
 
 const liste = () => page.evaluate(() => state.fasteners.map(x => ({ a: x.art, x: x.x === undefined ? null : +x.x.toFixed(3), y: x.y === undefined ? null : +x.y.toFixed(3), v: !!x.vier, c: x.color || null })));
-const waehle = async art => { await page.evaluate(a => waehleBefestigung(a), art); await page.waitForTimeout(250); };
+// Über den Schieber wählen (wie ein Tipp), damit auch die Sperre mit ihrer Erklärung greift
+const waehle = async art => { await page.evaluate(a => document.querySelector(`#strip-fastener .item[data-value="${a}"]`).click(), art); await page.waitForTimeout(350); };
 const karteAuf = async () => { await page.evaluate(() => { if ($('fcolors').hidden) toggleFcolors(true); else buildPalette(); }); await page.waitForTimeout(150); };
 const knopf = async cls => { await page.evaluate(c => document.querySelector('#fcolors .chip.' + c).click(), cls); await page.waitForTimeout(250); };
 const griffMitte = i => page.evaluate(i => { const g = document.querySelectorAll('.griff')[i]; const r = g.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, i);
@@ -72,14 +73,18 @@ await waehle('thumbtack');
 const getauscht = await liste();
 check('alle sind Zwecken', getauscht.every(x => x.a === 'thumbtack') && getauscht.length === 2);
 check('Plätze bleiben', Math.abs(getauscht[0].x - zwei[0].x) < 0.001 && Math.abs(getauscht[1].y - zwei[1].y) < 0.001);
-const sichtbar = () => page.evaluate(() => [...document.querySelectorAll('#strip-fastener .item')].filter(d => !d.hidden).map(d => d.dataset.value));
-// Die Zwecken liegen verteilt – dorthin passt kein Klebestreifen, also steht er gar nicht zur Wahl
-check('Klebestreifen verschwindet aus dem Schieber', !(await sichtbar()).includes('tape'), (await sichtbar()).join(' '));
-check('Magnete bleiben wählbar', (await sichtbar()).includes('magnet'));
+const gesperrt = () => page.evaluate(() => [...document.querySelectorAll('#strip-fastener .item.gesperrt')].map(d => d.dataset.value));
+const alleDa = () => page.evaluate(() => [...document.querySelectorAll('#strip-fastener .item')].every(d => !d.hidden));
+// Die Zwecken liegen verteilt – dorthin passt kein Klebestreifen. Er bleibt sichtbar (sonst sucht
+// man ihn und findet ihn nicht mehr), lässt sich aber nicht wählen.
+check('alle Arten bleiben sichtbar', await alleDa());
+check('Klebestreifen ist gesperrt', (await gesperrt()).includes('tape'), (await gesperrt()).join(' '));
+check('Magnete bleiben wählbar', !(await gesperrt()).includes('magnet'));
 await waehle('tape');
 check('Wechsel passiert nicht', (await liste()).every(x => x.a === 'thumbtack'));
+check('Tipp auf den gesperrten erklärt es', /Klebestreifen/.test(await page.evaluate(() => $('satz').textContent)), await page.evaluate(() => $('satz').textContent));
 await karteAuf(); await knopf('minus');
-check('mit einem Stück ist alles wieder da', (await sichtbar()).includes('tape') && (await sichtbar()).includes('tape2'), (await sichtbar()).join(' '));
+check('mit einem Stück ist nichts mehr gesperrt', (await gesperrt()).length === 0, (await gesperrt()).join(' '));
 await waehle('tape');
 const t = await liste();
 check('mit einem Stück geht der Wechsel', t.length === 1 && t[0].a === 'tape', JSON.stringify(t));
@@ -90,14 +95,14 @@ await page.evaluate(() => {
   state.fastener = 'clip'; aktiveBef = 0; applyFastener();
 });
 await page.waitForTimeout(250);
-check('bei drei Klammern sind Nadeln wählbar', (await sichtbar()).includes('pin'), (await sichtbar()).join(' '));
+check('bei drei Klammern sind Nadeln wählbar', !(await gesperrt()).includes('pin'), (await gesperrt()).join(' '));
 await waehle('pin');
 const n = await liste();
 check('drei Nadeln an denselben Plätzen', n.length === 3 && n.every(x => x.a === 'pin') && Math.abs(n[2].x - 0.86) < 0.001, JSON.stringify(n));
 // eine davon nach unten ziehen: jetzt ist die Klammer nicht mehr möglich
 await ziehen(1, 0, 150);
 check('Nadel nach unten gezogen', (await liste())[1].y > 0.2);
-check('Klammer nun nicht mehr wählbar', !(await sichtbar()).includes('clip'), (await sichtbar()).join(' '));
+check('Klammer nun gesperrt', (await gesperrt()).includes('clip'), (await gesperrt()).join(' '));
 
 // 4c) Farbe und Muster je Stück
 await page.evaluate(() => { state.fasteners = [[0.2, 0.012], [0.5, 0.012], [0.8, 0.012]].map(([x, y]) => ({ art: 'clip', x, y })); state.fastener = 'clip'; aktiveBef = 0; applyFastener(); });
