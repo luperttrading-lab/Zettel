@@ -138,7 +138,6 @@
     .strip .item.active span { font-weight: 600; }
     .strip .item svg { width: 60px; height: 40px; overflow: visible; display: block; }
     .strip-fastener { --iw: 92px; } .strip-fastener .item { height: 62px; }
-    .strip-fastener .item.gesperrt { opacity: .3; }
     /* Zeile „Anzahl“ in der Auswahlkarte: zwei Knöpfe und die Zahl daneben */
     #fcolors .chip.plus, #fcolors .chip.minus { font-size: 20px; line-height: 1; font-weight: 600; }
     #fcolors .chip.plus { color: #ffd60a; }
@@ -464,7 +463,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.43.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.44.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -685,8 +684,10 @@
     function setFastenerLook(patch) {
       const cur = fastenerLook();
       state.fastenerLook[state.fastener] = { color: cur.color, decor: cur.decor, ...patch };
-      // Eine Farbe gilt für das angetippte Stück; der Grundton wandert mit, damit die nächste ihn erbt.
-      if (patch.color && state.fasteners[aktiveBef]) state.fasteners[aktiveBef].color = patch.color;
+      // Farbe und Muster gelten für das angetippte Stück; der Grundton wandert mit, damit die nächste ihn erbt.
+      const b = state.fasteners[aktiveBef];
+      if (b && patch.color) b.color = patch.color;
+      if (b && patch.decor) b.decor = patch.decor;
       applyFastener(); persist();
     }
     // ---------- Mehrere Befestigungen ----------
@@ -697,14 +698,14 @@
     function befPixel(W, H, p) {
       return state.fasteners.map(b => {
         const home = fastenerHome(b.art, W, H, p);
-        return { art: b.art, vier: !!b.vier, color: b.color,
+        return { art: b.art, vier: !!b.vier, color: b.color, decor: b.decor,
           x: typeof b.x === 'number' ? b.x * W : home.x,
           y: typeof b.y === 'number' ? b.y * W : home.y };
       });
     }
     // Kennung für den Vergleich mit dem angehefteten Stand und als Cache-Schlüssel
     function befKennung() {
-      return state.fasteners.map(b => [b.art, b.x ?? '', b.y ?? '', b.vier ? '4' : '', b.color || ''].join(',')).join(';');
+      return state.fasteners.map(b => [b.art, b.x ?? '', b.y ?? '', b.vier ? '4' : '', b.color || '', b.decor || ''].join(',')).join(';');
     }
     // Einen freien Platz für eine neue Befestigung suchen – nie auf einer schon liegenden.
     function befFreierPlatz(W, H, p) {
@@ -861,29 +862,41 @@
       }
       el.appendChild(inner);
       let timer = null, current = null, target = null, targetTimer = null;
-      const itemW = () => inner.children[0].offsetWidth || 1;
-      const indexAt = () => Math.max(0, Math.min(items.length - 1, Math.round(el.scrollLeft / itemW())));
-      const highlight = (i = indexAt()) => { [...inner.children].forEach((d, k) => d.classList.toggle('active', k === i)); };
+      // Ausgeblendete Einträge zählen nicht mit: der Schieber rechnet mit den sichtbaren, sonst
+      // könnte man auf etwas scrollen, das gerade gar nicht gewählt werden darf.
+      let sichtbar = items.map(it => it.value);
+      const sichtbareEls = () => [...inner.children].filter(d => !d.hidden);
+      const itemW = () => (sichtbareEls()[0] || inner.children[0]).offsetWidth || 1;
+      const indexAt = () => Math.max(0, Math.min(sichtbar.length - 1, Math.round(el.scrollLeft / itemW())));
+      const highlight = (i = indexAt()) => { const els = sichtbareEls(); [...inner.children].forEach(d => d.classList.remove('active')); if (els[i]) els[i].classList.add('active'); };
       const choose = v => { if (v !== current) { current = v; onSelect(v); } };
       // Auswahl nach dem Wischen: das Element, das in der Mitte liegt. Läuft gerade eine Tipp-Animation
       // zu einem Ziel, zählen Zwischenstände nicht.
       const commit = () => {
         const i = indexAt();
         if (target !== null) { if (i !== target) return; target = null; clearTimeout(targetTimer); }
-        highlight(i); choose(items[i].value);
+        highlight(i); choose(sichtbar[i]);
       };
       el.addEventListener('scroll', () => { if (target === null) highlight(); clearTimeout(timer); timer = setTimeout(commit, 120); }, { passive: true });
       if ('onscrollend' in el) el.addEventListener('scrollend', () => { clearTimeout(timer); commit(); });
       // Tipp auf ein Element: sofort auswählen, dann weich hinscrollen; bleibt die Animation hängen, hart setzen
       function scrollToValue(v, smooth) {
-        const i = items.findIndex(it => it.value === v); if (i < 0) return;
+        const i = sichtbar.indexOf(v); if (i < 0) return;
         target = i; clearTimeout(targetTimer);
         targetTimer = setTimeout(() => { if (target !== null) { target = null; el.scrollLeft = i * itemW(); highlight(i); } }, 900);
         el.scrollTo({ left: i * itemW(), behavior: smooth ? 'smooth' : 'auto' });
         highlight(i); choose(v);
       }
-      return { set(v) {
-        const i = items.findIndex(it => it.value === v); if (i < 0) return;
+      return { zeige(werte) {
+        // Nur diese Einträge stehen zur Wahl; der Rest verschwindet ganz, damit man nicht hinschieben kann.
+        const alt = sichtbar.join(',');
+        sichtbar = items.map(it => it.value).filter(v => werte.includes(v));
+        if (sichtbar.join(',') === alt) return;
+        [...inner.children].forEach(d => { d.hidden = !sichtbar.includes(d.dataset.value); });
+        const i = Math.max(0, sichtbar.indexOf(current));
+        el.scrollLeft = i * itemW(); highlight(i);
+      }, set(v) {
+        const i = sichtbar.indexOf(v); if (i < 0) return;
         current = v;
         if (target === i) { highlight(i); return; }   // Animation dorthin läuft bereits
         target = null; clearTimeout(targetTimer);
@@ -900,20 +913,33 @@
     const stripFastener = makeStrip($('strip-fastener'), Object.keys(FASTENERS).filter(n => n !== 'pin2').map(name => ({
       value: name, html: fastenerItemHtml(name),
     })), v => waehleBefestigung(v), () => toggleFcolors());
-    // Auf dem Zettel liegt immer EINE Sorte. Innerhalb einer Regelgruppe (etwa Magnet ↔ Nadel) tauschen
-    // alle Stücke auf einmal und bleiben liegen. In eine andere Gruppe geht es nur, wenn ein Stück übrig
-    // ist – sonst gingen sorgfältig gelegte Plätze verloren. Das erklärt der Hinweis statt eines Fensters.
+    // Auf dem Zettel liegt immer EINE Sorte. Ein Wechsel ist erlaubt, wenn dabei nichts verloren geht:
+    // wenn alle Stücke Platz finden (Höchstzahl) und an ihrer Stelle liegen bleiben dürfen. Drei
+    // Büroklammern oben werden so zu drei Nadeln – die dürfen alles, was die Klammern durften, und mehr.
+    // Umgekehrt geht es nicht, weil Nadeln mitten auf dem Zettel keine gültigen Klammerplätze sind.
+    // Was nicht geht, verschwindet aus dem Schieber; man kann gar nicht erst hinschieben.
+    function wechselMoeglich(v) {
+      if (befAnzahl() > (FASTENER_MAX[v] || 1)) return false;
+      if (befAnzahl() === 1 && !state.fasteners[0].vier) return true;   // eine einzelne darf immer alles werden
+      const f = letzteMasse; if (!f) return true;
+      const tol = f.noteW * 0.03;                                       // 3 % der Breite als Spielraum
+      return befPixel(f.noteW, f.noteH, f.pad).every(b => {
+        const q = fastenerPlace(v, b.x, b.y, f.noteW, f.noteH, f.pad);
+        return Math.hypot(q.x - b.x, q.y - b.y) <= tol;
+      });
+    }
     function waehleBefestigung(v) {
-      const gleicheGruppe = FASTENER_RULE[v] === FASTENER_RULE[state.fastener];
-      if (!gleicheGruppe && befAnzahl() > 1) {
-        stripFastener.set(state.fastener);                     // Auswahl zurückstellen, nichts ändern
-        zeigeMeldung(FASTENERS[v].label + ' geht erst mit nur einer Befestigung – erst eine wegnehmen');
-        return;
-      }
-      const max = FASTENER_MAX[v] || 1;
-      state.fasteners = gleicheGruppe
-        ? state.fasteners.slice(0, max).map(b => ({ ...b, art: v, vier: v === 'tape2' ? b.vier : false }))
-        : [{ art: v, color: state.fasteners[0].color }];
+      if (!wechselMoeglich(v)) { stripFastener.set(state.fastener); return; }
+      const f = letzteMasse;
+      state.fasteners = state.fasteners.map(b => {
+        const n = { ...b, art: v, vier: v === 'tape2' ? b.vier : false };
+        // Plätze übernehmen, aber sicherheitshalber auf die Regel der neuen Art bringen
+        if (f && typeof b.x === 'number') {
+          const q = fastenerPlace(v, b.x * f.noteW, b.y * f.noteW, f.noteW, f.noteH, f.pad);
+          n.x = q.x / f.noteW; n.y = q.y / f.noteW;
+        }
+        return n;
+      });
       state.fastener = v;
       aktiveBef = Math.min(aktiveBef, state.fasteners.length - 1);
       applyFastener(); persist(); zeigeAuswahl();
@@ -980,10 +1006,12 @@
         b.setAttribute('role', 'radio'); b.setAttribute('aria-pressed', String(pressed)); b.title = title; b.setAttribute('aria-label', title);
         b.addEventListener('click', onPick); parent.appendChild(b); return b;
       };
+      // Farbe und Muster der **angetippten** Befestigung, nicht der Grundton der Art
+      const jetzt = (state.fasteners[aktiveBef] || {}).color || look.color;
+      const jetztDecor = (state.fasteners[aktiveBef] || {}).decor || look.decor;
       // Zeile 1: Farben (passen ohne Scrollen) – entfällt beim Bildmagneten
       if (hasColor(kind)) {
         const r1 = row('Farbe');
-        const jetzt = (state.fasteners[aktiveBef] || {}).color || look.color;   // die Farbe der angetippten, nicht der Grundton
         for (const [key, c] of Object.entries(FCOLORS)) chip(r1, 'color', '', jetzt === key, c.label, () => setFastenerLook({ color: key })).style.background = c.main;
       }
       // Zeile 2: wie viele davon auf dem Zettel liegen. Beim Eckstreifen macht ＋ aus zwei vier.
@@ -1003,7 +1031,7 @@
       const decors = decorsFor(kind);
       if (decors.length > (kind === 'photo' ? 0 : 1)) {
         const r2 = row(kind === 'magnet' ? 'Motiv' : kind === 'photo' ? 'Bild' : 'Muster');
-        for (const key of decors) chip(r2, 'icon', fastenerIcon(kind, { ...look, decor: key }), look.decor === key, DECOR_LABEL[key], () => setFastenerLook({ decor: key }));
+        for (const key of decors) chip(r2, 'icon', fastenerIcon(kind, { ...look, color: jetzt, decor: key }), jetztDecor === key, DECOR_LABEL[key], () => setFastenerLook({ decor: key }));
         const active = r2.querySelector('.chip[aria-pressed="true"]');
         if (active && active.offsetLeft + active.offsetWidth > r2.clientWidth) r2.scrollLeft = active.offsetLeft - 70;
       }
@@ -1051,7 +1079,8 @@
       if (state.fastener === 'tape2') { state.fasteners[0].vier = true; applyFastener(); persist(); return; }
       if (befVoll()) return;
       const q = befFreierPlatz(f.noteW, f.noteH, f.pad);
-      state.fasteners.push({ art: state.fastener, x: q.x / f.noteW, y: q.y / f.noteW, color: state.fasteners[aktiveBef].color });
+      const vorbild = state.fasteners[aktiveBef];
+      state.fasteners.push({ art: state.fastener, x: q.x / f.noteW, y: q.y / f.noteW, color: vorbild.color, decor: vorbild.decor });
       aktiveBef = state.fasteners.length - 1;
       applyFastener(); persist();
       zeigeMeldung('Dazugelegt – jetzt hinziehen, wo sie hin soll');
@@ -1134,7 +1163,7 @@
       const ende = () => {
         if (!start) return;
         const gezogen = start.zieht; start = null; g.classList.remove('zieht');
-        if (gezogen) { persist(); updatePinBadge(); }
+        if (gezogen) { persist(); updatePinBadge(); aktualisiereArten(); }
         else zeigeAuswahl();                    // kurzer Tipp: Auswahl für dieses Stück öffnen
         syncPreview();
       };
@@ -1156,20 +1185,19 @@
         const q = fastenerPlace(state.fastener, b0.x + d[0], b0.y + d[1], f.noteW, f.noteH, f.pad);
         const b = state.fasteners[aktiveBef];
         b.x = q.x / f.noteW; b.y = q.y / f.noteW;
-        syncPreview(); persist();
+        syncPreview(); persist(); aktualisiereArten();
       });
     }
 
+    // Nur die Arten zeigen, in die gewechselt werden kann, ohne dass ein Platz verloren geht.
+    // Nimmt man Stücke weg oder schiebt sie zusammen, tauchen die übrigen von selbst wieder auf.
+    function aktualisiereArten() {
+      stripFastener.zeige(Object.keys(FASTENERS).filter(n => n !== 'pin2' && (n === state.fastener || wechselMoeglich(n))));
+    }
     function applyFastener() {
       stripFastener.set(state.fastener);
       stripFastener.setHtml(state.fastener, fastenerItemHtml(state.fastener));
-      // Solange mehrere liegen, geht nur der Wechsel innerhalb derselben Regelgruppe. Die anderen
-      // Arten blenden ab – sobald nur noch eine übrig ist, werden sie von selbst wieder hell.
-      // Ein Fenster bräuchte es dafür nicht, man sieht den Weg.
-      $('strip-fastener').querySelectorAll('.item').forEach(el => {
-        const art = el.dataset.value;
-        el.classList.toggle('gesperrt', befAnzahl() > 1 && FASTENER_RULE[art] !== FASTENER_RULE[state.fastener]);
-      });
+      aktualisiereArten();
       if (!fcolorsEl.hidden && cardMode === 'fastener') buildPalette();
       syncPreview(); updatePinBadge();
     }

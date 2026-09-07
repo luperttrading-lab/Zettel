@@ -72,13 +72,46 @@ await waehle('thumbtack');
 const getauscht = await liste();
 check('alle sind Zwecken', getauscht.every(x => x.a === 'thumbtack') && getauscht.length === 2);
 check('Plätze bleiben', Math.abs(getauscht[0].x - zwei[0].x) < 0.001 && Math.abs(getauscht[1].y - zwei[1].y) < 0.001);
+const sichtbar = () => page.evaluate(() => [...document.querySelectorAll('#strip-fastener .item')].filter(d => !d.hidden).map(d => d.dataset.value));
+// Die Zwecken liegen verteilt – dorthin passt kein Klebestreifen, also steht er gar nicht zur Wahl
+check('Klebestreifen verschwindet aus dem Schieber', !(await sichtbar()).includes('tape'), (await sichtbar()).join(' '));
+check('Magnete bleiben wählbar', (await sichtbar()).includes('magnet'));
 await waehle('tape');
-check('Klebestreifen bei zwei Stück gesperrt', (await liste()).every(x => x.a === 'thumbtack'));
-check('mit Erklärung statt stiller Ablehnung', /erst mit nur einer/.test(await page.evaluate(() => $('satz').textContent)), await page.evaluate(() => $('satz').textContent));
+check('Wechsel passiert nicht', (await liste()).every(x => x.a === 'thumbtack'));
 await karteAuf(); await knopf('minus');
+check('mit einem Stück ist alles wieder da', (await sichtbar()).includes('tape') && (await sichtbar()).includes('tape2'), (await sichtbar()).join(' '));
 await waehle('tape');
 const t = await liste();
-check('mit einem Stück geht der Wechsel', t.length === 1 && t[0].a === 'tape' && t[0].x === null, JSON.stringify(t));
+check('mit einem Stück geht der Wechsel', t.length === 1 && t[0].a === 'tape', JSON.stringify(t));
+
+// 4b) Drei Büroklammern oben werden zu drei Nadeln – die dürfen alles, was die Klammern durften
+await page.evaluate(() => {
+  state.fasteners = [[0.14, 0.012], [0.5, 0.012], [0.86, 0.012]].map(([x, y]) => ({ art: 'clip', x, y }));
+  state.fastener = 'clip'; aktiveBef = 0; applyFastener();
+});
+await page.waitForTimeout(250);
+check('bei drei Klammern sind Nadeln wählbar', (await sichtbar()).includes('pin'), (await sichtbar()).join(' '));
+await waehle('pin');
+const n = await liste();
+check('drei Nadeln an denselben Plätzen', n.length === 3 && n.every(x => x.a === 'pin') && Math.abs(n[2].x - 0.86) < 0.001, JSON.stringify(n));
+// eine davon nach unten ziehen: jetzt ist die Klammer nicht mehr möglich
+await ziehen(1, 0, 150);
+check('Nadel nach unten gezogen', (await liste())[1].y > 0.2);
+check('Klammer nun nicht mehr wählbar', !(await sichtbar()).includes('clip'), (await sichtbar()).join(' '));
+
+// 4c) Farbe und Muster je Stück
+await page.evaluate(() => { state.fasteners = [[0.2, 0.012], [0.5, 0.012], [0.8, 0.012]].map(([x, y]) => ({ art: 'clip', x, y })); state.fastener = 'clip'; aktiveBef = 0; applyFastener(); });
+await page.waitForTimeout(200);
+await page.evaluate(() => { aktiveBef = 0; setFastenerLook({ color: 'red' }); aktiveBef = 1; setFastenerLook({ color: 'green' }); setFastenerLook({ decor: 'stripes' }); aktiveBef = 2; setFastenerLook({ color: 'yellow' }); setFastenerLook({ decor: 'dots' }); });
+await page.waitForTimeout(300);
+const bunt = await liste();
+check('drei Klammern, drei Farben', bunt.map(x => x.c).join(',') === 'red,green,yellow', JSON.stringify(bunt.map(x => x.c)));
+check('Muster je Stück', await page.evaluate(() => state.fasteners.map(b => b.decor || '-').join(',')) === '-,stripes,dots', await page.evaluate(() => state.fasteners.map(b => b.decor || '-').join(',')));
+const svg = await page.evaluate(() => $('fastener-preview').innerHTML);
+check('drei Farben wirklich gezeichnet', /#ff3b30/.test(svg) && /#34c759/.test(svg) && /#ffcc00/.test(svg));
+await page.screenshot({ path: out + '/klammern_bunt.png' });
+await page.evaluate(() => { state.fasteners = [{ art: 'tape' }]; state.fastener = 'tape'; aktiveBef = 0; applyFastener(); });
+await page.waitForTimeout(200);
 
 // 5) Klebestreifen bleibt waagerecht an der Kante, Büroklammer oben
 await ziehen(0, -80, 200);
