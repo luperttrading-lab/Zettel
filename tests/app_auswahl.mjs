@@ -61,7 +61,9 @@ const mitte = await page.evaluate(() => { const r = document.querySelector('#str
 await page.mouse.click(mitte.x, mitte.y); await page.waitForTimeout(400);
 check('Tipp auf die gewählte Befestigung: zu', !(await lage()).offen, JSON.stringify(await lage()));
 // 6) Wieder öffnen über den Zettel, dann Tipp auf den Text schließt
-await page.click('#fastener-preview rect.hit', { force: true }); await page.waitForTimeout(400);
+// Das unsichtbare Trefferfeld über der ganzen Befestigung gibt es seit 1.44.3 nicht mehr
+// (es umspannte bei mehreren Stücken den halben Zettel) – getroffen wird über die Griffe.
+await page.click('.note .griff'); await page.waitForTimeout(400);
 check('Tipp auf die Befestigung im Zettel: offen', (await lage()).offen);
 await page.click('#text'); await page.waitForTimeout(400);
 check('Tipp auf den Zettel: zu', !(await lage()).offen);

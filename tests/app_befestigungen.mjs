@@ -156,6 +156,42 @@ for (const f of [...faelle.map(x => ({ ...x, text: TEXT })), ...faelle.map(x => 
 await page.evaluate(() => { state.fasteners = [{ art: 'magnet', x: 0.2, y: 0.15 }, { art: 'magnet', x: 0.8, y: 0.6 }]; aktiveBef = 0; applyFastener(); });
 await page.waitForTimeout(300);
 await page.screenshot({ path: out + '/befestigungen.png' });
+// 8b) Farbe und Motiv gelten NUR für das angetippte Stück – nie für alle
+await page.evaluate(() => { waehleBefestigung('magnet'); });
+await page.waitForTimeout(200);
+await page.evaluate(() => { befDazu(); befDazu(); });
+await page.waitForTimeout(300);
+const look = () => page.evaluate(() => state.fasteners.map(b => b.color + '/' + b.decor));
+check('drei Magnete gleich', new Set(await look()).size === 1, (await look()).join(' '));
+await page.evaluate(() => { aktiveBef = 1; setFastenerLook({ decor: 'heart' }); });
+await page.waitForTimeout(250);
+let l = await look();
+check('nur Nr. 2 bekommt das Herz', l[1].endsWith('/heart') && !l[0].endsWith('/heart') && !l[2].endsWith('/heart'), l.join(' '));
+await page.evaluate(() => { aktiveBef = 2; setFastenerLook({ color: 'green' }); });
+await page.waitForTimeout(250);
+l = await look();
+check('nur Nr. 3 wird grün', l[2].startsWith('green') && !l[0].startsWith('green') && !l[1].startsWith('green'), l.join(' '));
+check('Nr. 2 behält ihr Herz', l[1].endsWith('/heart'), l.join(' '));
+
+// 8c) Der Rahmen gehört nur zur offenen Auswahl – beim Schreiben im Text ist er weg
+const rahmen = () => page.evaluate(() => document.querySelectorAll('.griff.aktiv').length);
+await page.evaluate(() => toggleFcolors(true)); await page.waitForTimeout(250);
+check('Karte offen: genau ein Rahmen', await rahmen() === 1, String(await rahmen()));
+await page.evaluate(() => toggleFcolors(false)); await page.waitForTimeout(250);
+check('Karte zu: kein Rahmen', await rahmen() === 0, String(await rahmen()));
+await page.evaluate(() => toggleFcolors(true)); await page.waitForTimeout(200);
+await page.click('#text'); await page.waitForTimeout(350);
+check('Tipp ins Textfeld nimmt den Rahmen weg', await rahmen() === 0, String(await rahmen()));
+
+// 8d) Mit mehreren verteilten Befestigungen bleibt das Textfeld erreichbar
+await page.evaluate(() => {
+  state.fasteners = [[0.2, 0.15], [0.8, 0.6], [0.8, 0.16], [0.2, 0.72]].map(([x, y]) => ({ art: 'magnet', x, y, color: 'red', decor: 'none' }));
+  state.fastener = 'magnet'; aktiveBef = 0; applyFastener();
+});
+await page.waitForTimeout(300);
+await page.click('#text', { timeout: 3000 }).then(() => check('Textfeld trotz vier Magneten antippbar', true))
+  .catch(e => check('Textfeld trotz vier Magneten antippbar', false, String(e).split('\n')[0]));
+
 // 9) Die Auswahlkarte verdeckt weder den Zettel noch den Befestigungs-Schieber
 await page.evaluate(() => {
   state.fasteners = [{ art: 'pin', x: 0.12, y: 0.9 }, { art: 'pin', x: 0.88, y: 0.9 }];

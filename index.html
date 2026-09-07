@@ -91,7 +91,7 @@
     .note .editor { position: relative; z-index: 1; }
     .note .fastener { position: absolute; pointer-events: none; z-index: 2; }
     .note .fastener svg { display: block; width: 100%; height: 100%; overflow: visible; }
-    .note .fastener svg * { pointer-events: visiblePainted; cursor: pointer; } /* Tipp auf die Befestigung öffnet die Farbwahl */
+    /* Die Zeichnung selbst fängt nichts ab – dafür liegen die Griffe über jedem einzelnen Stück. */
     /* Eingabefeld: ein Block pro Zeile, damit Listenpunkte einen hängenden Einzug bekommen
        (Folgezeilen beginnen unter dem ersten Wort, nicht unter der Zahl). */
     .note .editor {
@@ -465,7 +465,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.44.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.44.3'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -660,8 +660,10 @@
     if (!FASTENERS[state.fastener]) state.fastener = 'tape';
     if (!state.fastenerLook || typeof state.fastenerLook !== 'object') state.fastenerLook = {};
     // Auf dem Zettel liegt eine Liste von Befestigungen, alle von derselben Sorte. Je Stück die Art,
-    // der Platz in Anteilen der Zettelbreite (fehlt = Standardplatz) und die Farbe nur, wenn sie vom
-    // Grundton abweicht. Ältere Installationen hatten genau ein Feld `fastener`.
+    // der Platz in Anteilen der Zettelbreite (fehlt = Standardplatz), Farbe und Muster/Motiv.
+    // Farbe und Muster stehen **immer** im Stück: würden sie fehlen und aus dem Grundton der Art
+    // kommen, färbte ein Klick auf eine Befestigung alle anderen mit um.
+    // Ältere Installationen hatten genau ein Feld `fastener`.
     if (!Array.isArray(state.fasteners) || !state.fasteners.length) {
       // „Zwei Nadeln“ gibt es nicht mehr – sie werden in zwei einzelne umgeschrieben, die zweite
       // in der Gegenfarbe wie bisher. Die Nadeln stehen dabei minimal anders (Größe und Neigung).
@@ -676,6 +678,11 @@
     if (!state.fasteners.length) state.fasteners = [{ art: 'tape' }];
     state.fastener = state.fasteners[0].art;                                   // die Sorte des Zettels
     state.fasteners = state.fasteners.filter(b => b.art === state.fastener).slice(0, FASTENER_MAX[state.fastener] || 1);
+    // Fehlende Farbe/Muster einmalig aus dem Grundton der Art festschreiben
+    for (const b of state.fasteners) {
+      const l = normalizeLook(b.art, { ...(state.fastenerLook[b.art] || {}), ...(b.color ? { color: b.color } : {}), ...(b.decor ? { decor: b.decor } : {}) });
+      b.color = l.color; b.decor = l.decor;
+    }
     // Ältere Installationen: nur Farbe gespeichert
     if (state.fastenerColors && typeof state.fastenerColors === 'object') {
       for (const [k, c] of Object.entries(state.fastenerColors)) if (!state.fastenerLook[k]) state.fastenerLook[k] = { color: c };
@@ -934,7 +941,8 @@
       if (!wechselMoeglich(v)) { stripFastener.set(state.fastener); return; }
       const f = letzteMasse;
       state.fasteners = state.fasteners.map(b => {
-        const n = { ...b, art: v, vier: v === 'tape2' ? b.vier : false };
+        const l = normalizeLook(v, b);        // Motiv/Muster auf das umstellen, was die neue Art kennt
+        const n = { ...b, art: v, vier: v === 'tape2' ? b.vier : false, color: l.color, decor: l.decor };
         // Plätze übernehmen, aber sicherheitshalber auf die Regel der neuen Art bringen
         if (f && typeof b.x === 'number') {
           const q = fastenerPlace(v, b.x * f.noteW, b.y * f.noteW, f.noteW, f.noteH, f.pad);
@@ -1048,6 +1056,7 @@
       document.body.classList.toggle('picking-paper', show && cardMode === 'paper');
       if (show) { (cardMode === 'paper' ? buildPaperCard : buildPalette)(); placePalette(); }
       else cardMode = null;
+      syncPreview();     // der Rahmen um die angetippte Befestigung hängt daran
     }
     // Karte direkt oberhalb des Befestigungs-Schiebers: Unterkante der Karte = Oberkante des Schiebers
     function placePalette() {
@@ -1085,8 +1094,8 @@
       if (state.fastener === 'tape2') { state.fasteners[0].vier = true; applyFastener(); persist(); return; }
       if (befVoll()) return;
       const q = befFreierPlatz(f.noteW, f.noteH, f.pad);
-      const vorbild = state.fasteners[aktiveBef];
-      state.fasteners.push({ art: state.fastener, x: q.x / f.noteW, y: q.y / f.noteW, color: vorbild.color, decor: vorbild.decor });
+      const vorbild = state.fasteners[aktiveBef], l = normalizeLook(state.fastener, vorbild);
+      state.fasteners.push({ art: state.fastener, x: q.x / f.noteW, y: q.y / f.noteW, color: l.color, decor: l.decor });
       aktiveBef = state.fasteners.length - 1;
       applyFastener(); persist();
       zeigeMeldung('Dazugelegt – jetzt hinziehen, wo sie hin soll');
@@ -1137,9 +1146,10 @@
         const w = pkt.w * scale, h = pkt.h * scale;
         g.style.width = w + 'px'; g.style.height = h + 'px';
         g.style.left = (pkt.x * scale - w / 2) + 'px'; g.style.top = (pkt.y * scale - h / 2) + 'px';
-        // Der Rahmen zeigt, welche gerade gemeint ist: nötig, sobald mehrere liegen oder die Karte
-        // offen ist. Bei einer einzigen und geschlossener Karte wäre er nur Deko auf dem Zettel.
-        g.classList.toggle('aktiv', pkt.i === aktiveBef && (liste.length > 1 || (!fcolorsEl.hidden && cardMode === 'fastener')));
+        // Der Rahmen heißt „die bearbeitest du gerade“ – also nur, solange die Auswahl offen ist.
+        // Beim Schreiben im Textfeld ist sie zu und der Rahmen gehört weg (sonst bliebe eine
+        // Befestigung markiert, obwohl gar nichts an ihr geändert wird).
+        g.classList.toggle('aktiv', pkt.i === aktiveBef && !fcolorsEl.hidden && cardMode === 'fastener');
       });
     }
     const ZIEH_SCHWELLE = 8;              // px, darunter gilt es als Tipp
@@ -1709,13 +1719,11 @@
       const key = befKennung() + '|' + lookKey(fastenerLook()) + '|' + f.noteW + '|' + f.noteH;
       if (fp.dataset.key !== key) {
         fp.innerHTML = fastenersSvg(befPixel(f.noteW, f.noteH, f.pad), f.noteW, f.noteH, f.pad, fastenerLook()); fp.dataset.key = key;
-        // Unsichtbare Tipp-Fläche über der ganzen Befestigung (auch hohle Formen wie die Klammer sind so leicht zu treffen)
+        // Kein unsichtbares Trefferfeld mehr über der ganzen Befestigung: mit mehreren verteilten
+        // Stücken umspannte es den halben Zettel und fing jeden Tipp ins Textfeld ab. Getroffen
+        // wird jetzt über die Griffe, die genau auf jedem einzelnen Stück liegen.
         try {
-          const svg = fp.querySelector('svg'), bb = svg.getBBox(), g = f.pad * 0.4;
-          const hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-          hit.setAttribute('x', bb.x - g); hit.setAttribute('y', bb.y - g); hit.setAttribute('width', bb.width + 2 * g); hit.setAttribute('height', bb.height + 2 * g);
-          hit.setAttribute('fill', 'transparent'); hit.setAttribute('class', 'hit'); hit.style.pointerEvents = 'all';
-          svg.insertBefore(hit, svg.firstChild);
+          const bb = fp.querySelector('svg').getBBox();
           // So viel Abstand nach oben, wie die Befestigung über den Zettel ragt (sonst überdeckt sie die Kopfzeile)
           noteEl.style.marginTop = Math.max(0, Math.ceil(-bb.y * scale) - 6) + 'px';
         } catch (_) {}
