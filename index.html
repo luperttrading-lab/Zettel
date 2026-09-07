@@ -380,7 +380,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.37.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.37.3'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -1197,14 +1197,19 @@
       // Die Größe hängt nicht vom Text ab – nur die Schrift passt sich an.
       const noteH = Math.round(Math.min(noteW, layout.maxNoteH));
       const TITLE_GAP = 0.28;             // em unter der Überschrift, gleicher Wert im CSS und in render.js
-      // Auf liniertem/kariertem Papier belegt jede Überschriftzeile eine ganze Zahl Linienzeilen (raster = 1 oder 2),
-      // ohne Abstand darunter – wie von Hand: die Überschrift ragt nach oben, alles danach bleibt auf den Linien.
-      // Glattes Papier: wie bisher (Zeile 1,55-fach hoch plus Abstand). Gleiche Regel in render.js.
-      const raster = state.title && state.paper !== 'plain' ? Math.ceil(titleF - 1e-9) : 0;
+      // Auf liniertem/kariertem Papier belegt jede Überschriftzeile **eine** Linienzeile, ohne Abstand darunter –
+      // wie von Hand geschrieben: die Grundlinie liegt auf der Linie, die große Schrift ragt nach oben über die Zeile
+      // hinaus (bei Größe 2 und 3 in den Rand hinein, notfalls unter die Befestigung), und alles danach bleibt auf den
+      // Linien. Glattes Papier: wie bisher (Zeile 1,55-fach hoch plus Abstand). Gleiche Regel in render.js.
+      const raster = state.title && state.paper !== 'plain' ? 1 : 0;
+      const fontM = FONTS[state.font] || FONTS.caveat;
+      // Überstand der Überschrift über ihre Zeile: Unterschied der Grundlinienabstände beider Schriftgrößen
+      const ueberOf = f => (raster ? (titleF - 1) * (LH + fontM.asc - fontM.desc) / 2 * f : 0);
       const gapOf = f => (state.title && !raster ? f * titleF * TITLE_GAP : 0);
-      // Zeilen der Überschrift sind höher als die übrigen
+      // Zeilen der Überschrift sind höher als die übrigen (im Linienraster zählt eine Zeile)
       const blockH = (f, ls) => ls.reduce((a, l) => a + f * LH * (state.title && l.p === 0 ? (raster || titleF) : 1), 0);
-      const fitsHeight = (f, ls) => blockH(f, ls) + gapOf(f) + 2 * pad + inset <= noteH;
+      // Höhe einhalten – und die Überschrift darf oben nicht über das Papier hinausragen
+      const fitsHeight = (f, ls) => blockH(f, ls) + gapOf(f) + 2 * pad + inset <= noteH && ueberOf(f) <= pad + inset;
 
       let fs = Math.round(noteW / 7), lines;
       // 1) Kein Wort wird hart getrennt: Schrift so weit verkleinern, bis das längste Wort in eine Zeile passt.
@@ -1225,7 +1230,7 @@
       const lh = fs * LH;
       // Textblock: oben beginnen, unterhalb des Einschubs der Befestigung (wie von Hand geschrieben)
       const textTop = pad + inset;
-      return { layout, noteW, pad, textW, family, weight, LH, fs, lh, lines, noteH, inset, textTop, titleGap: gapOf(fs), titleF, raster, overflow };
+      return { layout, noteW, pad, textW, family, weight, LH, fs, lh, lines, noteH, inset, textTop, titleGap: gapOf(fs), titleF, raster, ueber: ueberOf(fs), overflow };
     }
     // Zu viel Text: die Vorschau wächst nach unten, damit man weiter sieht, was man tippt – das Bild hat aber
     // feste Maße und schnitte ab. Darum Warnung in Vorschau und Statuszeile, und Kleben/Teilen sind gesperrt.
@@ -1267,7 +1272,7 @@
       const font = FONTS[state.font] || FONTS.caveat;
       const b = (f.LH + font.asc - font.desc) / 2 * f.fs;
       const k = Math.max(1, f.lines.filter(l => l.p === 0).length);
-      const padTop = (f.raster - 1) * f.lh - (f.titleF - 1) * b;
+      const padTop = -f.ueber;   // negativ: die Überschrift beginnt über ihrer Zeile (raster = 1)
       const uOff = 0.95 * f.lh - b - 0.025 * f.titleF * f.fs;
       return { marginTop: padTop * scale + 'px', marginBottom: (k * f.raster * f.lh - padTop - k * f.titleF * f.lh) * scale + 'px', textUnderlineOffset: uOff * scale + 'px' };
     }
@@ -1307,8 +1312,13 @@
       textEl.titleStyle = f.raster ? titleRasterStyle(f, scale) : null;
       textEl.applyIndents();
       noteEl.style.height = Math.round(f.noteH * scale) + 'px';
-      // Vertikale Lage wie im Bild: Textblock unter dem Einschub der Befestigung, zentriert
-      textEl.style.paddingTop = Math.round((f.textTop - f.pad) * scale) + 'px';
+      // Vertikale Lage wie im Bild: Textblock unter dem Einschub der Befestigung, zentriert.
+      // Ragt die Überschrift nach oben über ihre Zeile hinaus, wird der Kasten des Textfelds um denselben Betrag
+      // nach oben erweitert (sonst schnitte sein overflow:hidden die Oberlängen ab); der Inhalt bleibt an Ort und Stelle.
+      const ueberPx = Math.round(f.ueber * scale);
+      textEl.style.marginTop = (-ueberPx) + 'px';
+      textEl.style.height = ueberPx ? 'calc(100% + ' + ueberPx + 'px)' : '';
+      textEl.style.paddingTop = (Math.round((f.textTop - f.pad) * scale) + ueberPx) + 'px';
       // Sicherung: Die Vorschau darf nie abschneiden. Bricht der Browser anders um als gemessen,
       // wächst der Zettel in der App, bis alles sichtbar ist.
       const padPx = parseFloat(getComputedStyle(noteEl).paddingTop) || 0;
@@ -1371,7 +1381,7 @@
 
       // Alles Bildbestimmende VOR dem ersten await lesen – sonst könnte ein Bild halb alten, halb neuen Stand zeigen
       const c = COLORS[state.color], edge = state.edge, paper = state.paper, texture = state.texture, ink = inkColor(), titleOn = state.title;
-      const { layout, noteW, pad, family, weight, fs, lh, lines, noteH, textTop, titleGap, titleF, raster } = fitNote(w, h, layoutName, noteText() || '…');
+      const { layout, noteW, pad, family, weight, fs, lh, lines, noteH, textTop, titleGap, titleF, raster, ueber } = fitNote(w, h, layoutName, noteText() || '…');
       const m = pad * 2.2;
       const fastener = await svgImage(fastenerSvg(state.fastener, noteW, noteH, pad, fastenerLook())).catch(() => null);
 
@@ -1423,9 +1433,9 @@
         const isTitle = titleOn && line.p === 0;                      // ganzer erster Absatz, auch mehrzeilig
         const f = isTitle ? Math.round(fs * titleF) : fs;
         ctx.font = `${weight} ${f}px ${family}`;
-        // Überschrift im Linienraster: Block raster·lh, Grundlinie auf der Grundlinie der letzten Rasterzeile
-        // (Textoberkante um (titleF − 1)·Grundlinienabstand höher als die einer Zeile in normaler Größe)
-        const ty = isTitle && raster ? y + (raster - 1) * lh - (titleF - 1) * baselineOf(fs) : y;
+        // Überschrift im Linienraster: belegt eine Zeile, Grundlinie auf deren Grundlinie – die größere Schrift
+        // ragt um „ueber“ nach oben über die Zeile hinaus (in den Rand, notfalls unter die Befestigung)
+        const ty = isTitle && raster ? y - ueber : y;
         if (line.mk) ctx.fillText(line.mk, -noteW / 2 + pad, ty);         // Markierung links
         const tx = -noteW / 2 + pad + line.x;
         ctx.fillText(line.t, tx, ty);                                     // Text eingerückt
@@ -1433,11 +1443,11 @@
         // (text-underline-offset .1em, Stärke .05em) unter der Grundlinie – die liegt je nach Schrift verschieden
         // tief unter der Oberkante (Marker tiefer als Caveat), darum aus den Metriken. Linienraster: mittig auf der Linie.
         if (isTitle && line.t) {
-          const uy = raster ? y + (raster - 1) * lh + 0.95 * lh - f * 0.025 : ty + baselineOf(f) + f * 0.1;
+          const uy = raster ? y + 0.95 * lh - f * 0.025 : ty + baselineOf(f) + f * 0.1;
           ctx.fillRect(tx, uy, ctx.measureText(line.t).width, Math.max(1, f * 0.05));
         }
         const letzteTitelzeile = isTitle && (!lines[i + 1] || lines[i + 1].p !== 0);
-        y += (isTitle && raster ? raster * lh : f * (lh / fs)) + (letzteTitelzeile ? titleGap : 0);
+        y += (isTitle && raster ? lh : f * (lh / fs)) + (letzteTitelzeile ? titleGap : 0);
       });
 
       // Befestigung zuletzt, liegt über Papier und Text
