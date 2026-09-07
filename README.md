@@ -26,8 +26,9 @@ So ist die Notiz sichtbar, ohne die App zu öffnen.
 4. „Zettel ausblenden" legt nur das eigene Hintergrundfoto in die Zwischenablage – ohne Zettel; Text und
    Einstellungen bleiben in der App. Ohne hinterlegtes Foto gibt es nur einen Hinweis.
 
-Die App meldet nach dem Kleben „Bild bereit" bzw. „Kurzbefehl angefordert" (jeweils „mit Zettel" oder „nur
-Hintergrund"), nie „angeheftet": ob das Bild wirklich auf dem Sperrbildschirm gelandet ist, kann sie nicht wissen.
+Die App meldet nach dem Kleben „Bild bereit" bzw. „Kurzbefehl angefordert" (in der Statuszeile mit „mit Zettel"
+oder „nur Hintergrund", in Kopfzeile und Marke kurz „Bild …" bzw. „Hintergrund …"), nie „angeheftet": ob das Bild
+wirklich auf dem Sperrbildschirm gelandet ist, kann sie nicht wissen.
 Nach jeder Änderung, die das Bild beträfe (Text, Papier, Schrift, Befestigung, Überschrift, Hintergrundfoto),
 steht dort „geändert · Bild veraltet". Passt der Text auch in kleinster Schrift nicht auf den Zettel, warnt die
 App („Zu viel Text") und klebt nicht – das Bild würde sonst abschneiden.

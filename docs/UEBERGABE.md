@@ -3,7 +3,7 @@
 **Repository: `luperttrading-lab/Zettel`.** Diese Datei liegt dort unter `docs/UEBERGABE.md`. Eine neue Sitzung
 muss in diesem Repository laufen, sonst fehlen Skripte, Motive, Schriften und Kontext.
 
-Stand: 7. September 2026, App-Version **1.36.3**, Branch `claude/docs-uebergabe-readme-e8bkvo` (nach Abschluss per
+Stand: 7. September 2026, App-Version **1.36.4**, Branch `claude/docs-uebergabe-readme-e8bkvo` (nach Abschluss per
 Fast-Forward auf `main` gebracht; Vercel und GitHub Pages bauen aus `main`).
 
 ## 0. Arbeitsweise mit dem Auftraggeber
@@ -95,6 +95,7 @@ Zweite Sitzung (Auftrag aus 6b, alle sechs Punkte umgesetzt, Reihenfolge 1 · 3 
 | 1.36.1 | Punkt 5: `fitNote` liefert `overflow`; Marke „⚠ Zu viel Text“ links unten, Statuszeile `OVERFLOW_HINT`, Kleben und Teilen gesperrt (`.btn.blocked`) | Vorschau wächst weiterhin (man sieht, was man tippt). `lib/render.js` gibt `overflow` zurück – **keine Layoutregel geändert**; Parität geprüft: 3–40 Zeilen gleiche Schriftgröße, Zeilenzahl und Flag, Grenze bei 22 Zeilen „Zeile n Einkauf“. Ausblenden bleibt möglich |
 | 1.36.2 | Punkt 6: Beschriftung „zugeschnittener JPEG-Abzug, nicht das Original“ in Anleitung, Knopf-Titel und Bestätigung | Trennung `zettel.bg` / `zettel.v1` unverändert; `pinned` trägt nur die Kennung; Test prüft, dass Leeren das Foto stehen lässt |
 | 1.36.3 | Altfehler: `.tsizes` hatte `display:flex`, das schlug das `hidden`-Attribut – die drei A-Knöpfe waren seit 1.34 immer sichtbar | Regel `.tsizes[hidden] { display: none }` |
+| 1.36.4 | Neun Befunde aus einem Review (Abschnitt 7): Schnappschuss des Stands im Tipp (`pinSnapshot`/`gleicherStand`, Meldung `GEAENDERT` statt „bereit“, wenn währenddessen geändert), Laufnummer `bgGen` gegen überholte `Image`-Rückrufe, Überlauf in `renderPng` mit geladener Schrift erneut geprüft, Fallback ohne Zwischenablage meldet Fehler, kaputtes Foto bleibt bis ✕ liegen (Meldung in Banner **und** Statuszeile), kurzer Wortlaut in Kopfzeile/Marke („Bild bereit“, „Kurzbefehl angefordert“, „Hintergrund bereit“, „Hintergrund angefordert“ – die lange Form „· mit Zettel / · nur Hintergrund“ nur in Statuszeile und Banner), Marken stapeln sich, `OVERFLOW_HINT` nur beim Übergang, alter Eintrag „Bild veraltet · neu kleben“, Server-Header `X-Zettel-Overflow` | `renderWallpaper` liest alles Bildbestimmende **vor** dem ersten `await`. Wer neue bildbestimmende Felder einführt: `SNAP_FIELDS`, `pinSnapshot` und `isPinnedCurrent` gemeinsam pflegen. Test: `tests/app_review.mjs` bei 375 px |
 
 **Parität App ↔ Server ist die wichtigste Regel.** Für denselben Text müssen `fitNote` (App) und die
 Schriftgrößenwahl in `render.js` dieselbe Größe und Zeilenzahl ergeben (zuletzt geprüft: 135 px / 105 px bei
@@ -179,7 +180,9 @@ Skripte: `node tools/gen_image.mjs <out.png> <modell> "<prompt>" [--dump] [--noc
   `(setsid nohup python3 -m http.server 8766 >/dev/null 2>&1 < /dev/null &)`, dann `http://localhost:8766/index.html`.
 - **Prüfskripte im Repo** (Chromium, Aufruf im Kopf jeder Datei, Ausgabeverzeichnis als Argument): `tests/app_status.mjs`
   (Punkt 1), `app_wortlaut.mjs` (3), `app_foto.mjs` (4), `app_ausblenden.mjs` (2), `app_ueberlauf.mjs` (5, inkl.
-  Parität mit `lib/render.js`), `app_trennung.mjs` (6 + Größenknöpfe). Jedes endet mit „ALLE TESTS OK“ oder „n FEHLER“.
+  Parität mit `lib/render.js`), `app_trennung.mjs` (6 + Größenknöpfe), `app_review.mjs` (Befunde 1.36.4, Viewport 375 px:
+  verzögertes `toBlob` für die Änderung während des Renderns, ✕ während des Dekodierens, Marken ohne Überlappung).
+  Jedes endet mit „ALLE TESTS OK“ oder „n FEHLER“. Der lokale Server auf 8766 stirbt bei längerer Pause – vor dem Lauf `curl` prüfen.
   `tests/app_photo.mjs` und `app_paper.mjs` sind für WebKit geschrieben; für Chromium die zwei `webkit`-Zeilen ersetzen.
 - Zwischenablage im Test: `context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin })`, Klick per
   Playwright gilt als Geste. **Nach `location.href = 'shortcuts://…'` nimmt Chromium keine Klicks und Tasten mehr an**
@@ -210,7 +213,7 @@ Skripte: `node tools/gen_image.mjs <out.png> <modell> "<prompt>" [--dump] [--noc
 2. Falls der Home-Bildschirm den Zettel zeigt (unscharf oder scharf): Home-Hälfte steht auf „Paar“ oder der
    Kurzbefehl hat „Home-Bildschirm“ angehakt. Beides in Ordnung; „Nebel ohne Zettel“ nur über Anpassen → Foto.
 
-### 6b. Sechs Verbesserungen an der App – **erledigt** (1.35.3 bis 1.36.2, Tabelle in Abschnitt 2)
+### 6b. Sechs Verbesserungen an der App – **erledigt** (1.35.3 bis 1.36.2, Nacharbeit 1.36.4; Tabelle in Abschnitt 2)
 
 Vorlage einer anderen KI, vom Auftraggeber gebilligt. Der ursprüngliche Auftrag zum Nachlesen; was daraus wurde,
 steht in Abschnitt 2. **Auf dem iPhone noch offen** (hier nur Chromium): Zwischenablage-Weg mit `png.catch`, Banner
@@ -256,7 +259,18 @@ auf dem iPhone offen. Den Erhalt von Home-Bildschirm, Uhrstil und Widgets nie au
   (Präfix „Bild bereit“/„Kurzbefehl „“) und `syncPreview` (`OVERFLOW_HINT`) arbeiten mit Textvergleich. Neue
   Meldungen dort brauchen eine eigene Löschregel, sonst bleiben sie stehen.
 
-## 7. Kosten dieser Sitzung und Rat für die nächste
+## 7. Kosten und Rat für die nächste Sitzung
+
+**Zweite Sitzung (6b, 7. September):** Claude ≈ 152 $ gemessen, davon **≈ 131 $ für einen Review-Workflow** mit
+96 Unteragenten (sechs Prüfperspektiven, je Befund drei Widerleger; 3 Stunden, weil die Umgebung nur zwei Agenten
+parallel erlaubt). Kostentreiber war das Cache-Schreiben: 5,4 Mio Token × 20 $/Mio = 108 $ – jeder Agent schreibt seinen
+eigenen Cache. Die eigentliche Umsetzung aller sechs Punkte samt Tests kostete ≈ 19 $. Der Review fand 20 bestätigte
+Befunde (neun Ursachen, alle in 1.36.4 behoben), aber gegen 3 Uhr UTC lief die Sitzung ins Nutzungslimit (Reset 3:20),
+die Widerleger zweier Perspektiven fielen aus. **Rat: in dieser Umgebung keine Mehr-Agenten-Workflows.** Ein einzelner
+Prüfagent oder die Prüfung im Hauptverlauf kostet 2–5 $ und hätte die wichtigsten Befunde (Schnappschuss, Laufnummer,
+Wortlautbreite) ebenfalls geliefert.
+
+**Erste Sitzung (1.29 → 1.35.2):**
 
 - RouteLLM gesamt 72 ct (alle Bilder der drei Tage).
 - Claude gesamt ≈ 149 $ (Opus 5 bis zum Modellwechsel, danach Fable 5.1). Ein sehr großer Teil davon ist
