@@ -12,21 +12,22 @@ Zustimmungsfloskeln, unbequeme Wahrheit zuerst).
 
 Der Auftraggeber will nach **jeder** Antwort wissen, was sie gekostet hat. Ganz am Ende der Antwort, genau
 einmal, als **Codeblock mit zwei Zeilen** – Festbreitenschrift, damit „RouteLLM“ und „Claude“ in beiden Zeilen
-genau untereinander stehen (Wunsch vom 7.9.2026). Keine Tabelle (passt nicht aufs iPhone), keine Fettschrift,
-Zahlen rechtsbündig, Cent mit einer, Dollar mit zwei Nachkommastellen, Breite 46 Zeichen:
+genau untereinander stehen (Wunsch vom 7.9.2026). Keine Tabelle, keine Fettschrift. **Höchstens 40 Zeichen
+breit** – der Codeblock zeigt auf dem iPhone 41 Zeichen, danach wird abgeschnitten (geprüft 7.9.2026, 46 Zeichen
+waren zu viel). Deshalb kurze Beschriftungen und eine Nachkommastelle:
 
 ```
-Diese Frage:   0,0 ct RouteLLM   0,56 $ Claude
-Heute gesamt: 78,0 ct RouteLLM 169,63 $ Claude
+Frage:   0,0 ct RouteLLM   0,6 $ Claude
+Heute:  78,0 ct RouteLLM 169,8 $ Claude
 ```
 
-Erzeugen mit (Python, Komma als Dezimaltrenner):
+Erzeugen mit (Python, Komma als Dezimaltrenner, 39 Zeichen):
 
 ```
 def kosten(frage_ct, frage_usd, tag_ct, tag_usd):
-    de = lambda x, n: f"{x:.{n}f}".replace('.', ',')
-    z1 = f"{'Diese Frage:':<13}{de(frage_ct,1):>5} ct RouteLLM {de(frage_usd,2):>6} $ Claude"
-    z2 = f"{'Heute gesamt:':<13}{de(tag_ct,1):>5} ct RouteLLM {de(tag_usd,2):>6} $ Claude"
+    de = lambda x: f"{x:.1f}".replace('.', ',')
+    z1 = f"{'Frage:':<7}{de(frage_ct):>5} ct RouteLLM {de(frage_usd):>5} $ Claude"
+    z2 = f"{'Heute:':<7}{de(tag_ct):>5} ct RouteLLM {de(tag_usd):>5} $ Claude"
     return z1, z2
 ```
 
