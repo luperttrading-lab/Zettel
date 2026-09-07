@@ -3,7 +3,7 @@
 **Repository: `luperttrading-lab/Zettel`.** Diese Datei liegt dort unter `docs/UEBERGABE.md`. Eine neue Sitzung
 muss in diesem Repository laufen, sonst fehlen Skripte, Motive, Schriften und Kontext.
 
-Stand: 7. September 2026, App-Version **1.37.0**, Branch `claude/docs-uebergabe-readme-e8bkvo` (nach Abschluss per
+Stand: 7. September 2026, App-Version **1.37.1**, Branch `claude/docs-uebergabe-readme-e8bkvo` (nach Abschluss per
 Fast-Forward auf `main` gebracht; Vercel und GitHub Pages bauen aus `main`).
 
 ## 0. Arbeitsweise mit dem Auftraggeber
@@ -97,10 +97,16 @@ Zweite Sitzung (Auftrag aus 6b, alle sechs Punkte umgesetzt, Reihenfolge 1 · 3 
 | 1.36.3 | Altfehler: `.tsizes` hatte `display:flex`, das schlug das `hidden`-Attribut – die drei A-Knöpfe waren seit 1.34 immer sichtbar | Regel `.tsizes[hidden] { display: none }` |
 | 1.36.4 | Neun Befunde aus einem Review (Abschnitt 7): Schnappschuss des Stands im Tipp (`pinSnapshot`/`gleicherStand`, Meldung `GEAENDERT` statt „bereit“, wenn währenddessen geändert), Laufnummer `bgGen` gegen überholte `Image`-Rückrufe, Überlauf in `renderPng` mit geladener Schrift erneut geprüft, Fallback ohne Zwischenablage meldet Fehler, kaputtes Foto bleibt bis ✕ liegen (Meldung in Banner **und** Statuszeile), kurzer Wortlaut in Kopfzeile/Marke („Bild bereit“, „Kurzbefehl angefordert“, „Hintergrund bereit“, „Hintergrund angefordert“ – die lange Form „· mit Zettel / · nur Hintergrund“ nur in Statuszeile und Banner), Marken stapeln sich, `OVERFLOW_HINT` nur beim Übergang, alter Eintrag „Bild veraltet · neu kleben“, Server-Header `X-Zettel-Overflow` | `renderWallpaper` liest alles Bildbestimmende **vor** dem ersten `await`. Wer neue bildbestimmende Felder einführt: `SNAP_FIELDS`, `pinSnapshot` und `isPinnedCurrent` gemeinsam pflegen. Test: `tests/app_review.mjs` bei 375 px |
 | 1.37.0 | Auftraggeber-Wunsch nach dem ersten Test auf dem iPhone („Ausblenden klappt, aber der Zettel klebt in der App noch genauso“): „Zettel ausblenden“ ist jetzt ein **Umschalter** mit Zustand `state.hidden`. Ausgeblendet: `.note.weg` (visibility hidden, Fläche bleibt), Hinweis `#weghint` „Zettel ausgeblendet · antippen zum Bearbeiten“, Knopf heißt „Zettel einblenden“. Einblenden **lädt das Zettelbild hoch** (gleicher Weg wie Kleben) – kein weiteres Hochladen nötig. Tipp auf die Fläche = `peek` (nur in der App sichtbar, nichts hochgeladen, Zustand bleibt) | Der Zustand wechselt erst, wenn das Bild fertig ist (`png.then`), bei Ablehnung nicht. „Aufs Display kleben“ beendet das Ausblenden ebenfalls. Leerer Zettel + einblenden → Zettel erscheint zum Schreiben mit Hinweis. Test: `tests/app_umschalter.mjs` |
+| 1.37.1 | Auftraggeber-Wunsch (Screenshot vom Sperrbildschirm): Überschrift auf liniertem Papier passte nicht ins Linienraster, alles darunter rutschte von den Linien. Jetzt **Linienraster**: auf liniertem/kariertem Papier belegt jede Überschriftzeile `raster = ceil(titleF)` Linienzeilen (1 bzw. 2) ohne Abstand darunter; die Überschrift sitzt unten bündig (Grundlinie auf der Grundlinie der letzten Rasterzeile, große Buchstaben ragen nach oben), der Unterstrich liegt mittig auf der Linie. Glattes Papier unverändert (1,55 Zeilen + 0,28 em) | **Layoutregel, dreifach**: `fitNote` (`raster`, `blockH`, `gapOf`), `render.js` (`raster`, `hoehe`, `titelLage`), Vorschau (`titleRasterStyle` → Inline-`marginTop/marginBottom/textUnderlineOffset` am ersten `.ln`, gesetzt über `textEl.titleStyle` in `applyIndents`). Dafür neu in beiden `FONTS`-Tabellen: `asc`/`desc` (hhea, em) – Grundlinie im Zeilenkasten = (lh + asc − desc)/2 · fs. Im Canvas dient `baselineOf(fs)` als Maß. satori setzt den Unterstrich selbst (Schriftmetrik, pro Wort) – dort nicht steuerbar. Test: `tests/app_titelraster.mjs` (Parität Größen × Papiere × Schriften, mehrzeilige Überschrift) |
 
 **Parität App ↔ Server ist die wichtigste Regel.** Für denselben Text müssen `fitNote` (App) und die
 Schriftgrößenwahl in `render.js` dieselbe Größe und Zeilenzahl ergeben (zuletzt geprüft: 135 px / 105 px bei
 Stufe 3, 4 bzw. 5 Zeilen, identisch). Wer Layoutregeln anfasst, ändert beide Dateien.
+**Bekannte Abweichung (vorbestehend, am Stand 1.37.0 nachgemessen):** Caveat ist exakt paritätisch; Kalam, Marker und
+Gloria weichen um 2–7 px ab (App 119/105/99 vs. Server 116/101/101 bei fünf Zeilen), unabhängig von Überschrift und Papier –
+Ursache ist die Breitenmessung (Canvas `measureText` vs. `*-widths.json`). Ebenfalls vorbestehend: im Canvas-Bild sitzt
+der Text etwa 0,15 em höher über der Linie als in der Vorschau (Canvas `textBaseline: top` kennt keinen halben
+Durchschuss); sichtbar als etwas mehr Luft zwischen Buchstaben und Linie im Bild.
 
 ## 3. Bild-Prompts (bewährt, unverändert gültig)
 

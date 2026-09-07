@@ -380,7 +380,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.37.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.37.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -397,14 +397,16 @@
     const PENS = { black: { label: 'Schwarz', ink: null }, blue: { label: 'Blau', ink: '#1b3f9c' }, red: { label: 'Rot', ink: '#c0392b' }, green: { label: 'Grün', ink: '#1e6b3a' } };
     const LINE_COLOR = 'rgba(0,0,0,.14)';
     // Schriften (alle frei lizenziert, liegen auch auf dem Server). lh = Zeilenhöhe relativ zur Schriftgröße.
+    // asc/desc = Ober-/Unterlänge aus der hhea-Tabelle in em; damit legen Browser und satori die Grundlinie in den
+    // Zeilenkasten: Abstand Oberkante → Grundlinie = (lh + asc − desc) / 2 · fs. Dieselben Werte in lib/render.js.
     const FONTS = {
-      caveat:  { label: 'Caveat',  family: 'Caveat',           weight: 500, lh: 1.15 },
-      patrick: { label: 'Patrick', family: 'Patrick Hand',     weight: 400, lh: 1.20 },
-      kalam:   { label: 'Kalam',   family: 'Kalam',            weight: 400, lh: 1.30 },
-      marker:  { label: 'Marker',  family: 'Permanent Marker', weight: 400, lh: 1.25 },
-      indie:   { label: 'Indie',   family: 'Indie Flower',      weight: 400, lh: 1.25 },
-      shadows: { label: 'Shadows', family: 'Shadows Into Light', weight: 400, lh: 1.30 },
-      gloria:  { label: 'Gloria',  family: 'Gloria Hallelujah', weight: 400, lh: 1.35 },
+      caveat:  { label: 'Caveat',  family: 'Caveat',           weight: 500, lh: 1.15, asc: 0.960, desc: 0.300 },
+      patrick: { label: 'Patrick', family: 'Patrick Hand',     weight: 400, lh: 1.20, asc: 1.042, desc: 0.312 },
+      kalam:   { label: 'Kalam',   family: 'Kalam',            weight: 400, lh: 1.30, asc: 1.063, desc: 0.531 },
+      marker:  { label: 'Marker',  family: 'Permanent Marker', weight: 400, lh: 1.25, asc: 1.109, desc: 0.317 },
+      indie:   { label: 'Indie',   family: 'Indie Flower',      weight: 400, lh: 1.25, asc: 0.971, desc: 0.488 },
+      shadows: { label: 'Shadows', family: 'Shadows Into Light', weight: 400, lh: 1.30, asc: 1.175, desc: 0.432 },
+      gloria:  { label: 'Gloria',  family: 'Gloria Hallelujah', weight: 400, lh: 1.35, asc: 1.405, desc: 0.577 },
     };
     const FALLBACK = '"Segoe Print", "Bradley Hand", "Comic Sans MS", cursive';
 
@@ -431,7 +433,7 @@
     // und wird per CSS gezeichnet (nicht editierbar); die Zeile ist um indentFn(zeile) px eingerückt.
     class Editor {
       constructor(el) {
-        this.el = el; this._value = ''; this.indentFn = () => 0; this._composing = false;
+        this.el = el; this._value = ''; this.indentFn = () => 0; this._composing = false; this.titleStyle = null;
         el.addEventListener('compositionstart', () => { this._composing = true; });
         el.addEventListener('compositionend', () => { this._composing = false; this._afterInput(); });
         el.addEventListener('input', () => { if (!this._composing) this._afterInput(); });
@@ -499,6 +501,10 @@
         [...this.el.children].forEach((d, i) => {
           const ind = Math.round(this.indentFn(lines[i] || '') * 100) / 100;
           d.style.paddingLeft = ind ? ind + 'px' : '';
+          if (i === 0) {   // Überschrift im Linienraster (syncPreview setzt titleStyle), sonst gilt das CSS
+            const t = this.titleStyle || {};
+            d.style.marginTop = t.marginTop || ''; d.style.marginBottom = t.marginBottom || ''; d.style.textUnderlineOffset = t.textUnderlineOffset || '';
+          }
         });
         this.el.classList.toggle('empty', this._value === '');
       }
@@ -1191,9 +1197,13 @@
       // Die Größe hängt nicht vom Text ab – nur die Schrift passt sich an.
       const noteH = Math.round(Math.min(noteW, layout.maxNoteH));
       const TITLE_GAP = 0.28;             // em unter der Überschrift, gleicher Wert im CSS und in render.js
-      const gapOf = f => (state.title ? f * titleF * TITLE_GAP : 0);
+      // Auf liniertem/kariertem Papier belegt jede Überschriftzeile eine ganze Zahl Linienzeilen (raster = 1 oder 2),
+      // ohne Abstand darunter – wie von Hand: die Überschrift ragt nach oben, alles danach bleibt auf den Linien.
+      // Glattes Papier: wie bisher (Zeile 1,55-fach hoch plus Abstand). Gleiche Regel in render.js.
+      const raster = state.title && state.paper !== 'plain' ? Math.ceil(titleF - 1e-9) : 0;
+      const gapOf = f => (state.title && !raster ? f * titleF * TITLE_GAP : 0);
       // Zeilen der Überschrift sind höher als die übrigen
-      const blockH = (f, ls) => ls.reduce((a, l) => a + f * LH * (state.title && l.p === 0 ? titleF : 1), 0);
+      const blockH = (f, ls) => ls.reduce((a, l) => a + f * LH * (state.title && l.p === 0 ? (raster || titleF) : 1), 0);
       const fitsHeight = (f, ls) => blockH(f, ls) + gapOf(f) + 2 * pad + inset <= noteH;
 
       let fs = Math.round(noteW / 7), lines;
@@ -1215,7 +1225,7 @@
       const lh = fs * LH;
       // Textblock: oben beginnen, unterhalb des Einschubs der Befestigung (wie von Hand geschrieben)
       const textTop = pad + inset;
-      return { layout, noteW, pad, textW, family, weight, LH, fs, lh, lines, noteH, inset, textTop, titleGap: gapOf(fs), titleF, overflow };
+      return { layout, noteW, pad, textW, family, weight, LH, fs, lh, lines, noteH, inset, textTop, titleGap: gapOf(fs), titleF, raster, overflow };
     }
     // Zu viel Text: die Vorschau wächst nach unten, damit man weiter sieht, was man tippt – das Bild hat aber
     // feste Maße und schnitte ab. Darum Warnung in Vorschau und Statuszeile, und Kleben/Teilen sind gesperrt.
@@ -1249,6 +1259,19 @@
       return Math.round(mirrorEl.offsetHeight / (px * f.LH));
     }
 
+    // Lage der Überschrift im Linienraster (Vorschau). b = Abstand Zeilenkasten-Oberkante → Grundlinie im Browser
+    // (halber Durchschuss plus Oberlänge). Die Überschriftzeile (Höhe titleF·lh) sitzt so im Block aus raster Zeilen,
+    // dass ihre Grundlinie auf der Grundlinie der letzten Rasterzeile liegt; der Unterstrich (0,05 em stark) liegt
+    // mittig auf der Linie, die 0,95·lh unter der Zeilenoberkante läuft. Mehrzeilige Überschrift: Block = k·raster·lh.
+    function titleRasterStyle(f, scale) {
+      const font = FONTS[state.font] || FONTS.caveat;
+      const b = (f.LH + font.asc - font.desc) / 2 * f.fs;
+      const k = Math.max(1, f.lines.filter(l => l.p === 0).length);
+      const padTop = (f.raster - 1) * f.lh - (f.titleF - 1) * b;
+      const uOff = 0.95 * f.lh - b - 0.025 * f.titleF * f.fs;
+      return { marginTop: padTop * scale + 'px', marginBottom: (k * f.raster * f.lh - padTop - k * f.titleF * f.lh) * scale + 'px', textUnderlineOffset: uOff * scale + 'px' };
+    }
+
     function syncPreview() {
       const t = targetCanvas();
       const text = noteText() || 'Was soll auf den Zettel?';
@@ -1279,8 +1302,9 @@
       textEl.style.fontFamily = f.family; textEl.style.fontWeight = f.weight;
       textEl.style.fontSize = (f.fs * scale) + 'px';
       textEl.style.lineHeight = String(f.LH);
-      // Hängender Einzug pro Zeile, gleiche Messung wie fürs Bild
+      // Hängender Einzug pro Zeile, gleiche Messung wie fürs Bild; dazu die Lage der Überschrift im Linienraster
       textEl.indentFn = line => lineIndent(line, f.family, f.weight, f.fs * scale);
+      textEl.titleStyle = f.raster ? titleRasterStyle(f, scale) : null;
       textEl.applyIndents();
       noteEl.style.height = Math.round(f.noteH * scale) + 'px';
       // Vertikale Lage wie im Bild: Textblock unter dem Einschub der Befestigung, zentriert
@@ -1347,7 +1371,7 @@
 
       // Alles Bildbestimmende VOR dem ersten await lesen – sonst könnte ein Bild halb alten, halb neuen Stand zeigen
       const c = COLORS[state.color], edge = state.edge, paper = state.paper, texture = state.texture, ink = inkColor(), titleOn = state.title;
-      const { layout, noteW, pad, family, weight, fs, lh, lines, noteH, textTop, titleGap, titleF } = fitNote(w, h, layoutName, noteText() || '…');
+      const { layout, noteW, pad, family, weight, fs, lh, lines, noteH, textTop, titleGap, titleF, raster } = fitNote(w, h, layoutName, noteText() || '…');
       const m = pad * 2.2;
       const fastener = await svgImage(fastenerSvg(state.fastener, noteW, noteH, pad, fastenerLook())).catch(() => null);
 
@@ -1399,15 +1423,21 @@
         const isTitle = titleOn && line.p === 0;                      // ganzer erster Absatz, auch mehrzeilig
         const f = isTitle ? Math.round(fs * titleF) : fs;
         ctx.font = `${weight} ${f}px ${family}`;
-        if (line.mk) ctx.fillText(line.mk, -noteW / 2 + pad, y);          // Markierung links
+        // Überschrift im Linienraster: Block raster·lh, Grundlinie auf der Grundlinie der letzten Rasterzeile
+        // (Textoberkante um (titleF − 1)·Grundlinienabstand höher als die einer Zeile in normaler Größe)
+        const ty = isTitle && raster ? y + (raster - 1) * lh - (titleF - 1) * baselineOf(fs) : y;
+        if (line.mk) ctx.fillText(line.mk, -noteW / 2 + pad, ty);         // Markierung links
         const tx = -noteW / 2 + pad + line.x;
-        ctx.fillText(line.t, tx, y);                                      // Text eingerückt
-        // Unterstrich von Hand: Canvas kennt keine Textdekoration. Lage wie im CSS (text-underline-offset .1em,
-        // Stärke .05em) unter der Grundlinie – und die liegt je nach Schrift verschieden tief unter der Oberkante
-        // (Marker deutlich tiefer als Caveat), darum aus den Metriken statt mit festem Faktor.
-        if (isTitle && line.t) ctx.fillRect(tx, y + baselineOf(f) + f * 0.1, ctx.measureText(line.t).width, Math.max(1, f * 0.05));
+        ctx.fillText(line.t, tx, ty);                                     // Text eingerückt
+        // Unterstrich von Hand: Canvas kennt keine Textdekoration. Glattes Papier: Lage wie im CSS
+        // (text-underline-offset .1em, Stärke .05em) unter der Grundlinie – die liegt je nach Schrift verschieden
+        // tief unter der Oberkante (Marker tiefer als Caveat), darum aus den Metriken. Linienraster: mittig auf der Linie.
+        if (isTitle && line.t) {
+          const uy = raster ? y + (raster - 1) * lh + 0.95 * lh - f * 0.025 : ty + baselineOf(f) + f * 0.1;
+          ctx.fillRect(tx, uy, ctx.measureText(line.t).width, Math.max(1, f * 0.05));
+        }
         const letzteTitelzeile = isTitle && (!lines[i + 1] || lines[i + 1].p !== 0);
-        y += f * (lh / fs) + (letzteTitelzeile ? titleGap : 0);
+        y += (isTitle && raster ? raster * lh : f * (lh / fs)) + (letzteTitelzeile ? titleGap : 0);
       });
 
       // Befestigung zuletzt, liegt über Papier und Text
