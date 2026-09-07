@@ -3,7 +3,7 @@
 **Repository: `luperttrading-lab/Zettel`.** Diese Datei liegt dort unter `docs/UEBERGABE.md`. Eine neue Sitzung
 muss in diesem Repository laufen, sonst fehlen Skripte, Motive, Schriften und Kontext.
 
-Stand: 7. September 2026, App-Version **1.37.3**, Branch `claude/docs-uebergabe-readme-e8bkvo` (nach Abschluss per
+Stand: 7. September 2026, App-Version **1.37.4**, Branch `claude/docs-uebergabe-readme-e8bkvo` (nach Abschluss per
 Fast-Forward auf `main` gebracht; Vercel und GitHub Pages bauen aus `main`).
 
 ## 0. Arbeitsweise mit dem Auftraggeber
@@ -99,6 +99,7 @@ Zweite Sitzung (Auftrag aus 6b, alle sechs Punkte umgesetzt, Reihenfolge 1 · 3 
 | 1.37.0 | Auftraggeber-Wunsch nach dem ersten Test auf dem iPhone („Ausblenden klappt, aber der Zettel klebt in der App noch genauso“): „Zettel ausblenden“ ist jetzt ein **Umschalter** mit Zustand `state.hidden`. Ausgeblendet: `.note.weg` (visibility hidden, Fläche bleibt), Hinweis `#weghint` „Zettel ausgeblendet · antippen zum Bearbeiten“, Knopf heißt „Zettel einblenden“. Einblenden **lädt das Zettelbild hoch** (gleicher Weg wie Kleben) – kein weiteres Hochladen nötig. Tipp auf die Fläche = `peek` (nur in der App sichtbar, nichts hochgeladen, Zustand bleibt) | Der Zustand wechselt erst, wenn das Bild fertig ist (`png.then`), bei Ablehnung nicht. „Aufs Display kleben“ beendet das Ausblenden ebenfalls. Leerer Zettel + einblenden → Zettel erscheint zum Schreiben mit Hinweis. Test: `tests/app_umschalter.mjs` |
 | 1.37.1 | Auftraggeber-Wunsch (Screenshot vom Sperrbildschirm): Überschrift auf liniertem Papier passte nicht ins Linienraster, alles darunter rutschte von den Linien. Jetzt **Linienraster**: auf liniertem/kariertem Papier belegt jede Überschriftzeile `raster = ceil(titleF)` Linienzeilen (1 bzw. 2) ohne Abstand darunter; die Überschrift sitzt unten bündig (Grundlinie auf der Grundlinie der letzten Rasterzeile, große Buchstaben ragen nach oben), der Unterstrich liegt mittig auf der Linie. Glattes Papier unverändert (1,55 Zeilen + 0,28 em) | **Layoutregel, dreifach**: `fitNote` (`raster`, `blockH`, `gapOf`), `render.js` (`raster`, `hoehe`, `titelLage`), Vorschau (`titleRasterStyle` → Inline-`marginTop/marginBottom/textUnderlineOffset` am ersten `.ln`, gesetzt über `textEl.titleStyle` in `applyIndents`). Dafür neu in beiden `FONTS`-Tabellen: `asc`/`desc` (hhea, em) – Grundlinie im Zeilenkasten = (lh + asc − desc)/2 · fs. Im Canvas dient `baselineOf(fs)` als Maß. satori setzt den Unterstrich selbst (Schriftmetrik, pro Wort) – dort nicht steuerbar. Test: `tests/app_titelraster.mjs` (Parität Größen × Papiere × Schriften, mehrzeilige Überschrift) |
 | 1.37.3 | Auftraggeber nach dem Test auf dem iPhone: bei Größe 2 und 3 klaffte oben eine Lücke, weil die Überschrift zwei Rasterzeilen belegte und unten bündig saß. Jetzt belegt sie **eine** Linienzeile und ragt mit der größeren Schrift nach oben darüber hinaus (`ueber = (titleF − 1) · (lh + asc − desc)/2 · fs`), notfalls bis unter die Befestigung – ausdrücklich gewünscht („macht nichts, wenn der Magnet knapp drüber ist“). Grundlinie und Unterstrich bleiben auf der Linie, der Rest im Raster | `raster` ist jetzt immer 1 (Wert bleibt als Schalter „im Linienraster“). Sicherung: `ueber ≤ pad + inset`, sonst schrumpft die Schrift (greift erst bei Regler 140 % und Größe 3). In der Vorschau wird der **Kasten des Textfelds** um `ueber` nach oben erweitert (`marginTop` negativ, `paddingTop` und `height: calc(100% + …)` gegen), sonst schnitte sein `overflow: hidden` die Oberlängen ab |
+| 1.37.4 | Frage des Auftraggebers: „Auf dem Home-Bildschirm erscheint mein Zettel unscharf mit – muss das so?“ Nein. Die Anleitung in der App erklärt jetzt bei Schritt 3 den Unterschied **Paar** (Home übernimmt automatisch das Sperrbildschirm-Bild, Zettel unscharf sichtbar) und **Foto** (eigenes Bild, bleibt dauerhaft) | Kein Code, nur Text. Die Kurzbefehl-Aktion schreibt nur die angehakte Hälfte; ein neu angelegtes Paar startet mit Home auf „Paar“ |
 
 **Parität App ↔ Server ist die wichtigste Regel.** Für denselben Text müssen `fitNote` (App) und die
 Schriftgrößenwahl in `render.js` dieselbe Größe und Zeilenzahl ergeben (zuletzt geprüft: 135 px / 105 px bei
@@ -231,7 +232,12 @@ Skripte: `node tools/gen_image.mjs <out.png> <modell> "<prompt>" [--dump] [--noc
    sichtbar ist → Fertig → Kurzbefehl erneut. Falls es nach jedem Ausblenden wiederkehrt: Bild für „nur Hintergrund“
    mit unsichtbarem Rand versehen oder das Foto im Kurzbefehl per „Bild überlagern“ auf das Zettelbild legen.
 2. Falls der Home-Bildschirm den Zettel zeigt (unscharf oder scharf): Home-Hälfte steht auf „Paar“ oder der
-   Kurzbefehl hat „Home-Bildschirm“ angehakt. Beides in Ordnung; „Nebel ohne Zettel“ nur über Anpassen → Foto.
+   Kurzbefehl hat „Home-Bildschirm“ angehakt. Beides in Ordnung; „Foto ohne Zettel“ nur über Anpassen → Foto.
+   **Am 7.9. gefragt und beantwortet:** Ein neu angelegtes Paar hat die Home-Hälfte auf „Paar“ – deshalb erschien das
+   rosa Bild samt Zettel unscharf auch auf dem Home-Bildschirm. Einmal Anpassen → Home-Bildschirm → Foto → dasselbe
+   Foto ohne Zettel, dann bleibt es dort [Wahrscheinlich: Apple dokumentiert es nicht, folgt aber daraus, dass die
+   Aktion nur die angehakte Hälfte schreibt]. Hätte die Home-Hälfte schon ein eigenes Foto gehabt, wäre es erhalten
+   geblieben. Seit 1.37.4 erklärt die App-Anleitung „Paar“ vs. „Foto“.
 
 ### 6b. Sechs Verbesserungen an der App – **erledigt** (1.35.3 bis 1.36.2, Nacharbeit 1.36.4; Tabelle in Abschnitt 2)
 
