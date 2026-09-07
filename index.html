@@ -180,7 +180,9 @@
       -webkit-tap-highlight-color: transparent; border-radius: 10px;
     }
     .note .griff.zieht { cursor: grabbing; }
-    .note .griff.aktiv { box-shadow: 0 0 0 2px rgba(255,214,10,.6); }
+    /* Zwei Ringe statt einem: innen dunkel (hebt sich vom hellen Papier ab), außen gelb (hebt sich
+       vom dunklen Grund ab). Ein einzelner gelber Ring verschwand auf dem gelben Zettel fast ganz. */
+    .note .griff.aktiv { box-shadow: 0 0 0 3px rgba(255,214,10,1), 0 0 0 5px rgba(28,26,21,.55); }
     .note .griff:focus-visible { outline: 2px solid #ffd60a; outline-offset: 2px; }
     .note.weg .griff { display: none; }   /* Zettel ausgeblendet: nichts zu greifen */
     body.picking .strip-fastener .item.active { box-shadow: inset 0 0 0 2px var(--fg); border-radius: 11px; }
@@ -463,7 +465,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.44.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.44.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
