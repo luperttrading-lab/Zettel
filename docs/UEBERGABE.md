@@ -3,7 +3,7 @@
 **Repository: `luperttrading-lab/Zettel`.** Diese Datei liegt dort unter `docs/UEBERGABE.md`. Eine neue Sitzung
 muss in diesem Repository laufen, sonst fehlen Skripte, Motive, Schriften und Kontext.
 
-Stand: 7. September 2026, App-Version **1.40.0**, Branch `claude/docs-uebergabe-readme-e8bkvo` (nach Abschluss per
+Stand: 7. September 2026, App-Version **1.41.0**, Branch `claude/docs-uebergabe-readme-e8bkvo` (nach Abschluss per
 Fast-Forward auf `main` gebracht; Vercel und GitHub Pages bauen aus `main`).
 
 ## 0. Arbeitsweise mit dem Auftraggeber
@@ -102,6 +102,7 @@ Zweite Sitzung (Auftrag aus 6b, alle sechs Punkte umgesetzt, Reihenfolge 1 · 3 
 | 1.37.4 | Frage des Auftraggebers: „Auf dem Home-Bildschirm erscheint mein Zettel unscharf mit – muss das so?“ Nein. Die Anleitung in der App erklärt jetzt bei Schritt 3 den Unterschied **Paar** (Home übernimmt automatisch das Sperrbildschirm-Bild, Zettel unscharf sichtbar) und **Foto** (eigenes Bild, bleibt dauerhaft) | Kein Code, nur Text. Die Kurzbefehl-Aktion schreibt nur die angehakte Hälfte; ein neu angelegtes Paar startet mit Home auf „Paar“ |
 | 1.38.0 | Auftraggeber-Wunsch: „Wenn man am Schieber vorbeiscrollt, sollte die Auswahl gleich zu sehen sein – sonst merkt man nie, dass es außer dem Fuchs noch andere gibt.“ Jeder Wechsel der Befestigung öffnet jetzt ihre Auswahlleiste von selbst (`zeigeAuswahl` im `onSelect` des Schiebers) | Die Leiste liegt über dem Schieber, der bleibt bedienbar. Der `pointerdown`-Schließer nimmt jetzt den **ganzen** `#strip-fastener` aus (vorher nur `.item.active`), sonst schlösse der erste Wisch sie wieder. Ist die Papier-Karte offen, stellt der Wechsel auf die Befestigung um. Tipp auf die gewählte Befestigung (Schieber oder Zettel) schließt weiterhin. Test: `tests/app_auswahl.mjs` – dort **nicht** `page.click` für Schieber-Elemente: Playwright scrollt den Schieber und trifft dann ein anderes Element (kostete eine Fehlersuche); stattdessen `el.click()` per `evaluate`, echte Mausklicks nur für die `pointerdown`-Fälle |
 | 1.39.0 → 1.40.0 | Bildmagnet `melody` (Melody, roter Pudel des Auftraggebers, fotorealistisch, Platte Himmelblau). Erst als `poodle`/Pudel auf Petrol gebaut, dann nach Rückmeldung (Fell rötlicher, Schnauze heller und kurz geschoren, Ohren kurz gelockt und eng am Kopf, Himmelblau gefällt) mit `gpt_image2_edit` aus erster Fassung + Foto neu erzeugt und umbenannt; `poodle` entfernt | Registry `lib/motifs.js` bei ~540 KB – Budget ~600 KB praktisch erreicht; vor dem nächsten Motiv WebP-Qualität in `prep_photo.mjs` senken oder ein Motiv entfernen. Entfernen eines Motivs: Registry laden, Schlüssel löschen, im selben Format zurückschreiben (siehe Commit 1.40.0), PNG unter `lib/motifs/` löschen |
+| 1.41.0 | Bildmagnet `melodycomic` (Melody Comic): wie `lolacomic` mit `gpt_image2_edit`, Fuchs als Stilvorlage, `melody.png` als Motiv, Platte Himmelblau; die Fassung mit Reliefoptik gewählt, weil sie zu Fuchs/Panda passt | Registry `lib/motifs.js` jetzt 572 KB – **nächstes Motiv nur noch mit gesenkter WebP-Qualität oder nach Entfernen eines Motivs** |
 
 **Parität App ↔ Server ist die wichtigste Regel.** Für denselben Text müssen `fitNote` (App) und die
 Schriftgrößenwahl in `render.js` dieselbe Größe und Zeilenzahl ergeben (zuletzt geprüft: 135 px / 105 px bei
