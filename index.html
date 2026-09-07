@@ -352,7 +352,7 @@
     <p>Beim ersten „Aufs Display kleben“ legt iOS einen <strong>neuen</strong> Sperrbildschirm an. Der kommt ohne Widgets, und sein Home-Bildschirm ist einfarbig. Das ist normal und passiert nur dieses eine Mal:</p>
     <ol>
       <li>Sperrbildschirm lange drücken → <strong>Anpassen</strong> → Widgets und Uhr einrichten wie gewohnt.</li>
-      <li>Rechts <strong>Home-Bildschirm</strong> → <strong>Foto</strong> → dein Hintergrundfoto.</li>
+      <li>Rechts <strong>Home-Bildschirm</strong> → <strong>Foto</strong> → dein Hintergrundfoto (dasselbe, das du oben in der App gewählt hast). Wichtig: Steht dort <strong>Paar</strong>, übernimmt der Home-Bildschirm automatisch das Sperrbildschirm-Bild – dann siehst du den Zettel auch dort, unscharf. Mit <strong>Foto</strong> bleibt der Home-Bildschirm für immer dein Foto ohne Zettel; der Kurzbefehl fasst ihn nicht mehr an, solange in seiner Aktion nur <strong>Sperrbildschirm</strong> angehakt ist.</li>
       <li>Diesen Sperrbildschirm <strong>aktiv lassen und nie löschen</strong>. Ab jetzt tauscht der Kurzbefehl nur noch das Foto darin – Widgets und Home-Bildschirm bleiben. Löschst du ihn, beginnt Schritt 3 von vorn.</li>
     </ol>
     <label>Name des Kurzbefehls <input id="shortcut" type="text" autocapitalize="words" spellcheck="false"></label>
@@ -380,7 +380,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.37.3'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.37.4'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
