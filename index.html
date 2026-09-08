@@ -29,6 +29,10 @@
       --paper: #fff59b;
       --ink: #2a2a2e;
       --note-font: 'Caveat', 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
+      /* Genau zwei Grautöne im ganzen Aufbau. --flaeche: alles, was man antippt – hell genug, dass der
+         Knopf sich vom schwarzen Grund abhebt. --gewaehlt: nur, was ausgewählt/erhaben ist. Kein dritter Ton. */
+      --flaeche: #2d2d33;
+      --gewaehlt: #3f3f48;
     }
     * { box-sizing: border-box; }
     /* Muss vor allen display-Regeln stehen: ein eigenes display:flex/grid schlüge sonst das hidden-Attribut.
@@ -116,10 +120,10 @@
        Eine Reihe pro Einstellung, nach links/rechts wischen; das Element in der Mitte ist die Auswahl,
        die Nachbarn sind gedimmt sichtbar. --iw = Breite eines Elements. */
     .strips { width: min(86vw, 380px); display: flex; flex-direction: column; gap: 6px; }
-    .strip-wrap { position: relative; background: #1e1e21; border-radius: 14px; --iw: 96px; }
+    .strip-wrap { position: relative; background: var(--flaeche); border-radius: 14px; --iw: 96px; }
     .strip-wrap::before { /* Markierung der Mitte */
       content: ""; position: absolute; top: 4px; bottom: 4px; left: 50%; width: var(--iw); margin-left: calc(var(--iw) / -2);
-      border-radius: 11px; background: #2d2d33; pointer-events: none;
+      border-radius: 11px; background: var(--gewaehlt); pointer-events: none;
     }
     .strip {
       /* pan-x **und** pan-y: mit nur pan-x sperrt der Browser die senkrechte Geste ganz – man wischt
@@ -158,7 +162,7 @@
     .fcolors {
       position: absolute; left: 50%; top: calc(100% - 44px); transform: translateX(-50%); z-index: 6; /* top wird per Skript auf den Befestigungs-Schieber gelegt */
       width: min(94vw, 420px); display: flex; flex-direction: column; gap: 6px; padding: 8px 0 8px 12px;
-      border-radius: 16px; background: #1e1e21; box-shadow: 0 10px 30px rgba(0,0,0,.6); border: 1px solid #2d2d33;
+      border-radius: 16px; background: var(--flaeche); box-shadow: 0 10px 30px rgba(0,0,0,.6); border: 1px solid #45454f;
     }
     .fcolors[hidden] { display: none; }
     .fcolors .row { display: flex; align-items: center; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-right: 12px; }
@@ -166,7 +170,7 @@
     .fcolors .lab { flex: 0 0 46px; font-size: 12px; color: var(--muted); }
     .fcolors .chip { flex: 0 0 auto; appearance: none; border: 3px solid transparent; cursor: pointer; padding: 0; background: transparent; }
     .fcolors .chip.color { width: 38px; height: 38px; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
-    .fcolors .chip.icon { width: 62px; height: 46px; border-radius: 12px; background: #2d2d33; display: flex; align-items: center; justify-content: center; }
+    .fcolors .chip.icon { width: 62px; height: 46px; border-radius: 12px; background: var(--gewaehlt); display: flex; align-items: center; justify-content: center; }
     .fcolors .chip.icon svg { width: 52px; height: 36px; overflow: visible; display: block; }
     .fcolors .chip[aria-pressed="true"] { border-color: var(--fg); }
     .fcolors .chip.pen { width: 30px; height: 30px; }
@@ -244,7 +248,7 @@
        anderen Bedienelemente, damit er sichtbar dazugehört. */
     .setup { border-top: 1px solid #2a2a30; padding-top: 10px; margin-top: 2px; }
     .setup > summary {
-      background: #1e1e21; border-radius: 12px; padding: 12px 14px; list-style-position: inside;
+      background: var(--flaeche); border-radius: 12px; padding: 12px 14px; list-style-position: inside;
       color: var(--muted); font-weight: 500;
     }
     .setup[open] > summary { border-radius: 12px 12px 0 0; color: var(--fg); }
@@ -264,7 +268,7 @@
     }
     .haupt .z1 { font-size: 17px; font-weight: 600; line-height: 1.2; text-align: center; }
     .haupt .z2 { font-size: 12.5px; font-weight: 500; line-height: 1.25; opacity: .72; text-align: center; }
-    .haupt.ruhig { background: #1e1e21; color: var(--fg); }   /* eine Helligkeit für alle Flächen, die man antippt */
+    .haupt.ruhig { background: var(--flaeche); color: var(--fg); }
     .haupt.zurueck { background: var(--paper); color: #2a2a2e; }
     .haupt.blocked { opacity: .45; }
 
@@ -282,7 +286,7 @@
     /* Drei gleich breite Symbolknöpfe – die Reihe bleibt immer dreiteilig, damit nichts springt */
     .icons { display: flex; gap: 10px; width: 100%; }
     .icons button {
-      flex: 1; appearance: none; border: 0; background: #1e1e21; color: var(--muted); border-radius: 13px;
+      flex: 1; appearance: none; border: 0; background: var(--flaeche); color: var(--muted); border-radius: 13px;
       padding: 11px 4px 9px; cursor: pointer; font: 500 11.5px/1.3 inherit;
       display: flex; flex-direction: column; align-items: center; gap: 5px;
     }
@@ -302,7 +306,7 @@
     .setup label.row input { width: 22px; height: 22px; padding: 0; accent-color: var(--fg); }
     .setup input {
       font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid #333;
-      background: #1e1e21; color: var(--fg);
+      background: var(--flaeche); color: var(--fg);
     }
 
     /* --- Hinweis „Neue Version“ --- */
@@ -349,7 +353,7 @@
     /* Überschrift-Schalter und Hintergrundfoto bekommen denselben angedeuteten Kasten wie die
        Auswahlleisten darüber – sonst steht hier nackter Text zwischen lauter Kästen. */
     .titlerow { display: flex; align-items: center; gap: 10px; margin: 0 auto; padding: 7px 12px;
-      width: min(86vw, 380px); box-sizing: border-box; background: #1e1e21; border-radius: 14px; }
+      width: min(86vw, 380px); box-sizing: border-box; background: var(--flaeche); border-radius: 14px; }
     .titlerow .toggle { font-size: 14px; }                 /* sonst bricht der Satz neben den drei Größen um */
     .titlerow .tsizes button { width: 30px; height: 30px; }
     .toggle { display: flex; align-items: center; gap: 10px; flex: 1 1 auto;
@@ -358,7 +362,7 @@
     .tsizes { display: flex; gap: 4px; flex: 0 0 auto; }
     .tsizes[hidden] { display: none; }   /* display:flex schlüge sonst das hidden-Attribut – die Knöpfe blieben ohne Überschrift sichtbar */
     .tsizes button { width: 34px; height: 34px; border: 0; border-radius: 9px; cursor: pointer;
-      background: #2d2d33; color: var(--muted, #9a9aa2); font-family: var(--note-font);
+      background: var(--gewaehlt); color: var(--muted, #9a9aa2); font-family: var(--note-font);
       line-height: 1; padding: 0; }
     .tsizes button:nth-child(1) { font-size: 14px; }
     .tsizes button:nth-child(2) { font-size: 18px; }
@@ -369,7 +373,7 @@
       width: min(86vw, 380px); box-sizing: border-box; }
     /* Angedeuteter Kasten wie bei „Kurzbefehl einrichten“ – ohne ihn las sich der Knopf als bloßer Text */
     .bgrow .btn { flex: 1 1 auto; padding: 9px 12px; font-size: 14px;
-      background: #1e1e21; border-radius: 14px; }
+      background: var(--flaeche); border-radius: 14px; }
     .bgrow .btn.off { flex: 0 0 auto; width: auto; min-width: 44px; }   /* .btn hat width:100% – hier ausdrücklich aufheben, sonst läuft die Reihe über */
     /* Vorschau: das gewählte Foto liegt hinter dem Zettel, leicht abgedunkelt wie auf dem Sperrbildschirm */
     .top.foto { background-size: cover; background-position: center; }
@@ -498,7 +502,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.51.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.51.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
