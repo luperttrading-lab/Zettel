@@ -489,7 +489,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.49.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.49.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -1420,7 +1420,7 @@
             // App den Fehler bei jedem Start erneut (Banner und Statuszeile) und gibt nie stumm den Verlauf aus.
             bgImage = null; bgKennung = ''; bgFehler = true; bgAnzeigen(null);
             bgClear.hidden = false;   // ✕: Daten löschen und ohne Foto weitermachen
-            updatePinBadge(); showInfo(BG_FEHLER); zeigeMeldung(BG_FEHLER);
+            updatePinBadge(); showInfo(BG_FEHLER, 0); zeigeMeldung(BG_FEHLER);
           }
           resolve();
         };
@@ -1790,9 +1790,10 @@
         try {
           const bb = fp.querySelector('svg').getBBox();
           // So viel Abstand nach oben, wie die Befestigung über den Zettel ragt (sonst überdeckt sie die Kopfzeile)
-          // knapper als früher (−12 statt −6): die Befestigung darf dicht unter die Kopfzeile rücken,
-          // das spart oben sichtbar Platz und der Zettel sitzt höher im Bild
-          noteEl.style.marginTop = Math.max(0, Math.ceil(-bb.y * scale) - 12) + 'px';
+          // Der Zettel sitzt fest knapp unter der Kopfzeile. Dass eine hohe Befestigung (Pinnadel)
+          // dabei über „Zettel v…“ ragt, ist ausdrücklich in Ordnung – der Platz oben ist mehr wert
+          // als die Freifläche. Vorher richtete sich der Abstand nach der Höhe der Befestigung.
+          noteEl.style.marginTop = '4px';
         } catch (_) {}
       }
       zeichneGriffe(f, scale);
@@ -2039,9 +2040,14 @@
     let checking = false, announced = null;
     const updateEl = $('update');
     // Meldung im Banner (z. B. „ist aktuell“): bleibt stehen, bis sie angetippt wird
-    function showInfo(text) {
+    let infoTimer = null;
+    function showInfo(text, sekunden = 2) {
       updateEl.className = 'update info'; $('update-text').textContent = text; $('update-go').hidden = true;
       updateEl.hidden = false;
+      // von selbst wieder weg – sonst steht „ist aktuell“ dort, bis man es wegtippt
+      clearTimeout(infoTimer);
+      // sekunden = 0: bleibt stehen (der Foto-Fehler beschreibt einen Zustand, keinen Fehlgriff)
+      if (sekunden) infoTimer = setTimeout(() => { if (updateEl.classList.contains('info')) updateEl.hidden = true; }, sekunden * 1000);
     }
     updateEl.addEventListener('click', e => { if (updateEl.classList.contains('info')) updateEl.hidden = true; });
     // Neue Version: Banner mit Knopf. Nach bewusster Prüfung (Tipp auf den Titel) lädt die App nach 1,5 s selbst neu;
