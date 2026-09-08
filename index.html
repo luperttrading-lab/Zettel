@@ -502,7 +502,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.51.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.51.3'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -1394,7 +1394,9 @@
       if (name !== 'none' && v.trim() === '') v = LISTS[name].mark(0);  // leerer Zettel: erste Markierung setzen
       textEl.value = v;
       onTextChanged(); flush();
-      textEl.selectionStart = textEl.selectionEnd = textEl.value.length;
+      // Cursor nur nachziehen, wenn ohnehin im Text getippt wird. Sonst setzt setCaret eine Auswahl in das
+      // contenteditable, und iOS springt aus der Auswahlleiste in den Text und blendet die Tastatur ein.
+      if (document.activeElement === textEl.el) textEl.selectionStart = textEl.selectionEnd = textEl.value.length;
     });
     function applyList() { stripList.set(state.list); }
     applyList();

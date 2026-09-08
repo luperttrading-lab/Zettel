@@ -93,6 +93,16 @@ const mittig = await page.evaluate(() => [...document.querySelectorAll('#strip-f
 }).filter(x => x !== null));
 check('Symbole sitzen senkrecht mittig', mittig.length >= 6 && mittig.every(x => x < 0.02), JSON.stringify(mittig.map(x => +x.toFixed(3))));
 
+// Gliederung wechseln darf den Fokus nicht in den Text ziehen: auf dem iPhone sprang die Ansicht
+// in das Textfeld und die Tastatur ging auf, während man noch in der Auswahlleiste war (1.51.3).
+await page.evaluate(() => { document.activeElement && document.activeElement.blur(); });
+const vorher = await page.evaluate(() => document.activeElement.id || document.activeElement.tagName);
+await page.evaluate(() => { const s = document.querySelector('#strip-list .item[data-value="dot"]') ||
+  document.querySelectorAll('#strip-list .item')[1]; s.click(); });
+await page.waitForTimeout(300);
+const nachher = await page.evaluate(() => document.activeElement.id || document.activeElement.tagName);
+check('Gliederungswechsel öffnet nicht die Tastatur', nachher !== 'text' && nachher === vorher, vorher + ' → ' + nachher);
+
 check('scrollWidth ≤ 448', sw <= 448, String(sw));
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();
