@@ -144,7 +144,7 @@ await page.evaluate(() => { document.querySelectorAll('#hcolors .row')[0].queryS
   document.querySelectorAll('#hcolors .row')[1].querySelectorAll('.chip')[1].click(); });
 await page.waitForTimeout(300);
 check('Form und Farbe kommen im Zustand an',
-  (await page.evaluate(() => [state.doneForm, state.doneColor].join(','))) === 'doppel,rot',
+  (await page.evaluate(() => [state.doneForm, state.doneColor].join(','))) === 'kreuz,rot',
   await page.evaluate(() => [state.doneForm, state.doneColor].join(',')));
 check('Haken zählt zum bildbestimmenden Stand',
   await page.evaluate(() => SNAP_FIELDS.includes('doneForm') && SNAP_FIELDS.includes('doneColor')));
