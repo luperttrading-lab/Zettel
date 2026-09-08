@@ -1,7 +1,13 @@
 # Kostentabelle unter jeder Antwort (Claude Code)
 
-Zweite Bauform neben der einzeiligen `docs/KOSTENZEILE.md`. **Nur eine von beiden verwenden.**
-Diese hier zeigt neben Claude **je eine eigene Spalte für jeden weiteren Dienst**, der Geld kostet –
+> **Gültig ab 8. September 2026. Diese Datei ersetzt jede frühere Kostenanweisung.**
+> Ab jetzt wird nach dieser Datei abgerechnet und angezeigt – nicht mehr nach `docs/KOSTENZEILE.md`
+> (einzeilige Fassung) und nicht nach älteren Fassungen, die irgendwo in einem Chat hochgeladen
+> wurden. Wer eine ältere Anweisung im Verlauf findet, ignoriert sie und richtet sich nach hier.
+> Erkennungsmerkmal der aktuellen Fassung: eine Spalte je Dienst, Datum und Uhrzeit in der Kopfzeile
+> links, `tools/kostentabelle.py` als Skript.
+
+Diese Anzeige zeigt neben Claude **je eine eigene Spalte für jeden weiteren Dienst**, der Geld kostet –
 Bildgenerierung über RouteLLM, ein Hosting, eine Wetter-API, was auch immer im Projekt dazukommt.
 Die Spalten sind nicht fest verdrahtet: Das Skript erzeugt sie aus dem, was in `tools/fremdkosten.json`
 steht. Ein neuer Dienst braucht also keine Änderung am Skript, nur einen Eintrag mit seinem Namen.

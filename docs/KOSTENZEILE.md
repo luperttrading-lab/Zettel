@@ -1,5 +1,9 @@
 # Kostenzeile unter jeder Antwort (Claude Code)
 
+> **Überholt seit 8. September 2026.** Es gilt `docs/KOSTENTABELLE.md`: Tabelle mit einer Spalte je
+> Dienst, Skript `tools/kostentabelle.py`. Diese Datei bleibt nur als Beschreibung der einzeiligen
+> Fassung liegen; nicht mehr danach arbeiten.
+
 ## Wenn du diese Datei in einem Chat bekommst
 
 Das ist ein **Auftrag, kein Hintergrundwissen**. Setze ihn sofort um, ohne Rückfrage:
