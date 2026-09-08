@@ -11,32 +11,19 @@ Zustimmungsfloskeln, unbequeme Wahrheit zuerst).
 ## Kostenzeile am Ende jeder Antwort – Pflicht
 
 Der Auftraggeber will nach **jeder** Antwort wissen, was sie gekostet hat. Ganz am Ende der Antwort, genau
-einmal, als **Codeblock mit zwei Zeilen** – Festbreitenschrift, damit „RouteLLM“ und „Claude“ in beiden Zeilen
-genau untereinander stehen (Wunsch vom 7.9.2026). Keine Tabelle, keine Fettschrift. **Höchstens 40 Zeichen
-breit** – der Codeblock zeigt auf dem iPhone 41 Zeichen, danach wird abgeschnitten (geprüft 7.9.2026, 46 Zeichen
-waren zu viel). Deshalb kurze Beschriftungen und eine Nachkommastelle:
+einmal, als **drei einfache Zeilen** – **kein Codeblock** (der graue Kasten ist zu auffällig für eine Fußnote,
+gesagt am 8.9.2026), keine Tabelle, keine Fettschrift. Zeilenumbruch mit zwei Leerzeichen am Zeilenende:
 
-```
-Frage:   0,0 ct RouteLLM   1,8 $ Claude
-Heute:   0,0 ct RouteLLM  41,8 $ Claude
-Chat:   72,0 ct RouteLLM 325,7 $ Claude
-```
+Frage: 0,0 ct RouteLLM · 0,8 $ Claude
+Heute: 0,0 ct RouteLLM · 51,9 $ Claude
+Chat: 72,0 ct RouteLLM · 335,8 $ Claude
 
 **Drei Zeilen seit 8.9.2026.** „Heute“ wird **nach Datum aus dem Protokoll** gerechnet, nicht kumulativ
 weitergezählt – sonst wandert der Vortag mit über Mitternacht (genau dieser Fehler passierte am 8.9.:
 gemeldet waren 471 $ „heute“, tatsächlich 40 $). „Chat“ ist die Summe dieser Sitzung **inklusive
-Unteragenten**. „Chat:“ statt „Gesamt:“, damit alle drei Zeilen 39 Zeichen bleiben.
+Unteragenten**.
 
-Erzeugen mit (Python, Komma als Dezimaltrenner, 39 Zeichen):
-
-```
-def kosten(frage_ct, frage_usd, tag_ct, tag_usd, chat_ct, chat_usd):
-    de = lambda x: f"{x:.1f}".replace('.', ',')
-    z1 = f"{'Frage:':<7}{de(frage_ct):>5} ct RouteLLM {de(frage_usd):>5} $ Claude"
-    z2 = f"{'Heute:':<7}{de(tag_ct):>5} ct RouteLLM {de(tag_usd):>5} $ Claude"
-    z3 = f"{'Chat:':<7}{de(chat_ct):>5} ct RouteLLM {de(chat_usd):>5} $ Claude"
-    return z1, z2, z3
-```
+Komma als Dezimaltrenner, eine Nachkommastelle.
 
 Regeln:
 - **Gemessen, nicht geschätzt.** „Diese Frage“ umfasst alles seit der letzten Nachricht des Auftraggebers:
