@@ -61,7 +61,7 @@ check('Erklärung wieder zu', await page.evaluate(() => document.getElementById(
 // 4) Rückkehr in die App zählt als erledigt
 await zurueckInDieApp(); await page.waitForTimeout(300);
 const l2 = await leiste();
-check('zurück: „dieser Zettel ist drauf“', l2.lage === 'fertig' && l2.satz.startsWith('dieser Zettel ist drauf') && l2.punkt === 'gut', JSON.stringify(l2));
+check('zurück: „dieser Zettel ist aktiv“', l2.lage === 'fertig' && l2.satz.startsWith('dieser Zettel ist aktiv') && l2.punkt === 'gut', JSON.stringify(l2));
 check('zurück: ruhiger Knopf', l2.knopf === 'Noch einmal auf Sperrbildschirm' && !l2.ansage, JSON.stringify(l2));
 check('zurück: Leistenhöhe unverändert', l2.hoehe === l0.hoehe, String(l2.hoehe));
 
@@ -103,7 +103,7 @@ const mitte = await page.evaluate(async () => {
 });
 check('ausblenden: Bild zeigt nur das Foto', mitte[2] > 100 && mitte[0] < 60, JSON.stringify(mitte));
 await zurueckInDieApp(); await page.waitForTimeout(300);
-check('ausgeblendet: „nur dein Foto ist drauf“', (await leiste()).satz.startsWith('nur dein Foto ist drauf'), (await leiste()).satz);
+check('ausgeblendet: „nur dein Foto ist aktiv“', (await leiste()).satz.startsWith('nur dein Foto ist aktiv'), (await leiste()).satz);
 check('ausgeblendet: Knopf blendet wieder ein', (await leiste()).knopf === 'Zettel wieder einblenden');
 check('ausgeblendet: Textänderung ändert den Stand nicht', await page.evaluate(async () => { textEl.value = 'Milch und Brot'; onTextChanged(); flush(); await new Promise(r => setTimeout(r, 200)); return lage() === 'fertig'; }));
 await page.screenshot({ path: out + '/leiste_ausgeblendet.png' });
