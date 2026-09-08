@@ -1,0 +1,7 @@
+[
+  {"ts": "2026-09-06T20:00:00Z", "usd": 0.72, "dienst": "RouteLLM", "was": "Sammelbuchung 6.9.: alle Bilder des Tages (Frosch, Hase, Lola-Reihe, Bruno, Comics), 72 ct gemessen"},
+  {"ts": "2026-09-07T13:31:00Z", "usd": 0.018, "dienst": "RouteLLM", "was": "gpt_image2_edit 3x Pudel-Magnet, Plattenfarben"},
+  {"ts": "2026-09-07T14:05:00Z", "usd": 0.024, "dienst": "RouteLLM", "was": "gpt_image2_edit 2x Melody fotorealistisch"},
+  {"ts": "2026-09-07T15:40:00Z", "usd": 0.009, "dienst": "RouteLLM", "was": "gpt_image2_edit 2x Melody Comic"},
+  {"ts": "2026-09-07T16:20:00Z", "usd": 0.009, "dienst": "RouteLLM", "was": "gpt_image2_edit 2x Melody Comic, Kopf groesser"}
+]
