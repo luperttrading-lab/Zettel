@@ -35,14 +35,14 @@ await page.evaluate(() => localStorage.clear()); await page.reload(); await page
 
 // 1) Leerer Anfang
 const l0 = await leiste();
-check('leer: „Noch nichts auf dem Sperrbildschirm“', l0.lage === 'leer' && l0.satz === 'Noch nichts auf dem Sperrbildschirm' && l0.punkt === '', JSON.stringify(l0));
+check('leer: „Sperrbildschirm: noch leer“', l0.lage === 'leer' && l0.satz === 'Sperrbildschirm: noch leer' && l0.punkt === '', JSON.stringify(l0));
 check('leer: Knopf lädt ein zum Übertragen', l0.knopf === 'Neuen Zettel auf Sperrbildschirm' && !l0.ansage, JSON.stringify(l0));
 await page.evaluate(() => { textEl.value = 'Milch kaufen'; onTextChanged(); flush(); }); await page.waitForTimeout(300);
 
 // 2) Schritt 1: Bild bereitlegen → Ansage statt Knopf
 await page.click('#stick'); await page.waitForTimeout(1500);
 const l1 = await leiste();
-check('wartend: Zeile nennt den Kurzbefehl', l1.lage === 'wartet' && l1.satz === 'Bild fertig · wartet auf den Kurzbefehl' && l1.punkt === 'gelb', JSON.stringify(l1));
+check('wartend: Zeile nennt den Kurzbefehl', l1.lage === 'wartet' && l1.satz === 'Bild wartet auf den Kurzbefehl' && l1.punkt === 'gelb', JSON.stringify(l1));
 check('wartend: Ansage statt Knopf', l1.ansage && l1.knopf === null, JSON.stringify(l1));
 check('wartend: Leistenhöhe unverändert', l1.hoehe === l0.hoehe, l0.hoehe + ' → ' + l1.hoehe);
 const clip = await page.evaluate(async () => { const i = await navigator.clipboard.read(); return i.map(x => x.types.join(',')).join(';'); });
@@ -61,7 +61,7 @@ check('Erklärung wieder zu', await page.evaluate(() => document.getElementById(
 // 4) Rückkehr in die App zählt als erledigt
 await zurueckInDieApp(); await page.waitForTimeout(300);
 const l2 = await leiste();
-check('zurück: „Sperrbildschirm zeigt diesen Zettel“', l2.lage === 'fertig' && l2.satz === 'Sperrbildschirm zeigt diesen Zettel' && l2.punkt === 'gut', JSON.stringify(l2));
+check('zurück: „Sperrbildschirm: dieser Zettel“', l2.lage === 'fertig' && l2.satz.startsWith('Sperrbildschirm: dieser Zettel') && l2.punkt === 'gut', JSON.stringify(l2));
 check('zurück: ruhiger Knopf', l2.knopf === 'Noch einmal auf Sperrbildschirm' && !l2.ansage, JSON.stringify(l2));
 check('zurück: Leistenhöhe unverändert', l2.hoehe === l0.hoehe, String(l2.hoehe));
 
@@ -75,7 +75,7 @@ const aenderungen = [
 for (const [name, hin, zurueck] of aenderungen) {
   await page.evaluate(hin); await page.waitForTimeout(250);
   const a = await leiste();
-  check(`${name} geändert → „noch der alte Zettel“`, a.lage === 'geaendert' && a.satz === 'Sperrbildschirm: noch der alte Zettel' && a.punkt === 'warn', JSON.stringify(a));
+  check(`${name} geändert → „alter Zettel“`, a.lage === 'geaendert' && a.satz === 'Sperrbildschirm: alter Zettel' && a.punkt === 'warn', JSON.stringify(a));
   await page.evaluate(zurueck); await page.waitForTimeout(250);
   check(`${name} zurückgenommen → wieder aktuell`, (await leiste()).lage === 'fertig');
 }
@@ -93,7 +93,7 @@ check('mit Foto übertragen → aktuell', (await leiste()).lage === 'fertig');
 // 8) Ausblenden: nur das Foto, Zettel verschwindet auch in der App
 await page.click('#hide'); await page.waitForTimeout(1500);
 const l3 = await leiste();
-check('ausblenden: „Foto fertig · wartet …“', l3.lage === 'wartet' && l3.satz === 'Foto fertig · wartet auf den Kurzbefehl', JSON.stringify(l3));
+check('ausblenden: „Foto wartet …“', l3.lage === 'wartet' && l3.satz === 'Foto wartet auf den Kurzbefehl', JSON.stringify(l3));
 check('ausblenden: Zettel in der App weg', await page.evaluate(() => document.getElementById('note').classList.contains('weg') && !document.getElementById('weghint').hidden));
 check('ausblenden: Symbol heißt jetzt einblenden', l3.icon1.includes('einblenden'), l3.icon1);   // ohne Leerzeichen: der Umbruch steht als <br> im Knopf
 const mitte = await page.evaluate(async () => {
@@ -103,7 +103,7 @@ const mitte = await page.evaluate(async () => {
 });
 check('ausblenden: Bild zeigt nur das Foto', mitte[2] > 100 && mitte[0] < 60, JSON.stringify(mitte));
 await zurueckInDieApp(); await page.waitForTimeout(300);
-check('ausgeblendet: „Sperrbildschirm: nur dein Foto“', (await leiste()).satz === 'Sperrbildschirm: nur dein Foto', (await leiste()).satz);
+check('ausgeblendet: „Sperrbildschirm: nur dein Foto“', (await leiste()).satz.startsWith('Sperrbildschirm: nur dein Foto'), (await leiste()).satz);
 check('ausgeblendet: Knopf blendet wieder ein', (await leiste()).knopf === 'Zettel wieder einblenden');
 check('ausgeblendet: Textänderung ändert den Stand nicht', await page.evaluate(async () => { textEl.value = 'Milch und Brot'; onTextChanged(); flush(); await new Promise(r => setTimeout(r, 200)); return lage() === 'fertig'; }));
 await page.screenshot({ path: out + '/leiste_ausgeblendet.png' });

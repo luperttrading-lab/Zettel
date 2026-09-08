@@ -41,7 +41,7 @@
       font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       padding: max(env(safe-area-inset-top), 20px) 20px max(env(safe-area-inset-bottom), 20px);
       /* eng gesetzt: der gewonnene Platz kommt der Vorschau zugute */
-      display: flex; flex-direction: column; align-items: center; gap: 9px;
+      display: flex; flex-direction: column; align-items: center; gap: 7px;
       -webkit-tap-highlight-color: transparent;
     }
     /* Kopf + Zettel bleiben oben stehen, die Einstellungen scrollen darunter durch */
@@ -52,7 +52,7 @@
       margin-top: calc(-1 * max(env(safe-area-inset-top), 20px));
       padding: max(env(safe-area-inset-top), 16px) 0 14px;
     }
-    header { width: 100%; max-width: 420px; display: flex; justify-content: space-between; align-items: baseline; }
+    header { width: 100%; max-width: 420px; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 0 2px; }
     header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .02em; }
     header h1 small { font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 6px; letter-spacing: 0; }
     header span { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -223,13 +223,27 @@
 
     /* --- Zustandszeile: eine Zeile, immer gleich gebaut. Zeigt normalerweise, was zuletzt übertragen wurde;
        liegt eine Meldung an (Fehler, Hinweis), hat die Vorrang. --- */
+    /* Zustand in der Kopfzeile: kein Kasten, kein Polster – er soll nur lesbar sein, nicht laut. */
     .status {
-      display: flex; align-items: center; gap: 9px; padding: 12px 14px; width: 100%;
-      background: #1e1e21; border-radius: 13px; font-size: 14px; color: var(--muted);
+      display: flex; align-items: center; gap: 7px; margin: 0; min-width: 0; flex: 1 1 auto;
+      justify-content: flex-end; font-size: 12.5px; color: var(--muted);
       white-space: nowrap; overflow: hidden;
     }
     .status .satz { overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
     .status .satz b { color: var(--fg); font-weight: 600; }
+    .status .uhr { color: #6f6f78; font-variant-numeric: tabular-nums; }
+    /* Der Kurzbefehl-Abschnitt stand zusammenhanglos am Seitenende – jetzt mit Trennlinie
+       und einer Zeile, die sagt, wofür er da ist. */
+    /* Stand zusammenhanglos am Seitenende – jetzt mit Trennlinie und als Kasten wie die
+       anderen Bedienelemente, damit er sichtbar dazugehört. */
+    .setup { border-top: 1px solid #2a2a30; padding-top: 10px; margin-top: 2px; }
+    .setup > summary {
+      background: #1e1e21; border-radius: 12px; padding: 12px 14px; list-style-position: inside;
+      color: var(--muted); font-weight: 500;
+    }
+    .setup[open] > summary { border-radius: 12px 12px 0 0; color: var(--fg); }
+    .setup summary::marker { color: #6f6f78; }
+    .setup > :not(summary) { padding: 0 4px; }
     .status.lang { white-space: normal; }                      /* Meldungen dürfen umbrechen */
     .punkt { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; background: var(--muted); }
     .punkt.warn { background: #ff9f0a; }
@@ -326,7 +340,7 @@
     .overlay img { max-height: 66vh; max-width: 90vw; border-radius: 22px; box-shadow: 0 10px 40px rgba(0,0,0,.7); }
     .overlay p { margin: 0; color: var(--fg); text-align: center; font-size: 15px; max-width: 340px; }
     /* Schalter „Überschrift“ samt drei Größen */
-    .titlerow { display: flex; align-items: center; gap: 12px; margin: 2px auto 0; padding: 0 4px;
+    .titlerow { display: flex; align-items: center; gap: 12px; margin: 0 auto; padding: 0 4px;
       max-width: 520px; width: 100%; }
     .toggle { display: flex; align-items: center; gap: 10px; flex: 1 1 auto;
       font-size: 15px; color: var(--muted, #9a9aa2); cursor: pointer; }
@@ -341,7 +355,7 @@
     .tsizes button:nth-child(3) { font-size: 23px; }
     .tsizes button[aria-checked="true"] { background: #fff; color: #17171a; }
     /* Eigenes Hintergrundfoto: Reihe mit zwei kleinen Knöpfen */
-    .bgrow { display: flex; align-items: center; gap: 8px; margin: 2px auto 0; padding: 0 4px;
+    .bgrow { display: flex; align-items: center; gap: 8px; margin: 0 auto; padding: 0 4px;
       max-width: 520px; width: 100%; }
     .bgrow .btn { flex: 1 1 auto; padding: 9px 12px; font-size: 14px; }
     .bgrow .btn.off { flex: 0 0 auto; width: auto; min-width: 44px; }   /* .btn hat width:100% – hier ausdrücklich aufheben, sonst läuft die Reihe über */
@@ -352,9 +366,10 @@
 </head>
 <body>
   <div class="top">
+    <!-- Die Kopfzeile trägt den Zustand: als eigene Zeile unten kostete er Platz, ohne mehr zu sagen. -->
     <header>
       <h1>Zettel <small id="ver"></small></h1>
-      <span id="uhr"></span>
+      <p class="status" id="status"><span class="punkt" id="punkt"></span><span class="satz" id="satz"></span></p>
     </header>
 
     <section class="note" id="note" aria-label="Zettel">
@@ -394,10 +409,15 @@
     </div>
   </div>
 
+  <div class="bgrow">
+    <button class="btn ghost" type="button" id="bgpick" title="Gespeichert wird ein auf Displaygröße zugeschnittener JPEG-Abzug, nicht das Original">Eigenes Hintergrundfoto</button>
+    <button class="btn ghost off" type="button" id="bgclear" hidden aria-label="Hintergrundfoto entfernen">✕</button>
+    <input id="bgfile" type="file" accept="image/*" hidden>
+  </div>
+
   <!-- Untere Leiste: Zustand, ein Hauptknopf (bzw. die Ansage für Schritt 2), drei Symbolknöpfe.
        Höhe und Anordnung bleiben in jedem Zustand gleich – es springt nichts. -->
   <div class="actions">
-    <p class="status" id="status"><span class="punkt" id="punkt"></span><span class="satz" id="satz"></span></p>
     <button class="haupt" id="stick" type="button"><span class="z1" id="stick1"></span><span class="z2" id="stick2"></span></button>
     <div class="ansage" id="ansage" role="button" tabindex="0" hidden>
       <span class="z1">Jetzt bist du dran</span>
@@ -410,11 +430,6 @@
     </div>
   </div>
 
-  <div class="bgrow">
-    <button class="btn ghost" type="button" id="bgpick" title="Gespeichert wird ein auf Displaygröße zugeschnittener JPEG-Abzug, nicht das Original">Eigenes Hintergrundfoto</button>
-    <button class="btn ghost off" type="button" id="bgclear" hidden aria-label="Hintergrundfoto entfernen">✕</button>
-    <input id="bgfile" type="file" accept="image/*" hidden>
-  </div>
 
   <details class="setup">
     <summary>Kurzbefehl einrichten (einmalig)</summary>
@@ -470,7 +485,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.47.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.48.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -804,11 +819,13 @@
     function zustandZeile() {
       const foto = state.hidden;
       switch (lage()) {
-        case 'leer':      return { punkt: '', text: 'Noch nichts auf dem Sperrbildschirm' };
+        // Knapper als bis 1.47.0: die Zeile steht jetzt in der Kopfzeile und muss auch auf dem
+        // kleinsten iPhone ohne Abschneiden hineinpassen. „Sperrbildschirm“ bleibt das Leitwort.
+        case 'leer':      return { punkt: '', text: 'Sperrbildschirm: noch leer' };
         case 'alt':       return { punkt: 'warn', text: 'Stand unbekannt · <b>neu übertragen</b>' };
-        case 'geaendert': return { punkt: 'warn', text: foto ? 'Sperrbildschirm: <b>noch das alte Foto</b>' : 'Sperrbildschirm: <b>noch der alte Zettel</b>' };
-        case 'wartet':    return { punkt: 'gelb', text: (foto ? 'Foto' : 'Bild') + ' fertig · <b>wartet auf den Kurzbefehl</b>' };
-        default:          return { punkt: 'gut', text: foto ? 'Sperrbildschirm: <b>nur dein Foto</b>' : '<b>Sperrbildschirm zeigt diesen Zettel</b>' };
+        case 'geaendert': return { punkt: 'warn', text: 'Sperrbildschirm: ' + (foto ? '<b>altes Foto</b>' : '<b>alter Zettel</b>') };
+        case 'wartet':    return { punkt: 'gelb', text: (foto ? 'Foto' : 'Bild') + ' <b>wartet auf den Kurzbefehl</b>' };
+        default:          return { punkt: 'gut', text: 'Sperrbildschirm: ' + (foto ? '<b>nur dein Foto</b>' : '<b>dieser Zettel</b>') };
       }
     }
     // Meldungen (Fehler, Hinweise) teilen sich die Zeile mit dem Zustand und haben Vorrang.
@@ -837,7 +854,9 @@
         $('stick2').textContent = fertig && !state.hidden ? 'falls der Sperrbildschirm etwas anderes zeigt'
           : state.autoRun ? 'legt das Bild bereit und startet den Kurzbefehl' : 'Schritt 1 von 2 · legt das Bild bereit';
       }
-      $('uhr').textContent = state.pinned ? fmtTime(state.pinned.at) : '';
+      // Die Uhrzeit des letzten Übertragens hängt jetzt hinten am Zustand – eine eigene Anzeige
+      // dafür gibt es seit 1.48.0 nicht mehr, die Kopfzeile trägt beides zusammen.
+      if (!meldung && state.pinned && lage() === 'fertig') $('satz').innerHTML += ' <span class="uhr">' + fmtTime(state.pinned.at) + '</span>';
     }
     const updatePinBadge = zeichneLeiste;   // Name aus früheren Versionen, überall im Code verwendet
     // Schnappschuss des bildbestimmenden Stands. Wird im Moment des Tipps genommen, nicht erst, wenn das Bild fertig ist:
@@ -1225,14 +1244,14 @@
           : FASTENERS[v].label + ' passt nicht zu diesen Plätzen – erst eine wegnehmen oder nach oben schieben'));
     }
     // Es muss **nicht** alles auf einen Bildschirm passen – man muss nur sehen, dass unten noch
-    // etwas kommt. Deshalb: die Vorschau gibt so weit nach, bis die Zustandszeile ganz im Bild ist
-    // und der Hauptknopf darunter **angeschnitten** hervorschaut. Der Anschnitt ist der Hinweis
-    // „hier geht es weiter“ – ein Knopf dafür wäre kleiner und würde übersehen (1.46.0).
+    // etwas kommt. Deshalb gibt die Vorschau so weit nach, bis der Hauptknopf **angeschnitten**
+    // hervorschaut. Der Anschnitt ist der Hinweis „hier geht es weiter“ – ein Knopf dafür wäre
+    // kleiner und würde übersehen (1.46.0). Der Zustand steht seit 1.48.0 oben in der Kopfzeile.
     const ANSCHNITT = 26;                // so viel vom Hauptknopf muss zu sehen sein
     let notez = 1;
     function passeHoehe() {
-      const root = document.documentElement, st = $('status');
-      const zuTief = () => st.getBoundingClientRect().bottom + ANSCHNITT > window.innerHeight;
+      const root = document.documentElement, kn = $('stick');
+      const zuTief = () => kn.getBoundingClientRect().top + ANSCHNITT > window.innerHeight;
       notez = 1; root.style.setProperty('--notez', '1');
       if (!zuTief()) { syncPreview(); return; }
       for (let i = 0; i < 12 && notez > 0.66; i++) {
