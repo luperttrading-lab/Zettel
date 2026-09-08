@@ -263,6 +263,17 @@ Skripte: `node tools/gen_image.mjs <out.png> <modell> "<prompt>" [--dump] [--noc
    durch Zwei-Finger-Geste unter „Anpassen“). Abhilfe zu prüfen: Anpassen → Foto zusammenziehen, bis das ganze Bild
    sichtbar ist → Fertig → Kurzbefehl erneut. Falls es nach jedem Ausblenden wiederkehrt: Bild für „nur Hintergrund“
    mit unsichtbarem Rand versehen oder das Foto im Kurzbefehl per „Bild überlagern“ auf das Zettelbild legen.
+   **Wieder am 8.9., 11:00:** derselbe Effekt, diesmal ohne Ausblenden – der Zettel steht vergrößert und **links
+   angeschnitten** auf dem Sperrbildschirm. Das erzeugte Bild ist nachweislich in Ordnung (in Chromium bei 393 × 852
+   dpr 3 gerendert und **angesehen**: 1179 × 2556, Zettel auf 80 % Breite, mittig, Text vollständig). Damit bleibt nur
+   der Zuschnitt des Paars. Seit **1.50.5** steht die Bildgröße dauerhaft unten in der Versionszeile („Version … ·
+   Bild 1179 × 2556 · …“) – meldet die App dort die Displayauflösung, kann der Fehler nicht in der App liegen.
+   Reihenfolge zum Prüfen: (1) Bild in Fotos ansehen – stimmt es dort, liegt es am Setzen; (2) Sperrbildschirm →
+   Anpassen → Foto mit zwei Fingern zusammenziehen, bis es einrastet → Fertig → Kurzbefehl erneut; (3) hilft das
+   nicht: **Paar löschen** und den Kurzbefehl einmal laufen lassen (er legt ein frisches Paar ohne gespeicherten
+   Zuschnitt an, Widgets und Uhrstil müssen neu eingerichtet werden). Erst wenn auch ein frisches Paar zoomt, ist
+   ein App-seitiger Sicherheitsrand nötig: Bei 1,35-fachem Zoom werden je Seite 153 px abgeschnitten, der Zettel hat
+   aber nur 118 px Rand – er müsste dafür von 80 % auf ≈ 62 % der Bildbreite schrumpfen (Schrift entsprechend kleiner).
 2. Falls der Home-Bildschirm den Zettel zeigt (unscharf oder scharf): Home-Hälfte steht auf „Paar“ oder der
    Kurzbefehl hat „Home-Bildschirm“ angehakt. Beides in Ordnung; „Foto ohne Zettel“ nur über Anpassen → Foto.
    **Am 7.9. gefragt und beantwortet:** Ein neu angelegtes Paar hat die Home-Hälfte auf „Paar“ – deshalb erschien das
