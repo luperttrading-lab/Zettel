@@ -53,11 +53,23 @@ satori + resvg). Ein handgeschriebener Notizzettel wird als Sperrbildschirm-Bild
 - Ist ein anderes Paar aktiv, läuft der Kurzbefehl trotzdem in sein eigenes Paar – man sieht das Ergebnis nur nicht.
 - iOS gibt ein gesetztes Hintergrundbild **nie** heraus. Sein Nebelfoto liegt nur in der Fotos-Mediathek
   (Sperrbildschirm bearbeiten → „Foto in Mediathek anzeigen“). Das ist die Quelle für die App.
-- Die Aktion kennt nur: Bild, Sperrbildschirm, Home-Bildschirm, Vorschau anzeigen. **Keine** Zielauswahl eines
-  vorhandenen Paars, **keine** zwei Bilder. Widgets kann keine Kurzbefehl-Aktion setzen. Die Aktion verlangt
-  einen Sperrbildschirm im Modus „Foto“, nicht „Fotoshuffle“.
-- Eine andere KI hat dem Auftraggeber eine „Zielauswahl in der Aktion“ als Lösung verkauft – die gibt es nach
-  allen Quellen nicht. Der Auftraggeber weiß das.
+- **Korrektur vom 8.9.2026 – die beiden folgenden Absätze standen hier falsch und haben drei Sitzungen lang
+  in die Irre geführt.** Ein Screenshot des Kurzbefehls („Anheften“, 11:20) zeigt die Aktion so:
+  *Hintergrund „9“ auf Zwischenablage für Sperrbildschirm festlegen.* Das erste Feld **ist** eine Zielauswahl
+  eines vorhandenen Paars. Die andere KI hatte recht, diese Datei hatte unrecht. [Sicher, am Gerät gesehen]
+  Daraus folgt:
+  - Der Kurzbefehl schreibt **nicht** in „sein eigenes“ Paar, sondern in das **im Feld ausgewählte**. Beim
+    Auftraggeber war das Paar 9 – ein alter, von Hand zurechtgezogener Nebel-Sperrbildschirm. Dessen
+    gespeicherter Zuschnitt erklärt den vergrößerten, links angeschnittenen Zettel (7.9. und 8.9.).
+  - „Paar nie löschen“ ist damit **keine** Naturgesetzlichkeit, sondern nur: das im Feld gewählte Paar darf
+    nicht verschwinden, sonst zeigt das Feld ins Leere und man muss es neu setzen.
+  - Sauberer Weg nach jedem Neuanlegen: Bild in Fotos sichern → Sperrbildschirm **+** → Fotos → Bild → **ohne
+    zu zoomen** hinzufügen → im Kurzbefehl das erste Feld auf dieses neue Paar stellen.
+  - Offen: ob die Zielauswahl beim Setzen den gespeicherten Zuschnitt des Zielpaars **immer** anwendet oder ob
+    ein frisch angelegtes Paar zuschnittfrei bleibt. Am Gerät zu prüfen.
+- Die Aktion kennt: **Zielpaar**, Bild, Sperrbildschirm, Home-Bildschirm, Vorschau anzeigen. **Keine** zwei
+  Bilder. Widgets kann keine Kurzbefehl-Aktion setzen. Die Aktion verlangt einen Sperrbildschirm im Modus
+  „Foto“, nicht „Fotoshuffle“.
 
 Die Einrichtungsanleitung in der App (`<details class="setup">`) beschreibt seit 1.35.2 genau diese drei
 Handgriffe beim ersten Mal. Mehr lässt sich am Erstlauf nicht glätten.
