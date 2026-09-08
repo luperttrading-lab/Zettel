@@ -81,4 +81,24 @@ for (const u of urls) {
   }
 }
 if (data.usage) console.log('usage', JSON.stringify(data.usage));
+
+// Kosten selbst festhalten, damit die Kostentabelle sie kennt (siehe docs/KOSTENTABELLE.md).
+// Liefert die Antwort keinen Betrag, wird der Eintrag mit usd: null angelegt – sichtbar offen
+// statt stillschweigend null. Nachtragen, sobald der Verbrauch in ChatLLM sichtbar ist.
+try {
+  const datei = 'tools/fremdkosten.json';
+  const liste = fs.existsSync(datei) ? JSON.parse(fs.readFileSync(datei, 'utf8')) : [];
+  const betrag = data.usage && (data.usage.cost ?? data.usage.total_cost ?? data.usage.usd);
+  liste.push({
+    ts: new Date().toISOString().replace(/\.\d+Z$/, 'Z'),
+    usd: typeof betrag === 'number' ? betrag : null,
+    dienst: 'RouteLLM',
+    was: `${model}, ${urls.length} Bild(er)`,
+  });
+  fs.writeFileSync(datei, JSON.stringify(liste, null, 2) + '\n');
+  console.log(typeof betrag === 'number'
+    ? `Kosten ${betrag} $ in ${datei} eingetragen`
+    : `Eintrag in ${datei} angelegt, Betrag offen (usd: null) – in ChatLLM unter Credits nachsehen und nachtragen`);
+} catch (e) { console.error('Kosten konnten nicht eingetragen werden:', e.message); }
+
 console.log('Dauer', Date.now() - t0, 'ms');

@@ -63,6 +63,19 @@ Das Skript kann fremde Dienste nicht messen. Es liest sie aus `tools/fremdkosten
 
 Pflichtfelder: `ts` (UTC), `usd`, `dienst`. `was` ist frei und dient nur dem Nachvollziehen.
 
+**Wer trägt ein?** Zwei Wege, und nur der erste läuft von allein:
+
+1. **Das Werkzeug selbst**, wenn es die Kosten verursacht. `tools/gen_image.mjs` hängt nach jedem
+   erzeugten Bild einen Eintrag an. Nennt die Antwort der API keinen Betrag, steht dort `"usd": null`;
+   die Spalte bekommt dann ein `?` hinter den Namen, damit sichtbar bleibt, dass eine Zahl fehlt.
+   So gehört es bei jedem weiteren kostenpflichtigen Werkzeug gebaut: Eintrag schreiben, nicht
+   darauf verlassen, dass jemand daran denkt.
+2. **Von Hand**, für alles, was außerhalb des Chats anfällt: Monatspauschalen, Rechnungen, Nutzung
+   in anderen Chats. Der Chat kann das nicht bemerken, er sieht nur seine eigenen Aufrufe.
+
+Ein Chat merkt also **nicht** von selbst, dass irgendwo Geld ausgegeben wurde. Er weiß es nur, wenn
+er den Aufruf selbst gemacht hat oder wenn du es ihm sagst.
+
 **Regel für den Chat, der damit arbeitet:** Sobald in diesem Projekt ein Dienst Geld kostet, der noch
 keine Spalte hat, legst du selbst einen Eintrag mit passendem `dienst`-Namen an. Nicht nachfragen,
 nicht auf eine Anweisung warten, und den Namen nicht bei jedem Eintrag anders schreiben – ein Dienst,
@@ -187,12 +200,16 @@ c_frage = sum(cost(mo, u) for ts, mo, u in seen.values() if last_user and ts >= 
 # tools/fremdkosten.json: [{"ts": "...Z", "usd": 0.34, "dienst": "RouteLLM", "was": "gpt_image2 Panda"}, ...]
 # Für jeden Dienst, der dort auftaucht, entsteht automatisch eine eigene Spalte.
 fremd = collections.defaultdict(lambda: [0.0, 0.0, 0.0])   # Dienst -> [Frage, heute, gesamt]
+offen = set()                                              # Dienste mit Eintraegen ohne Betrag
 for datei, standard in (('fremdkosten.json', None), ('routellm.json', 'RouteLLM')):
     try: eintraege = json.load(open(os.path.join('tools', datei)))
     except Exception: continue
     for e in eintraege:
-        usd, ts = float(e.get('usd', 0)), e.get('ts', '')
-        d = fremd[e.get('dienst') or standard or 'Sonstige']
+        roh, ts = e.get('usd'), e.get('ts', '')
+        name = e.get('dienst') or standard or 'Sonstige'
+        if roh is None: offen.add(name); continue      # Eintrag ohne Betrag: Spalte als unvollständig kennzeichnen
+        usd = float(roh)
+        d = fremd[name]
         d[2] += usd
         if lokal(ts) == heute_lokal: d[1] += usd
         if last_user and ts >= last_user: d[0] += usd
@@ -211,7 +228,9 @@ ct = lambda x: f'{x*100:.1f}'.replace('.', ',')
 # Einheit je Spalte: Dollar, sobald der Gesamtwert der Spalte einen Dollar erreicht, sonst Cent
 def zelle(wert, gesamt): return f'{de(wert)} $' if gesamt >= 1 else f'{ct(wert)} ct'
 
-kopf  = [jetzt.strftime('%d.%m. %H:%M'), 'Claude'] + dienste
+for d in offen: fremd[d]                                   # leere Spalte anlegen, damit der Dienst sichtbar wird
+dienste = sorted(set(dienste) | offen, key=lambda k: (-fremd[k][2], k))
+kopf  = [jetzt.strftime('%d.%m. %H:%M'), 'Claude'] + [d + ' ?' if d in offen else d for d in dienste]
 zeile = ['diese Frage', 'heute', 'dieser Chat']
 werte = [[c_frage, c_heute, c_ges]] + [fremd[d] for d in dienste]
 print('| ' + ' | '.join(kopf) + ' |')
