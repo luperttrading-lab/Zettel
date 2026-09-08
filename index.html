@@ -119,7 +119,7 @@
     /* Erledigt: Strich durch den Text. Die Markierung liegt absolut und bleibt davon unberührt – so bleibt
        der Punkt bzw. die Zahl lesbar. Gleiche Regel im Bild (Canvas) und auf dem Server (render.js). */
     /* Kein opacity auf der Zeile: das Bild kennt keins, und der grüne Haken soll kräftig bleiben. */
-    .note .editor .ln.durch { text-decoration: line-through; text-decoration-thickness: .05em; }
+    .note .editor .ln.durch { text-decoration: line-through; text-decoration-thickness: .065em; }   /* gleicher Wert im Bild */
     /* Der Haken hängt hinten an, etwas größer und **ohne** Strich: als inline-block gibt die Zeile
        ihre Textdekoration nicht an ihn weiter (CSS: atomare Inline-Boxen werden nicht mitdekoriert). */
     /* **Eine** Box am Zeilenende für jede Listenzeile (außer Kästchen – dort sitzt das Zeichen vorn im
@@ -531,7 +531,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.57.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.57.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -2116,7 +2116,7 @@
         ctx.fillText(rumpf, tx, ty);                                      // Text eingerückt
         if (line.durch && rumpf) {   // Strich von Hand – Canvas kennt keine Textdekoration
           const bl = baselineOf(f); ctx.font = `${weight} ${f}px ${family}`;   // baselineOf ändert die Schrift
-          ctx.fillRect(tx, Math.round(ty + bl - f * 0.30), ctx.measureText(rumpf).width, Math.max(1, Math.round(f * 0.05)));
+          ctx.fillRect(tx, Math.round(ty + bl - f * 0.30), ctx.measureText(rumpf).width, Math.max(1, Math.round(f * 0.065)));
         }
         if (hakenHier) {
           // Gezeichneter Haken – gleicher Pfad wie in der Vorschau, damit beide nicht auseinanderlaufen.
