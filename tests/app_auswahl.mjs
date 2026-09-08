@@ -103,6 +103,31 @@ await page.waitForTimeout(300);
 const nachher = await page.evaluate(() => document.activeElement.id || document.activeElement.tagName);
 check('Gliederungswechsel öffnet nicht die Tastatur', nachher !== 'text' && nachher === vorher, vorher + ' → ' + nachher);
 
+// Erledigt: Tipp auf die Listenmarkierung setzt den Haken, der Wechsel der Listenart behält ihn (1.53.0).
+await page.evaluate(() => { textEl.value = 'Kopf\nRasen wässern\nNadine anrufen'; onTextChanged();
+  state.title = true; state.list = 'dot'; persist(); });
+await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(500);
+const treffer = await page.evaluate(() => { const d = textEl.el.children[1]; const r = d.getBoundingClientRect();
+  return { x: r.left + 4, y: r.top + r.height / 2 }; });
+await page.mouse.click(treffer.x, treffer.y); await page.waitForTimeout(250);
+check('Tipp auf die Markierung setzt den Haken',
+  (await page.evaluate(() => textEl.value)) === 'Kopf\n• Rasen wässern ✓\n• Nadine anrufen',
+  JSON.stringify(await page.evaluate(() => textEl.value)));
+check('erledigte Zeile wird durchgestrichen',
+  await page.evaluate(() => textEl.el.children[1].classList.contains('durch')));
+check('Tastatur bleibt zu', (await page.evaluate(() => document.activeElement.id || document.activeElement.tagName)) !== 'text');
+await page.evaluate(() => { state.list = 'check'; persist(); });
+await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(500);
+check('Wechsel auf Kästchen macht aus dem Haken ein ☑',
+  (await page.evaluate(() => textEl.value)) === 'Kopf\n☑ Rasen wässern\n☐ Nadine anrufen',
+  JSON.stringify(await page.evaluate(() => textEl.value)));
+check('im Kasten kein zusätzlicher Strich',
+  !(await page.evaluate(() => textEl.el.children[1].classList.contains('durch'))));
+await page.mouse.click(treffer.x, treffer.y); await page.waitForTimeout(250);
+check('nochmal tippen nimmt den Haken zurück',
+  (await page.evaluate(() => textEl.value)) === 'Kopf\n☐ Rasen wässern\n☐ Nadine anrufen',
+  JSON.stringify(await page.evaluate(() => textEl.value)));
+
 check('scrollWidth ≤ 448', sw <= 448, String(sw));
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();

@@ -110,6 +110,9 @@
     .note .editor .ln { min-height: 1em; position: relative; }
     /* Listenmarkierung liegt außerhalb des Textflusses (nicht editierbar), die Zeile ist um ihre Breite eingerückt */
     .note .editor .ln[data-mk]::before { content: attr(data-mk); position: absolute; left: 0; top: 0; white-space: pre; }
+    /* Erledigt: Strich durch den Text. Die Markierung liegt absolut und bleibt davon unberührt – so bleibt
+       der Punkt bzw. die Zahl lesbar. Gleiche Regel im Bild (Canvas) und auf dem Server (render.js). */
+    .note .editor .ln.durch { text-decoration: line-through; text-decoration-thickness: .05em; opacity: .78; }
     .note .editor.empty .ln:first-child::after { content: "Was soll auf den Zettel?"; color: rgba(42,42,46,.35); }
     /* Überschrift: erste Zeile unterstrichen, mit etwas Luft darunter (Werte auch in fitNote und render.js).
        Kein fett: die Handschriften haben nur einen Schnitt, der Browser würde künstlich fetten, satori nicht. */
@@ -502,7 +505,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.52.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.53.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -542,6 +545,13 @@
     // damit Textfeld, Zeichenfläche und Server dort nie umbrechen.
     const NB = ' ';
     const PREFIX_RE = /^(\d+\.|•|▪|–|☐|☑)\s+/;
+    // „Erledigt“: bei der Kästchenliste zeigt das Häkchen im Kasten (☑), bei jeder anderen Liste ein Haken
+    // hinten an der Zeile **und** ein dünner Strich durch den Text. Dieselbe Regel steht in lib/render.js.
+    const DONE = '✓';
+    const DONE_RE = /\s*✓$/;
+    const istErledigt = l => { const m = l.match(PREFIX_RE); return !!((m && m[1] === '☑') || DONE_RE.test(l)); };
+    const ohneHaken = l => l.replace(DONE_RE, '');
+    const durchgestrichen = l => { const m = l.match(PREFIX_RE); return istErledigt(l) && !(m && m[1] === '☑'); };
     // Überschrift an? Wird nach dem Laden des Zustands gesetzt. Eigene Variable, weil die
     // Editor-Klasse vor `state` angelegt wird und `state` dort noch in der TDZ läge.
     var noteTitleOn = false;
@@ -613,7 +623,7 @@
         this.el.innerHTML = text.split('\n').map(l => {
           const m = l.match(PREFIX_RE);
           const body = m ? l.slice(m[0].length) : l;
-          return `<div class="ln"${m ? ` data-mk="${esc(m[0].trim())}"` : ''}>${body ? esc(body) : '<br>'}</div>`;
+          return `<div class="ln${durchgestrichen(l) ? ' durch' : ''}"${m ? ` data-mk="${esc(m[0].trim())}"` : ''}>${body ? esc(body) : '<br>'}</div>`;
         }).join('');
         this.el.classList.toggle('titled', noteTitleOn);
         this.el.style.setProperty('--titlef', noteTitleF);
@@ -1381,11 +1391,14 @@
       let n = 0;
       return text.split('\n').map((line, i) => {
         const had = PREFIX_RE.test(line);
-        const bare = line.replace(PREFIX_RE, '');
-        if (mode === 'none') return bare;
+        const erl = istErledigt(line);                 // beim Wechsel der Listenart nicht verlieren
+        const bare = ohneHaken(line.replace(PREFIX_RE, ''));
+        const haken = erl && bare.trim() ? ' ' + DONE : '';
+        if (mode === 'none') return bare + haken;
         if (state.title && i === 0) return bare;       // Überschrift trägt keine Listenmarkierung
         if (bare.trim() === '' && !had) return bare;   // Leerzeile ohne Markierung bleibt Leerzeile
-        return LISTS[mode].mark(n++) + bare;           // markierte, noch leere Zeile behält ihre Markierung
+        if (mode === 'check') return (erl ? '☑' : '☐') + NB + bare;   // hier sitzt das Zeichen im Kasten
+        return LISTS[mode].mark(n++) + bare + haken;   // markierte, noch leere Zeile behält ihre Markierung
       }).join('\n');
     }
     const stripList = makeStrip($('strip-list'), Object.entries(LISTS).map(([name, l]) => ({ value: name, html: l.label })), name => {
@@ -1400,6 +1413,31 @@
     });
     function applyList() { stripList.set(state.list); }
     applyList();
+
+    // Eine Zeile als erledigt markieren: Tipp auf die Listenmarkierung links.
+    // pointerdown mit preventDefault – sonst setzt iOS den Cursor in den Text und fährt die Tastatur aus.
+    function erledigtUmschalten(line, mode) {
+      const an = !istErledigt(line);
+      const m = line.match(PREFIX_RE);
+      const bare = ohneHaken(m ? line.slice(m[0].length) : line);
+      if (!bare.trim()) return line;
+      if (mode === 'check') return (an ? '☑' : '☐') + NB + bare;
+      return (m ? m[0] : '') + bare + (an ? ' ' + DONE : '');
+    }
+    textEl.el.addEventListener('pointerdown', e => {
+      if (state.list === 'none') return;
+      const d = e.target.closest && e.target.closest('.ln');
+      if (!d || !d.hasAttribute('data-mk')) return;
+      const einzug = parseFloat(getComputedStyle(d).paddingLeft) || 0;
+      if (einzug <= 0 || e.clientX - d.getBoundingClientRect().left > einzug) return;   // nur die Markierung, nicht der Text
+      const i = [...textEl.el.children].indexOf(d);
+      if (i < 0) return;
+      e.preventDefault();
+      const zeilen = textEl.value.split('\n');
+      zeilen[i] = erledigtUmschalten(zeilen[i], state.list);
+      textEl.value = zeilen.join('\n');
+      onTextChanged(); flush();
+    });
     // Überschrift an/aus: erste Zeile fett, ohne Listenmarkierung
     const titleToggle = $('titleon'), sizesEl = $('tsizes');
     titleToggle.checked = !!state.title;
@@ -1600,12 +1638,13 @@
       const lines = [];
       text.replace(/\r/g, '').split('\n').forEach((para, pi) => {
         if (fontFor) ctx.font = fontFor(pi);
-        if (para.trim() === '') { lines.push({ t: '', x: 0, mk: '', p: pi }); return; }
+        if (para.trim() === '') { lines.push({ t: '', x: 0, mk: '', p: pi, durch: false }); return; }
+        const durch = durchgestrichen(para);   // gilt für alle Umbruchzeilen des Absatzes
         const m = para.match(PREFIX_RE);
         const mk = m ? m[0] : '', body = para.slice(mk.length);
         const indent = mk ? ctx.measureText(mk).width : 0, limit = maxW - indent;
         let line = '', first = true;
-        const push = t => { lines.push({ t, x: indent, mk: first ? mk.trim() : '', p: pi }); first = false; };
+        const push = t => { lines.push({ t, x: indent, mk: first ? mk.trim() : '', p: pi, durch }); first = false; };
         for (const c of chunksOf(body)) {
           const test = line ? line + c.sep + c.s : c.s;
           if (ctx.measureText(test).width <= limit) { line = test; continue; }
@@ -1929,6 +1968,10 @@
         if (line.mk) ctx.fillText(line.mk, -noteW / 2 + pad, ty);         // Markierung links
         const tx = -noteW / 2 + pad + line.x;
         ctx.fillText(line.t, tx, ty);                                     // Text eingerückt
+        if (line.durch && line.t) {   // Strich durch erledigte Zeilen – Canvas kennt keine Textdekoration
+          const bl = baselineOf(f); ctx.font = `${weight} ${f}px ${family}`;   // baselineOf ändert die Schrift
+          ctx.fillRect(tx, Math.round(ty + bl - f * 0.30), ctx.measureText(line.t).width, Math.max(1, Math.round(f * 0.05)));
+        }
         // Unterstrich von Hand: Canvas kennt keine Textdekoration. Glattes Papier: Lage wie im CSS
         // (text-underline-offset .1em, Stärke .05em) unter der Grundlinie – die liegt je nach Schrift verschieden
         // tief unter der Oberkante (Marker tiefer als Caveat), darum aus den Metriken. Linienraster: mittig auf der Linie.
