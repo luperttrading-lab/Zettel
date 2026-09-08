@@ -12,11 +12,20 @@ Zustimmungsfloskeln, unbequeme Wahrheit zuerst).
 
 Der Auftraggeber will nach **jeder** Antwort wissen, was sie gekostet hat. Ganz am Ende der Antwort, genau
 einmal, als **drei einfache Zeilen** – **kein Codeblock** (der graue Kasten ist zu auffällig für eine Fußnote,
-gesagt am 8.9.2026), keine Tabelle, keine Fettschrift. Zeilenumbruch mit zwei Leerzeichen am Zeilenende:
+gesagt am 8.9.2026), keine Tabelle, keine Fettschrift, **kein Trennpunkt**. Zeilenumbruch mit zwei Leerzeichen
+am Zeilenende.
 
-Frage: 0,0 ct RouteLLM · 0,8 $ Claude
-Heute: 0,0 ct RouteLLM · 51,9 $ Claude
-Chat: 72,0 ct RouteLLM · 335,8 $ Claude
+„RouteLLM“ und „Claude“ sollen genau untereinander stehen. Ohne Festbreitenschrift geht das nur, wenn die
+**Zahlen** vorne rechtsbündig ausgerichtet werden – mit dem **ziffernbreiten Leerzeichen U+2007** (` `,
+FIGURE SPACE) als Füllzeichen, nicht mit gewöhnlichen Leerzeichen. Ziffern sind in den üblichen
+Oberflächenschriften gleich breit, deshalb trägt das. Die Kennzeichnung steht **hinten**, weil „Frage“,
+„heute“ und „Chat“ verschieden breit sind und vorne alles verschieben würden:
+
+  0,0 ct RouteLLM    0,9 $ Claude  diese Frage
+  0,0 ct RouteLLM   53,8 $ Claude  heute
+ 72,0 ct RouteLLM  337,7 $ Claude  dieser Chat
+
+Erzeugen mit `('%5s' % wert).replace(' ', '\u2007')` für die ct-Spalte und `%6s` für die $-Spalte.
 
 **Drei Zeilen seit 8.9.2026.** „Heute“ wird **nach Datum aus dem Protokoll** gerechnet, nicht kumulativ
 weitergezählt – sonst wandert der Vortag mit über Mitternacht (genau dieser Fehler passierte am 8.9.:
