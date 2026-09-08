@@ -47,12 +47,12 @@
     /* Kopf + Zettel bleiben oben stehen, die Einstellungen scrollen darunter durch */
     .top {
       position: sticky; top: 0; z-index: 5; width: 100%;
-      display: flex; flex-direction: column; align-items: center; gap: 14px;
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
       background: var(--bg);
       margin-top: calc(-1 * max(env(safe-area-inset-top), 20px));
-      padding: max(env(safe-area-inset-top), 16px) 0 14px;
+      padding: max(env(safe-area-inset-top), 14px) 0 16px;
     }
-    header { width: 100%; max-width: 420px; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 0 2px; }
+    header { width: 100%; max-width: 420px; display: flex; justify-content: space-between; align-items: baseline; padding: 0 2px; }
     header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .02em; }
     header h1 small { font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 6px; letter-spacing: 0; }
     header span { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -223,11 +223,14 @@
 
     /* --- Zustandszeile: eine Zeile, immer gleich gebaut. Zeigt normalerweise, was zuletzt übertragen wurde;
        liegt eine Meldung an (Fehler, Hinweis), hat die Vorrang. --- */
-    /* Zustand in der Kopfzeile: kein Kasten, kein Polster – er soll nur lesbar sein, nicht laut. */
+    /* Zustand als Marke in der rechten unteren Zettelecke – mit eigenem dunklen Grund, damit er
+       auch über einem bunten Hintergrundfoto lesbar bleibt. Kurze Texte, sonst wird sie zu breit. */
     .status {
-      display: flex; align-items: center; gap: 7px; margin: 0; min-width: 0; flex: 1 1 auto;
-      justify-content: flex-end; font-size: 12.5px; color: var(--muted);
-      white-space: nowrap; overflow: hidden;
+      position: absolute; right: -8px; bottom: -15px; z-index: 3; margin: 0;
+      display: flex; align-items: center; gap: 7px; max-width: 96%;
+      background: rgba(20,20,22,.92); border: 1px solid #33333c; border-radius: 999px;
+      padding: 6px 11px; font: 500 12px/1.15 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: var(--muted); white-space: nowrap; overflow: hidden; backdrop-filter: blur(6px);
     }
     .status .satz { overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
     .status .satz b { color: var(--fg); font-weight: 600; }
@@ -366,10 +369,8 @@
 </head>
 <body>
   <div class="top">
-    <!-- Die Kopfzeile trägt den Zustand: als eigene Zeile unten kostete er Platz, ohne mehr zu sagen. -->
     <header>
       <h1>Zettel <small id="ver"></small></h1>
-      <p class="status" id="status"><span class="punkt" id="punkt"></span><span class="satz" id="satz"></span></p>
     </header>
 
     <section class="note" id="note" aria-label="Zettel">
@@ -378,6 +379,9 @@
       <div class="editor" id="text" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Zettel-Text" spellcheck="false" autocapitalize="sentences" enterkeyhint="enter"></div>
       <div class="fastener" id="fastener-preview" aria-hidden="true"></div>
       <span class="pin over" id="overpin" hidden>⚠ Zu viel Text</span>
+      <!-- Zustand als Marke in der Zettelecke: in der Kopfzeile lag er auf dem Hintergrundfoto
+           und war kaum zu lesen (1.48.0), als eigene Zeile unten kostete er Platz (bis 1.47.0). -->
+      <p class="status" id="status"><span class="punkt" id="punkt"></span><span class="satz" id="satz"></span></p>
       <!-- Zettel ausgeblendet: Tipp zeigt ihn zum Bearbeiten, ohne etwas hochzuladen -->
       <button class="weghint" id="weghint" type="button" hidden>Zettel ausgeblendet<small>antippen zum Einblenden</small></button>
     </section>
@@ -485,7 +489,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.48.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.49.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -819,13 +823,13 @@
     function zustandZeile() {
       const foto = state.hidden;
       switch (lage()) {
-        // Knapper als bis 1.47.0: die Zeile steht jetzt in der Kopfzeile und muss auch auf dem
-        // kleinsten iPhone ohne Abschneiden hineinpassen. „Sperrbildschirm“ bleibt das Leitwort.
-        case 'leer':      return { punkt: '', text: 'Sperrbildschirm: noch leer' };
-        case 'alt':       return { punkt: 'warn', text: 'Stand unbekannt · <b>neu übertragen</b>' };
-        case 'geaendert': return { punkt: 'warn', text: 'Sperrbildschirm: ' + (foto ? '<b>altes Foto</b>' : '<b>alter Zettel</b>') };
-        case 'wartet':    return { punkt: 'gelb', text: (foto ? 'Foto' : 'Bild') + ' <b>wartet auf den Kurzbefehl</b>' };
-        default:          return { punkt: 'gut', text: 'Sperrbildschirm: ' + (foto ? '<b>nur dein Foto</b>' : '<b>dieser Zettel</b>') };
+        // Sehr knapp: die Marke sitzt in der Zettelecke und darf den Zettel nicht zudecken.
+        // Wovon die Rede ist, sagt der Hauptknopf darunter („… auf Sperrbildschirm“).
+        case 'leer':      return { punkt: '', text: 'noch nicht übertragen' };
+        case 'alt':       return { punkt: 'warn', text: '<b>Stand unbekannt</b>' };
+        case 'geaendert': return { punkt: 'warn', text: foto ? '<b>altes Foto</b> drauf' : '<b>alter Zettel</b> drauf' };
+        case 'wartet':    return { punkt: 'gelb', text: '<b>wartet</b> auf den Kurzbefehl' };
+        default:          return { punkt: 'gut', text: (foto ? '<b>nur dein Foto</b>' : '<b>dieser Zettel</b>') + ' ist drauf' };
       }
     }
     // Meldungen (Fehler, Hinweise) teilen sich die Zeile mit dem Zustand und haben Vorrang.
@@ -1786,7 +1790,9 @@
         try {
           const bb = fp.querySelector('svg').getBBox();
           // So viel Abstand nach oben, wie die Befestigung über den Zettel ragt (sonst überdeckt sie die Kopfzeile)
-          noteEl.style.marginTop = Math.max(0, Math.ceil(-bb.y * scale) - 6) + 'px';
+          // knapper als früher (−12 statt −6): die Befestigung darf dicht unter die Kopfzeile rücken,
+          // das spart oben sichtbar Platz und der Zettel sitzt höher im Bild
+          noteEl.style.marginTop = Math.max(0, Math.ceil(-bb.y * scale) - 12) + 'px';
         } catch (_) {}
       }
       zeichneGriffe(f, scale);

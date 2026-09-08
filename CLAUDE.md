@@ -17,18 +17,25 @@ breit** – der Codeblock zeigt auf dem iPhone 41 Zeichen, danach wird abgeschni
 waren zu viel). Deshalb kurze Beschriftungen und eine Nachkommastelle:
 
 ```
-Frage:   0,0 ct RouteLLM   0,6 $ Claude
-Heute:  78,0 ct RouteLLM 169,8 $ Claude
+Frage:   0,0 ct RouteLLM   1,8 $ Claude
+Heute:   0,0 ct RouteLLM  41,8 $ Claude
+Chat:   72,0 ct RouteLLM 325,7 $ Claude
 ```
+
+**Drei Zeilen seit 8.9.2026.** „Heute“ wird **nach Datum aus dem Protokoll** gerechnet, nicht kumulativ
+weitergezählt – sonst wandert der Vortag mit über Mitternacht (genau dieser Fehler passierte am 8.9.:
+gemeldet waren 471 $ „heute“, tatsächlich 40 $). „Chat“ ist die Summe dieser Sitzung **inklusive
+Unteragenten**. „Chat:“ statt „Gesamt:“, damit alle drei Zeilen 39 Zeichen bleiben.
 
 Erzeugen mit (Python, Komma als Dezimaltrenner, 39 Zeichen):
 
 ```
-def kosten(frage_ct, frage_usd, tag_ct, tag_usd):
+def kosten(frage_ct, frage_usd, tag_ct, tag_usd, chat_ct, chat_usd):
     de = lambda x: f"{x:.1f}".replace('.', ',')
     z1 = f"{'Frage:':<7}{de(frage_ct):>5} ct RouteLLM {de(frage_usd):>5} $ Claude"
     z2 = f"{'Heute:':<7}{de(tag_ct):>5} ct RouteLLM {de(tag_usd):>5} $ Claude"
-    return z1, z2
+    z3 = f"{'Chat:':<7}{de(chat_ct):>5} ct RouteLLM {de(chat_usd):>5} $ Claude"
+    return z1, z2, z3
 ```
 
 Regeln:
@@ -69,8 +76,25 @@ Regeln:
   ```
 
   Der Wert ist kumulativ für die Sitzung; die Differenz zur vorigen Messung ist der Aufwand seit der letzten
-  Nachricht. „Heute gesamt“ = Summe über die Sitzungen des Tages (Stand am Ende der vorigen Sitzung steht in
-  `docs/UEBERGABE.md`).
+  Nachricht. Für **„Heute“ nach Datum gruppieren** (`o['timestamp'][:10]`) – nie den Vortag mitschleppen:
+
+  ```
+  python3 -c "
+  import json,glob,collections
+  seen={}
+  for f in glob.glob('/root/.claude/projects/-home-user-Zettel/**/*.jsonl', recursive=True):
+    for line in open(f, encoding='utf-8'):
+      try: o=json.loads(line)
+      except: continue
+      m=o.get('message') if isinstance(o,dict) else None
+      if isinstance(m,dict) and m.get('usage') and m.get('id'): seen[m['id']]=(m['usage'],m.get('model'),(o.get('timestamp') or '')[:10])
+  tag=collections.defaultdict(float)
+  for u,mo,d in seen.values():
+    i,o_,cw,cr=(10,50,20,0.25) if (mo and 'fable' in mo) else (5,25,10,0.5)
+    tag[d]+=u.get('input_tokens',0)*i/1e6+u.get('output_tokens',0)*o_/1e6+u.get('cache_creation_input_tokens',0)*cw/1e6+u.get('cache_read_input_tokens',0)*cr/1e6
+  for d in sorted(tag): print(d, round(tag[d],2))
+  print('CHAT', round(sum(tag.values()),2))"
+  ```
 - Der Claude-Betrag ist ein **Gegenwert zu API-Preisen**. Solange das Abo nicht in Überziehung ist, wird er
   nicht in Rechnung gestellt; der Auftraggeber will ihn trotzdem sehen.
 - Nach einer Pause von mehr als einer Stunde muss der Gesprächsspeicher neu aufgebaut werden; das kostet bei

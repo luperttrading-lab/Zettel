@@ -90,7 +90,7 @@ check('G: Zustandszeile passt bei 375 px', rG.passt, JSON.stringify(rG));
 // H) alter Eintrag: „Stand unbekannt“, kein „geändert“ (Text vorher kürzen, sonst hat die Überlaufwarnung Vorrang)
 await page.evaluate(() => { textEl.value = 'Milch'; onTextChanged(); flush(); }); await page.waitForTimeout(300);
 await page.evaluate(() => { state.pinned = { text: state.text, color: state.color, at: Date.now() }; updatePinBadge(); });
-check('H: alter Eintrag', (await zeile()) === 'Stand unbekannt · neu übertragen', await zeile());
+check('H: alter Eintrag', (await zeile()) === 'Stand unbekannt', await zeile());
 // Überlauf: die Befestigungsvorschau ragt seit jeher ~20 px über (harmlos); alles andere muss in 375 px passen
 const sw = await page.evaluate(() => ({ gesamt: document.documentElement.scrollWidth, ohneVorschau: Math.round(Math.max(...[...document.querySelectorAll('body *')].filter(e => !e.closest('#fastener-preview, .strip, #fcolors') && e.getBoundingClientRect().width > 0).map(e => e.getBoundingClientRect().right))) }));   // Schieber scrollen intern, die Vorschau ragt seit jeher über
 check('scrollWidth ≤ 395 bei 375 px', sw.gesamt <= 395, String(sw.gesamt));
