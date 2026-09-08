@@ -31,7 +31,6 @@
       --note-font: 'Caveat', 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
       /* Genau zwei Grautöne im ganzen Aufbau. --flaeche: alles, was man antippt – hell genug, dass der
          Knopf sich vom schwarzen Grund abhebt. --gewaehlt: nur, was ausgewählt/erhaben ist. Kein dritter Ton. */
-      --haken: #1a7f3c;        /* Grün des Erledigt-Hakens – gleicher Wert im Bild (renderWallpaper) */
       --flaeche: #2d2d33;
       --gewaehlt: #3f3f48;
     }
@@ -117,9 +116,11 @@
     .note .editor .ln.durch { text-decoration: line-through; text-decoration-thickness: .05em; }
     /* Der Haken hängt hinten an, etwas größer und **ohne** Strich: als inline-block gibt die Zeile
        ihre Textdekoration nicht an ihn weiter (CSS: atomare Inline-Boxen werden nicht mitdekoriert). */
-    .note .editor .ln[data-done]::after { content: attr(data-done); display: inline-block;
-      margin-left: .2em; font-size: 1.18em; text-decoration: none;
-      color: var(--haken); -webkit-text-stroke: .05em var(--haken); }
+    /* Der Haken ist ein gezeichneter Pfad, kein Zeichen: als inline-block erbt er die Textdekoration der
+       Zeile nicht, der Strich endet also vor ihm. Bild und Farbe setzt das Skript über --haken-bild. */
+    .note .editor .ln[data-done]::after { content: ''; display: inline-block; vertical-align: -.16em;
+      width: 1.06em; height: 1.06em; margin-left: .22em; text-decoration: none;
+      background: var(--haken-bild) no-repeat center / contain; }
     .note .editor.empty .ln:first-child::after { content: "Was soll auf den Zettel?"; color: rgba(42,42,46,.35); }
     /* Überschrift: erste Zeile unterstrichen, mit etwas Luft darunter (Werte auch in fitNote und render.js).
        Kein fett: die Handschriften haben nur einen Schnitt, der Browser würde künstlich fetten, satori nicht. */
@@ -410,6 +411,8 @@
     </section>
     <!-- Aussehen der Befestigung: erscheint beim Antippen der Befestigung, Farben · Muster · Motive -->
     <div class="fcolors" id="fcolors" hidden role="radiogroup" aria-label="Aussehen der Befestigung"></div>
+    <!-- Aussehen des Erledigt-Hakens: erscheint beim langen Drücken auf eine Listenmarkierung -->
+    <div class="fcolors" id="hcolors" hidden role="radiogroup" aria-label="Aussehen des Hakens"></div>
   </div>
 
   <div class="colors" id="colors" role="radiogroup" aria-label="Zettelfarbe"></div>
@@ -512,7 +515,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.53.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.54.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -555,7 +558,24 @@
     // „Erledigt“: bei der Kästchenliste zeigt das Häkchen im Kasten (☑), bei jeder anderen Liste ein Haken
     // hinten an der Zeile **und** ein dünner Strich durch den Text. Dieselbe Regel steht in lib/render.js.
     const DONE = '✓';
-    const HAKEN_GRUEN = '#1a7f3c';   // steht ein zweites Mal als --haken im CSS
+    // Formen des Erledigt-Zeichens: ein Pfad in 24 × 24, gestrichen. **Dieselbe Zeichenkette** dient der
+    // Vorschau (SVG als Hintergrundbild der ::after-Box) und dem Bild (Path2D im Canvas) – so kann es nicht
+    // auseinanderlaufen. Der Server zeichnet weiter das Zeichen ✓ im Text, siehe UEBERGABE 1.53.1.
+    const HAKEN = {
+      schwung: { label: 'Schwung', d: 'M2.5 12.5 C5.5 14.5 7.5 17 9 20.5 C12.5 13 16.5 7 22 3', w: 2.9 },
+      schlank: { label: 'Schlank', d: 'M3 13 L9.5 19.5 L21.5 4', w: 1.8 },
+      fett:    { label: 'Kräftig', d: 'M3 13 L9.5 19.5 L21.5 4', w: 4.4 },
+      doppel:  { label: 'Doppelt', d: 'M1.5 12 L6 16.5 L14.5 5 M8.5 16.5 L13 21 L22.5 8', w: 2.2 },
+      kreuz:   { label: 'Kreuz',   d: 'M4.5 4.5 L19.5 19.5 M19.5 4.5 L4.5 19.5', w: 2.9 },
+      stern:   { label: 'Stern',   d: 'M12 2.5 L12 21.5 M3.8 7.2 L20.2 16.8 M20.2 7.2 L3.8 16.8', w: 2.4 },
+    };
+    const HAKEN_FARBEN = { gruen: '#1a7f3c', rot: '#c0392b', blau: '#1f5fa8', orange: '#d97706', violett: '#6d28d9', tinte: '' };
+    const hakenForm  = () => HAKEN[state.doneForm] || HAKEN.schwung;
+    const hakenFarbe = () => HAKEN_FARBEN[state.doneColor] || HAKEN_FARBEN.gruen;   // '' = Farbe des Stifts
+    function hakenSvg(farbe, f = hakenForm()) {
+      return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="' + f.d +
+        '" fill="none" stroke="' + farbe + '" stroke-width="' + f.w + '" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    }
     const DONE_RE = /\s*✓$/;
     const istErledigt = l => { const m = l.match(PREFIX_RE); return !!((m && m[1] === '☑') || DONE_RE.test(l)); };
     const ohneHaken = l => l.replace(DONE_RE, '');
@@ -708,7 +728,7 @@
 
     // ---------- Zustand ----------
     // autoRun standardmäßig aus: Start per URL bringt die Kurzbefehle-App in den Vordergrund.
-    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fasteners: null, fastenerLook: {}, paper: 'plain', pen: 'black', font: 'caveat', list: 'none', title: false, titleSize: 1, hidden: false, updated: null, pinned: null };
+    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fasteners: null, fastenerLook: {}, paper: 'plain', pen: 'black', font: 'caveat', list: 'none', doneForm: 'schwung', doneColor: 'gruen', title: false, titleSize: 1, hidden: false, updated: null, pinned: null };
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) state = { ...state, ...JSON.parse(raw) };
@@ -792,6 +812,8 @@
     }
     if (!FONTS[state.font]) state.font = 'caveat';
     if (!['none', 'num', 'dot', 'square', 'dash', 'check'].includes(state.list)) state.list = 'none';
+    if (!HAKEN[state.doneForm]) state.doneForm = 'schwung';
+    if (!(state.doneColor in HAKEN_FARBEN)) state.doneColor = 'gruen';
     if (typeof state.title !== 'boolean') state.title = false;
     if (typeof state.hidden !== 'boolean') state.hidden = false;   // Zettel ausgeblendet (auf dem Display nur das Foto)
     if (![1, 2, 3].includes(state.titleSize)) state.titleSize = 1;
@@ -903,9 +925,9 @@
     // Rendern und Zwischenablage brauchen Zeit, und was in dieser Zeit geändert wird, ist nicht im Bild.
     // requested: der Kurzbefehl wurde per URL aufgerufen (sonst liegt das Bild nur in der Zwischenablage)
     // bgOnly: „Zettel ausblenden“ – im Bild ist nur das Hintergrundfoto
-    const SNAP_FIELDS = ['text', 'color', 'fontScale', 'fastener', 'fastenerLook', 'paper', 'pen', 'texture', 'edge', 'font', 'title', 'titleSize', 'bg'];
+    const SNAP_FIELDS = ['text', 'color', 'fontScale', 'fastener', 'fastenerLook', 'paper', 'pen', 'texture', 'edge', 'font', 'title', 'titleSize', 'doneForm', 'doneColor', 'bg'];
     function pinSnapshot({ requested = false, bgOnly = false } = {}) {
-      return { text: state.text, color: state.color, fontScale: state.fontScale, fastener: befKennung(), fastenerLook: lookKey(fastenerLook()), paper: state.paper, pen: state.pen, texture: state.texture, edge: state.edge, font: state.font, title: state.title, titleSize: state.titleSize, bg: bgKennung, requested, bgOnly };
+      return { text: state.text, color: state.color, fontScale: state.fontScale, fastener: befKennung(), fastenerLook: lookKey(fastenerLook()), paper: state.paper, pen: state.pen, texture: state.texture, edge: state.edge, font: state.font, title: state.title, titleSize: state.titleSize, doneForm: state.doneForm, doneColor: state.doneColor, bg: bgKennung, requested, bgOnly };
     }
     // Gleicher bildbestimmender Stand? Bei „nur Hintergrund“ zählt allein das Foto; die Überschriftgröße nur mit Überschrift.
     function gleicherStand(a, b) { return a.bgOnly ? a.bg === b.bg : SNAP_FIELDS.every(k => (k === 'titleSize' && !a.title) || a[k] === b[k]); }
@@ -1436,6 +1458,41 @@
       if (mode === 'check') return (an ? '☑' : '☐') + NB + bare;
       return (m ? m[0] : '') + bare + (an ? ' ' + DONE : '');
     }
+    // Kurz tippen = erledigt an/aus. Lang drücken = Fenster für Form und Farbe des Hakens.
+    const hcolorsEl = $('hcolors');
+    let hakenTimer = null, hakenLang = false;
+    function hakenBildSetzen() { textEl.el.style.setProperty('--haken-bild', 'url("data:image/svg+xml,' +
+      encodeURIComponent(hakenSvg(hakenFarbe() || inkColor())) + '")'); }
+    function hakenFensterBauen() {
+      const chip = (art, inhalt, gewaehlt, tun, titel) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'chip ' + art; b.setAttribute('aria-pressed', String(gewaehlt));
+        if (titel) b.title = titel;
+        b.innerHTML = inhalt;
+        b.addEventListener('click', () => { tun(); persist(); hakenBildSetzen(); textEl.value = textEl.value; onTextChanged(); flush(); hakenFensterBauen(); });
+        return b;
+      };
+      const reihe = (name, kinder) => {
+        const r = document.createElement('div'); r.className = 'row';
+        const l = document.createElement('span'); l.className = 'lab'; l.textContent = name;
+        r.append(l, ...kinder); return r;
+      };
+      const farbe = hakenFarbe() || inkColor();
+      hcolorsEl.replaceChildren(
+        reihe('Form', Object.entries(HAKEN).map(([k, f]) =>
+          chip('icon', hakenSvg(farbe, f), state.doneForm === k, () => { state.doneForm = k; }, f.label))),
+        reihe('Farbe', Object.entries(HAKEN_FARBEN).map(([k, v]) =>
+          chip('color', '', state.doneColor === k, () => { state.doneColor = k; }, k)).map((b, i) => {
+            b.style.background = Object.values(HAKEN_FARBEN)[i] || inkColor(); return b; })),
+      );
+    }
+    function hakenFenster(auf) {
+      if (auf) hakenFensterBauen();
+      hcolorsEl.hidden = !auf;
+    }
+    document.addEventListener('pointerdown', e => {
+      if (!hcolorsEl.hidden && !hcolorsEl.contains(e.target)) hakenFenster(false);
+    }, true);
     textEl.el.addEventListener('pointerdown', e => {
       if (state.list === 'none') return;
       const d = e.target.closest && e.target.closest('.ln');
@@ -1445,11 +1502,29 @@
       const i = [...textEl.el.children].indexOf(d);
       if (i < 0) return;
       e.preventDefault();
+      hakenLang = false;
+      clearTimeout(hakenTimer);
+      hakenTimer = setTimeout(() => { hakenLang = true; hakenFenster(true); }, 480);
+    });
+    const hakenEnde = e => {
+      clearTimeout(hakenTimer);
+      if (hakenLang) { hakenLang = false; return; }                       // langes Drücken hat das Fenster geöffnet
+      if (state.list === 'none') return;
+      const d = e.target.closest && e.target.closest('.ln');
+      if (!d || !d.hasAttribute('data-mk')) return;
+      const einzug = parseFloat(getComputedStyle(d).paddingLeft) || 0;
+      if (einzug <= 0 || e.clientX - d.getBoundingClientRect().left > einzug) return;
+      const i = [...textEl.el.children].indexOf(d);
+      if (i < 0) return;
+      e.preventDefault();
       const zeilen = textEl.value.split('\n');
       zeilen[i] = erledigtUmschalten(zeilen[i], state.list);
       textEl.value = zeilen.join('\n');
       onTextChanged(); flush();
-    });
+    };
+    textEl.el.addEventListener('pointerup', hakenEnde);
+    textEl.el.addEventListener('pointercancel', () => { clearTimeout(hakenTimer); hakenLang = false; });
+    hakenBildSetzen();
     // Überschrift an/aus: erste Zeile fett, ohne Listenmarkierung
     const titleToggle = $('titleon'), sizesEl = $('tsizes');
     titleToggle.checked = !!state.title;
@@ -1646,15 +1721,21 @@
     // Ergebnis: [{ t: Text, x: Einzug in px, mk: Markierung (nur erste Zeile eines Listenpunkts) }]
     // Die Markierung steht links neben dem eingerückten Textblock; alle Zeilen des Punkts sind gleich breit.
     // fontFor(pi) liefert optional eine eigene Schrift für einen Absatz (die Überschrift ist größer)
-    function wrap(ctx, text, maxW, fontFor) {
+    // Der Haken ist in der Vorschau ein Kasten von HAKEN_EM Breite hinter dem Text und im Bild ein Pfad
+    // derselben Breite. Damit beide gleich umbrechen, wird das Zeichen ✓ **nicht** gemessen, sondern
+    // dieser feste Betrag am Zeilenende freigehalten. (0,22 em Abstand + 1,06 em Zeichen, siehe CSS.)
+    const HAKEN_EM = 1.28;
+    function wrap(ctx, text, maxW, fontFor, hakenFs) {
       const lines = [];
       text.replace(/\r/g, '').split('\n').forEach((para, pi) => {
         if (fontFor) ctx.font = fontFor(pi);
         if (para.trim() === '') { lines.push({ t: '', x: 0, mk: '', p: pi, durch: false }); return; }
         const durch = durchgestrichen(para);   // gilt für alle Umbruchzeilen des Absatzes
         const m = para.match(PREFIX_RE);
-        const mk = m ? m[0] : '', body = para.slice(mk.length);
-        const indent = mk ? ctx.measureText(mk).width : 0, limit = maxW - indent;
+        const mk = m ? m[0] : '';
+        const body = durch ? ohneHaken(para.slice(mk.length)) : para.slice(mk.length);
+        const frei = durch && hakenFs ? HAKEN_EM * hakenFs(pi) : 0;      // Platz für den Haken am Zeilenende
+        const indent = mk ? ctx.measureText(mk).width : 0, limit = maxW - indent - frei;
         let line = '', first = true;
         const push = t => { lines.push({ t, x: indent, mk: first ? mk.trim() : '', p: pi, durch }); first = false; };
         for (const c of chunksOf(body)) {
@@ -1669,6 +1750,7 @@
           }
         }
         push(line);
+        lines[lines.length - 1].letzte = true;        // nur hinter der letzten Umbruchzeile steht der Haken
       });
       return lines;
     }
@@ -1723,7 +1805,8 @@
       const titleF = state.title ? TITLE_F[state.titleSize] : 1;
       const fontAt = f => `${weight} ${f}px ${family}`;
       const fontOf = (f, pi) => fontAt(Math.round(f * (state.title && pi === 0 ? titleF : 1)));
-      const measure = f => wrap(measureCtx, text, wrapW, pi => fontOf(f, pi));
+      const measure = f => wrap(measureCtx, text, wrapW, pi => fontOf(f, pi),
+        pi => Math.round(f * (state.title && pi === 0 ? titleF : 1)));
       const wordFits = f => paraInfo.every((pi, i) => {
         measureCtx.font = fontOf(f, i);
         return measureCtx.measureText(pi.longest).width <= wrapW - (pi.mk ? measureCtx.measureText(pi.mk).width : 0);
@@ -1922,6 +2005,7 @@
 
       // Alles Bildbestimmende VOR dem ersten await lesen – sonst könnte ein Bild halb alten, halb neuen Stand zeigen
       const c = COLORS[state.color], edge = state.edge, paper = state.paper, texture = state.texture, ink = inkColor(), titleOn = state.title;
+      const hForm = hakenForm(), hFarbe = hakenFarbe() || ink, hPfad = new Path2D(hForm.d);
       const { layout, noteW, pad, family, weight, fs, lh, lines, noteH, textTop, titleGap, titleF, raster, ueber } = fitNote(w, h, layoutName, noteText() || '…');
       const m = pad * 2.2;
       const fastener = await svgImage(fastenersSvg(befPixel(noteW, noteH, pad), noteW, noteH, pad, fastenerLook())).catch(() => null);
@@ -1980,25 +2064,24 @@
         if (line.mk) ctx.fillText(line.mk, -noteW / 2 + pad, ty);         // Markierung links
         const tx = -noteW / 2 + pad + line.x;
         // Erledigte Zeile: Strich nur durch den Text, der Haken bleibt frei und steht etwas größer dahinter.
-        const hakenHier = line.durch && DONE_RE.test(line.t);
-        const rumpf = hakenHier ? ohneHaken(line.t) : line.t;
+        const hakenHier = line.durch && line.letzte;
+        const rumpf = line.t;
         ctx.fillText(rumpf, tx, ty);                                      // Text eingerückt
         if (line.durch && rumpf) {   // Strich von Hand – Canvas kennt keine Textdekoration
           const bl = baselineOf(f); ctx.font = `${weight} ${f}px ${family}`;   // baselineOf ändert die Schrift
           ctx.fillRect(tx, Math.round(ty + bl - f * 0.30), ctx.measureText(rumpf).width, Math.max(1, Math.round(f * 0.05)));
         }
         if (hakenHier) {
+          // Gezeichneter Haken – gleicher Pfad wie in der Vorschau, damit beide nicht auseinanderlaufen.
           const bl = baselineOf(f); ctx.font = `${weight} ${f}px ${family}`;
-          const br = ctx.measureText(rumpf).width;
-          const fh = Math.round(f * 1.18), blH = baselineOf(fh);
-          ctx.font = `${weight} ${fh}px ${family}`;
-          // Grün und kräftiger: füllen **und** umranden. Handschriften haben nur einen Schnitt – künstlich
-          // fetten würde der Browser, satori nicht; die Umrandung sieht überall gleich aus. Farbe = --haken.
-          ctx.fillStyle = HAKEN_GRUEN; ctx.strokeStyle = HAKEN_GRUEN;
-          ctx.lineWidth = Math.max(1, fh * 0.05); ctx.lineJoin = 'round';
-          const hx = tx + br + f * 0.2, hy = ty + bl - blH;               // Grundlinien aufeinander
-          ctx.fillText(DONE, hx, hy); ctx.strokeText(DONE, hx, hy);
-          ctx.fillStyle = ink; ctx.font = `${weight} ${f}px ${family}`;
+          const br = ctx.measureText(rumpf).width, s = f * 1.06;
+          ctx.save();
+          ctx.translate(tx + br + f * 0.22, ty + bl - s * 0.849);         // wie CSS: 0,90 em über der Grundlinie
+          ctx.scale(s / 24, s / 24);
+          ctx.strokeStyle = hFarbe; ctx.lineWidth = hForm.w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+          ctx.stroke(hPfad);
+          ctx.restore();
+          ctx.fillStyle = ink;
         }
         // Unterstrich von Hand: Canvas kennt keine Textdekoration. Glattes Papier: Lage wie im CSS
         // (text-underline-offset .1em, Stärke .05em) unter der Grundlinie – die liegt je nach Schrift verschieden

@@ -128,6 +128,34 @@ check('nochmal tippen nimmt den Haken zurück',
   (await page.evaluate(() => textEl.value)) === 'Kopf\n☐ Rasen wässern\n☐ Nadine anrufen',
   JSON.stringify(await page.evaluate(() => textEl.value)));
 
+// Langes Drücken auf die Markierung öffnet die Auswahl für Form und Farbe des Hakens (1.54.0).
+await page.evaluate(() => { textEl.value = 'Kopf\n• Rasen wässern ✓\n• Nadine anrufen'; onTextChanged();
+  state.title = true; state.list = 'dot'; persist(); });
+await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(500);
+const mk = await page.evaluate(() => { const d = textEl.el.children[1], r = d.getBoundingClientRect();
+  return { x: r.left + 4, y: r.top + r.height / 2 }; });
+await page.mouse.move(mk.x, mk.y); await page.mouse.down(); await page.waitForTimeout(700); await page.mouse.up();
+await page.waitForTimeout(250);
+check('langes Drücken öffnet die Hakenauswahl', await page.evaluate(() => !document.getElementById('hcolors').hidden));
+check('langes Drücken schaltet nicht um',
+  (await page.evaluate(() => textEl.value)) === 'Kopf\n• Rasen wässern ✓\n• Nadine anrufen',
+  JSON.stringify(await page.evaluate(() => textEl.value)));
+await page.evaluate(() => { document.querySelectorAll('#hcolors .row')[0].querySelectorAll('.chip')[3].click();
+  document.querySelectorAll('#hcolors .row')[1].querySelectorAll('.chip')[1].click(); });
+await page.waitForTimeout(300);
+check('Form und Farbe kommen im Zustand an',
+  (await page.evaluate(() => [state.doneForm, state.doneColor].join(','))) === 'doppel,rot',
+  await page.evaluate(() => [state.doneForm, state.doneColor].join(',')));
+check('Haken zählt zum bildbestimmenden Stand',
+  await page.evaluate(() => SNAP_FIELDS.includes('doneForm') && SNAP_FIELDS.includes('doneColor')));
+// Vorschau und Bild müssen gleich umbrechen – der Haken belegt in beiden HAKEN_EM breit Platz
+check('Vorschau und Bild haben gleich viele Zeilen',
+  await page.evaluate(() => { const t = targetCanvas();
+    return fitNote(t.w, t.h, t.layout, noteText()).lines.length === textEl.el.children.length; }));
+await page.evaluate(() => { document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); });
+await page.waitForTimeout(200);
+check('Tipp daneben schließt die Auswahl', await page.evaluate(() => document.getElementById('hcolors').hidden));
+
 check('scrollWidth ≤ 448', sw <= 448, String(sw));
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();
