@@ -156,6 +156,26 @@ await page.evaluate(() => { document.body.dispatchEvent(new PointerEvent('pointe
 await page.waitForTimeout(200);
 check('Tipp daneben schließt die Auswahl', await page.evaluate(() => document.getElementById('hcolors').hidden));
 
+// Antippen hinter dem Text erledigt die Zeile – dort steht auch der blasse Wegweiser (1.55.0).
+await page.evaluate(() => { textEl.value = 'Kopf\n• Rasen wässern\n• Nadine anrufen'; onTextChanged();
+  state.title = true; state.list = 'dot'; persist(); });
+await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(500);
+const hinten = await page.evaluate(() => { const d = textEl.el.children[1], r = d.getBoundingClientRect();
+  const rr = document.createRange(); rr.selectNodeContents(d);
+  return { x: (rr.getBoundingClientRect().right + r.right) / 2, y: r.top + r.height / 2 }; });
+await page.mouse.click(hinten.x, hinten.y); await page.waitForTimeout(250);
+check('Tipp hinter dem Text erledigt die Zeile',
+  (await page.evaluate(() => textEl.value)) === 'Kopf\n• Rasen wässern ✓\n• Nadine anrufen',
+  JSON.stringify(await page.evaluate(() => textEl.value)));
+check('Wegweiser nur auf offenen Punktzeilen', await page.evaluate(() => {
+  const g = d => getComputedStyle(d).backgroundImage !== 'none';
+  return !g(textEl.el.children[0]) && !g(textEl.el.children[1]) && g(textEl.el.children[2]);
+}));
+await page.evaluate(() => { state.list = 'check'; persist(); });
+await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(500);
+check('Kästchenliste ohne Wegweiser', await page.evaluate(() =>
+  [...textEl.el.children].every(d => getComputedStyle(d).backgroundImage === 'none')));
+
 check('scrollWidth ≤ 448', sw <= 448, String(sw));
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();

@@ -116,6 +116,12 @@
     .note .editor .ln.durch { text-decoration: line-through; text-decoration-thickness: .05em; }
     /* Der Haken hängt hinten an, etwas größer und **ohne** Strich: als inline-block gibt die Zeile
        ihre Textdekoration nicht an ihn weiter (CSS: atomare Inline-Boxen werden nicht mitdekoriert). */
+    /* Wegweiser: Auf einer Listenzeile, die noch nicht erledigt ist, steht rechts ein blasser Haken – er
+       zeigt, wo man tippen muss. Nur in der App: das Bild zeichnet der Canvas, der kennt ihn nicht.
+       Als Hintergrundbild der Zeile, damit er keinen Platz belegt und den Umbruch nicht verschiebt. */
+    .note .editor .ln[data-mk]:not([data-done]):not([data-mk="☐"]):not([data-mk="☑"]) {
+      background: var(--haken-geist) no-repeat right center / 1.2em 1.2em;
+    }
     /* Der Haken ist ein gezeichneter Pfad, kein Zeichen: als inline-block erbt er die Textdekoration der
        Zeile nicht, der Strich endet also vor ihm. Bild und Farbe setzt das Skript über --haken-bild. */
     .note .editor .ln[data-done]::after { content: ''; display: inline-block; vertical-align: -.18em;
@@ -515,7 +521,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.54.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.55.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -1461,8 +1467,12 @@
     // Kurz tippen = erledigt an/aus. Lang drücken = Fenster für Form und Farbe des Hakens.
     const hcolorsEl = $('hcolors');
     let hakenTimer = null, hakenLang = false;
-    function hakenBildSetzen() { textEl.el.style.setProperty('--haken-bild', 'url("data:image/svg+xml,' +
-      encodeURIComponent(hakenSvg(hakenFarbe() || inkColor())) + '")'); }
+    function hakenBildSetzen() {
+      const url = f => 'url("data:image/svg+xml,' + encodeURIComponent(f) + '")';
+      textEl.el.style.setProperty('--haken-bild', url(hakenSvg(hakenFarbe() || inkColor())));
+      // Wegweiser in der Tinte des Zettels, stark abgeschwächt – er soll zeigen, nicht auffallen
+      textEl.el.style.setProperty('--haken-geist', url(hakenSvg(inkColor()).replace('<path', '<path opacity="0.22"')));
+    }
     function hakenFensterBauen() {
       const chip = (art, inhalt, gewaehlt, tun, titel) => {
         const b = document.createElement('button');
@@ -1493,13 +1503,23 @@
     document.addEventListener('pointerdown', e => {
       if (!hcolorsEl.hidden && !hcolorsEl.contains(e.target)) hakenFenster(false);
     }, true);
-    textEl.el.addEventListener('pointerdown', e => {
-      if (state.list === 'none') return;
+    // Trefferzone: die Markierung links **oder** die freie Fläche rechts hinter dem Text – dort, wo der
+    // Haken erscheint. Beim Kästchen ist das Ziel sichtbar, beim Punkt zeigt es der blasse Wegweiser.
+    function hakenZeile(e) {
+      if (state.list === 'none') return -1;
       const d = e.target.closest && e.target.closest('.ln');
-      if (!d || !d.hasAttribute('data-mk')) return;
+      if (!d || !d.hasAttribute('data-mk')) return -1;
+      const kasten = d.getBoundingClientRect();
       const einzug = parseFloat(getComputedStyle(d).paddingLeft) || 0;
-      if (einzug <= 0 || e.clientX - d.getBoundingClientRect().left > einzug) return;   // nur die Markierung, nicht der Text
-      const i = [...textEl.el.children].indexOf(d);
+      const links = einzug > 0 && e.clientX - kasten.left <= einzug;
+      let rechts = false;
+      try { const r = document.createRange(); r.selectNodeContents(d);
+        rechts = e.clientX >= r.getBoundingClientRect().right + 6; } catch (_) {}
+      if (!links && !rechts) return -1;
+      return [...textEl.el.children].indexOf(d);
+    }
+    textEl.el.addEventListener('pointerdown', e => {
+      const i = hakenZeile(e);
       if (i < 0) return;
       e.preventDefault();
       hakenLang = false;
@@ -1509,12 +1529,7 @@
     const hakenEnde = e => {
       clearTimeout(hakenTimer);
       if (hakenLang) { hakenLang = false; return; }                       // langes Drücken hat das Fenster geöffnet
-      if (state.list === 'none') return;
-      const d = e.target.closest && e.target.closest('.ln');
-      if (!d || !d.hasAttribute('data-mk')) return;
-      const einzug = parseFloat(getComputedStyle(d).paddingLeft) || 0;
-      if (einzug <= 0 || e.clientX - d.getBoundingClientRect().left > einzug) return;
-      const i = [...textEl.el.children].indexOf(d);
+      const i = hakenZeile(e);
       if (i < 0) return;
       e.preventDefault();
       const zeilen = textEl.value.split('\n');
