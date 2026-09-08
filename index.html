@@ -101,9 +101,15 @@
     /* Eingabefeld: ein Block pro Zeile, damit Listenpunkte einen hängenden Einzug bekommen
        (Folgezeilen beginnen unter dem ersten Wort, nicht unter der Zahl). */
     .note .editor {
-      width: 100%; height: 100%; border: 0; outline: 0; background: transparent;
+      width: calc(100% + .5em); height: 100%; border: 0; outline: 0; background: transparent;
       color: inherit; font-family: var(--note-font); font-weight: 500;
       font-size: clamp(26px, 8vw, 36px); line-height: 1.15; padding: 0; margin: 0; display: block;
+      /* 0,5 em breiterer Kasten bei **gleich breitem Inhalt** (deshalb width: calc(100% + .5em) oben –
+         mit box-sizing: border-box schrumpfte padding-right sonst die Textspalte und die Vorschau
+         brach früher um als das Bild): der Haken darf in den Zettelrand ragen,
+         ohne dass overflow:hidden ihn abschneidet. Der Rand ist mindestens 0,56 em breit (pad = 8 % der
+         Zettelbreite, fs höchstens Zettelbreite/7), er bleibt also immer auf dem Papier. */
+      margin-right: -.5em; padding-right: .5em;
       overflow: hidden; overflow-wrap: break-word; white-space: pre-wrap; caret-color: currentColor;
       -webkit-user-select: text; user-select: text;
     }
@@ -125,7 +131,7 @@
     /* Der Haken ist ein gezeichneter Pfad, kein Zeichen: als inline-block erbt er die Textdekoration der
        Zeile nicht, der Strich endet also vor ihm. Bild und Farbe setzt das Skript über --haken-bild. */
     .note .editor .ln[data-done]::after { content: ''; display: inline-block; vertical-align: -.18em;
-      width: 1.2em; height: 1.2em; margin-left: .22em; text-decoration: none;
+      width: 1.2em; height: 1.2em; margin-left: .22em; margin-right: -.5em; text-decoration: none;
       background: var(--haken-bild) no-repeat center / contain; }
     .note .editor.empty .ln:first-child::after { content: "Was soll auf den Zettel?"; color: rgba(42,42,46,.35); }
     /* Überschrift: erste Zeile unterstrichen, mit etwas Luft darunter (Werte auch in fitNote und render.js).
@@ -521,7 +527,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.55.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.56.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -672,6 +678,13 @@
         [...this.el.children].forEach((d, i) => {
           const ind = Math.round(this.indentFn(lines[i] || '') * 100) / 100;
           d.style.paddingLeft = ind ? ind + 'px' : '';
+          // Wegweiser hinter das Zeilenende legen – am Spaltenrand lag er sonst über dem letzten Wort
+          if (d.hasAttribute('data-mk') && !d.hasAttribute('data-done')) {
+            let x = null;
+            try { const r = document.createRange(); r.selectNodeContents(d);
+              x = r.getBoundingClientRect().right - d.getBoundingClientRect().left; } catch (_) {}
+            d.style.backgroundPosition = x === null ? '' : Math.round(x + 6) + 'px center';
+          } else d.style.backgroundPosition = '';
           if (i === 0) {   // Überschrift im Linienraster (syncPreview setzt titleStyle), sonst gilt das CSS
             const t = this.titleStyle || {};
             d.style.marginTop = t.marginTop || ''; d.style.marginBottom = t.marginBottom || ''; d.style.textUnderlineOffset = t.textUnderlineOffset || '';
@@ -1738,8 +1751,8 @@
     // fontFor(pi) liefert optional eine eigene Schrift für einen Absatz (die Überschrift ist größer)
     // Der Haken ist in der Vorschau ein Kasten von HAKEN_EM Breite hinter dem Text und im Bild ein Pfad
     // derselben Breite. Damit beide gleich umbrechen, wird das Zeichen ✓ **nicht** gemessen, sondern
-    // dieser feste Betrag am Zeilenende freigehalten. (0,22 em Abstand + 1,20 em Zeichen, siehe CSS.)
-    const HAKEN_EM = 1.42;
+    // dieser feste Betrag am Zeilenende freigehalten – 0,5 em davon ragen in den Zettelrand (siehe CSS).
+    const HAKEN_EM = 0.92;   // 0,22 Abstand + 1,20 Zeichen − 0,50, die in den Zettelrand ragen dürfen
     function wrap(ctx, text, maxW, fontFor, hakenFs) {
       const lines = [];
       text.replace(/\r/g, '').split('\n').forEach((para, pi) => {
@@ -1855,12 +1868,30 @@
       const ueberzaehlig = ls => ls.filter(l => !(state.title && l.p === 0)).length - (paras.length - (state.title ? 1 : 0));
       lines = measure(fs);
       while (ueberzaehlig(lines) > 0 && fs > paraFloor) { fs = Math.round(fs * 0.95); lines = measure(fs); }
+      // Feinsuche: die 5-%-Schritte schießen über und verschenkten sichtbar Platz. In 1-%-Schritten
+      // wieder hochtasten, solange jeder Absatz einzeilig bleibt und kein Wort hart getrennt wird.
+      for (let i = 0; i < 8; i++) {
+        const p = Math.round(fs * 1.01);
+        if (p <= fs || !wordFits(p)) break;
+        const l2 = measure(p);
+        if (ueberzaehlig(l2) > ueberzaehlig(lines)) break;
+        fs = p; lines = l2;
+      }
       // 3) Nutzer-Regler (Prozent der Automatik), danach erneut: kein hartes Trennen.
       fs = Math.round(fs * ((state.fontScale || 100) / 100));
       while (!wordFits(fs) && fs > minFs) fs = Math.round(fs * 0.94);
       // 4) Höhe des Layouts einhalten.
       lines = measure(fs);
       while (!fitsHeight(fs, lines) && fs > minFs) { fs = Math.round(fs * 0.92); lines = measure(fs); }
+      for (let i = 0; i < 8; i++) {                       // auch hier fein nachziehen
+        const p = Math.round(fs * 1.01);
+        if (p <= fs || !wordFits(p)) break;
+        const l2 = measure(p);
+        // Höhe **und** die Ein-Zeilen-Regel einhalten – ohne die zweite Bedingung wuchs die Schrift,
+        // bis ein Absatz umbrach (gemessen: 58 px mit Umbruch statt 55 px ohne).
+        if (!fitsHeight(p, l2) || ueberzaehlig(l2) > ueberzaehlig(lines)) break;
+        fs = p; lines = l2;
+      }
       // overflow: auch in kleinster Schrift passt der Text nicht in den Zettel – das Bild würde ihn abschneiden
       const overflow = !fitsHeight(fs, lines);
       const lh = fs * LH;
