@@ -118,8 +118,8 @@
        ihre Textdekoration nicht an ihn weiter (CSS: atomare Inline-Boxen werden nicht mitdekoriert). */
     /* Der Haken ist ein gezeichneter Pfad, kein Zeichen: als inline-block erbt er die Textdekoration der
        Zeile nicht, der Strich endet also vor ihm. Bild und Farbe setzt das Skript über --haken-bild. */
-    .note .editor .ln[data-done]::after { content: ''; display: inline-block; vertical-align: -.16em;
-      width: 1.06em; height: 1.06em; margin-left: .22em; text-decoration: none;
+    .note .editor .ln[data-done]::after { content: ''; display: inline-block; vertical-align: -.18em;
+      width: 1.2em; height: 1.2em; margin-left: .22em; text-decoration: none;
       background: var(--haken-bild) no-repeat center / contain; }
     .note .editor.empty .ln:first-child::after { content: "Was soll auf den Zettel?"; color: rgba(42,42,46,.35); }
     /* Überschrift: erste Zeile unterstrichen, mit etwas Luft darunter (Werte auch in fitNote und render.js).
@@ -515,7 +515,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.54.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.54.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -562,15 +562,15 @@
     // Vorschau (SVG als Hintergrundbild der ::after-Box) und dem Bild (Path2D im Canvas) – so kann es nicht
     // auseinanderlaufen. Der Server zeichnet weiter das Zeichen ✓ im Text, siehe UEBERGABE 1.53.1.
     const HAKEN = {
+      fein:    { label: 'Fein',    d: 'M2 12.6 L8.8 19.8 L22 3.2', w: 1.7 },   // Vorgabe: die Form, die der Auftraggeber gewählt hat
       schwung: { label: 'Schwung', d: 'M2.5 12.5 C5.5 14.5 7.5 17 9 20.5 C12.5 13 16.5 7 22 3', w: 2.9 },
-      schlank: { label: 'Schlank', d: 'M3 13 L9.5 19.5 L21.5 4', w: 1.8 },
-      fett:    { label: 'Kräftig', d: 'M3 13 L9.5 19.5 L21.5 4', w: 4.4 },
+      fett:    { label: 'Kräftig', d: 'M2 12.6 L8.8 19.8 L22 3.2', w: 4.2 },
       doppel:  { label: 'Doppelt', d: 'M1.5 12 L6 16.5 L14.5 5 M8.5 16.5 L13 21 L22.5 8', w: 2.2 },
       kreuz:   { label: 'Kreuz',   d: 'M4.5 4.5 L19.5 19.5 M19.5 4.5 L4.5 19.5', w: 2.9 },
       stern:   { label: 'Stern',   d: 'M12 2.5 L12 21.5 M3.8 7.2 L20.2 16.8 M20.2 7.2 L3.8 16.8', w: 2.4 },
     };
     const HAKEN_FARBEN = { gruen: '#1a7f3c', rot: '#c0392b', blau: '#1f5fa8', orange: '#d97706', violett: '#6d28d9', tinte: '' };
-    const hakenForm  = () => HAKEN[state.doneForm] || HAKEN.schwung;
+    const hakenForm  = () => HAKEN[state.doneForm] || HAKEN.fein;
     const hakenFarbe = () => HAKEN_FARBEN[state.doneColor] || HAKEN_FARBEN.gruen;   // '' = Farbe des Stifts
     function hakenSvg(farbe, f = hakenForm()) {
       return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="' + f.d +
@@ -728,7 +728,7 @@
 
     // ---------- Zustand ----------
     // autoRun standardmäßig aus: Start per URL bringt die Kurzbefehle-App in den Vordergrund.
-    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fasteners: null, fastenerLook: {}, paper: 'plain', pen: 'black', font: 'caveat', list: 'none', doneForm: 'schwung', doneColor: 'gruen', title: false, titleSize: 1, hidden: false, updated: null, pinned: null };
+    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fasteners: null, fastenerLook: {}, paper: 'plain', pen: 'black', font: 'caveat', list: 'none', doneForm: 'fein', doneColor: 'gruen', title: false, titleSize: 1, hidden: false, updated: null, pinned: null };
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) state = { ...state, ...JSON.parse(raw) };
@@ -812,7 +812,7 @@
     }
     if (!FONTS[state.font]) state.font = 'caveat';
     if (!['none', 'num', 'dot', 'square', 'dash', 'check'].includes(state.list)) state.list = 'none';
-    if (!HAKEN[state.doneForm]) state.doneForm = 'schwung';
+    if (!HAKEN[state.doneForm]) state.doneForm = 'fein';
     if (!(state.doneColor in HAKEN_FARBEN)) state.doneColor = 'gruen';
     if (typeof state.title !== 'boolean') state.title = false;
     if (typeof state.hidden !== 'boolean') state.hidden = false;   // Zettel ausgeblendet (auf dem Display nur das Foto)
@@ -1723,8 +1723,8 @@
     // fontFor(pi) liefert optional eine eigene Schrift für einen Absatz (die Überschrift ist größer)
     // Der Haken ist in der Vorschau ein Kasten von HAKEN_EM Breite hinter dem Text und im Bild ein Pfad
     // derselben Breite. Damit beide gleich umbrechen, wird das Zeichen ✓ **nicht** gemessen, sondern
-    // dieser feste Betrag am Zeilenende freigehalten. (0,22 em Abstand + 1,06 em Zeichen, siehe CSS.)
-    const HAKEN_EM = 1.28;
+    // dieser feste Betrag am Zeilenende freigehalten. (0,22 em Abstand + 1,20 em Zeichen, siehe CSS.)
+    const HAKEN_EM = 1.42;
     function wrap(ctx, text, maxW, fontFor, hakenFs) {
       const lines = [];
       text.replace(/\r/g, '').split('\n').forEach((para, pi) => {
@@ -2074,9 +2074,9 @@
         if (hakenHier) {
           // Gezeichneter Haken – gleicher Pfad wie in der Vorschau, damit beide nicht auseinanderlaufen.
           const bl = baselineOf(f); ctx.font = `${weight} ${f}px ${family}`;
-          const br = ctx.measureText(rumpf).width, s = f * 1.06;
+          const br = ctx.measureText(rumpf).width, s = f * 1.2;
           ctx.save();
-          ctx.translate(tx + br + f * 0.22, ty + bl - s * 0.849);         // wie CSS: 0,90 em über der Grundlinie
+          ctx.translate(tx + br + f * 0.22, ty + bl - s * 0.85);          // wie CSS: 1,02 em über der Grundlinie
           ctx.scale(s / 24, s / 24);
           ctx.strokeStyle = hFarbe; ctx.lineWidth = hForm.w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
           ctx.stroke(hPfad);
