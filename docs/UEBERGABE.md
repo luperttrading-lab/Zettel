@@ -286,6 +286,27 @@ Skripte: `node tools/gen_image.mjs <out.png> <modell> "<prompt>" [--dump] [--noc
    Zuschnitt an, Widgets und Uhrstil müssen neu eingerichtet werden). Erst wenn auch ein frisches Paar zoomt, ist
    ein App-seitiger Sicherheitsrand nötig: Bei 1,35-fachem Zoom werden je Seite 153 px abgeschnitten, der Zettel hat
    aber nur 118 px Rand – er müsste dafür von 80 % auf ≈ 62 % der Bildbreite schrumpfen (Schrift entsprechend kleiner).
+
+   **Nachmittag des 8.9. – kontrolliertes A/B, das den Verdacht dreht.** Ein Messbild (1179 × 2556, Skala in
+   5-%-Schritten, roter 10-px-Rahmen auf der Bildkante) lief über Fotos → Kopieren → Kurzbefehl auf den
+   Sperrbildschirm. Pixelmessung der Screenshots (roter Rahmen gesucht):
+
+   | Bild | Rahmen links | Rahmen rechts |
+   |---|---|---|
+   | Messbild, Quelle | 0,00 … 0,85 % | 99,15 … 100,00 % |
+   | Sperrbildschirm, nur Messbild | 0,00 … 0,85 % | 99,15 … 100,00 % |
+   | Sperrbildschirm, Zettel **aus der App über den Kurzbefehl**, Messbild als Hintergrundfoto | 0,00 … 0,85 % | 99,15 … 100,00 % |
+
+   Also **pixelgenau 1:1**, auch auf dem Weg App → Zwischenablage → Kurzbefehl. Der Zettel maß dabei 943 px =
+   **80,0 %** der Bildbreite, exakt der Sollwert. Danach nur das **Hintergrundfoto** zurück auf sein Nebelbild
+   gestellt, sonst nichts geändert: Zettel wieder vergrößert und links angeschnitten (linke Kante bei 0 %).
+
+   Damit sind widerlegt: Zuschnitt am Paar (das Messbild lief durch dasselbe Paar), Zoom in der Aktion,
+   falsche Bildgröße der App (`canvas.width = w` steht fest, das Foto wird nur hineingemalt). Übrig bleibt
+   [Vermutung]: **iOS rahmt fotografische Inhalte beim Setzen automatisch neu**, flache Grafiken nicht.
+   Nächster Test (offen): Nebelfoto als Hintergrund, aber **ohne** Kurzbefehl setzen (Teilen → Bild sichern →
+   Anpassen → Fotosymbol). 1:1 ⇒ die Aktion rahmt; wieder gezoomt ⇒ iOS rahmt jedes Foto, dann muss der Zettel
+   im Bild schmaler werden. Ebenfalls zu prüfen: „···“-Menü in *Anpassen* mit Tiefeneffekt / perspektivischem Zoom.
 2. Falls der Home-Bildschirm den Zettel zeigt (unscharf oder scharf): Home-Hälfte steht auf „Paar“ oder der
    Kurzbefehl hat „Home-Bildschirm“ angehakt. Beides in Ordnung; „Foto ohne Zettel“ nur über Anpassen → Foto.
    **Am 7.9. gefragt und beantwortet:** Ein neu angelegtes Paar hat die Home-Hälfte auf „Paar“ – deshalb erschien das
