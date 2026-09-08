@@ -31,6 +31,7 @@
       --note-font: 'Caveat', 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
       /* Genau zwei Grautöne im ganzen Aufbau. --flaeche: alles, was man antippt – hell genug, dass der
          Knopf sich vom schwarzen Grund abhebt. --gewaehlt: nur, was ausgewählt/erhaben ist. Kein dritter Ton. */
+      --haken: #1a7f3c;        /* Grün des Erledigt-Hakens – gleicher Wert im Bild (renderWallpaper) */
       --flaeche: #2d2d33;
       --gewaehlt: #3f3f48;
     }
@@ -112,11 +113,13 @@
     .note .editor .ln[data-mk]::before { content: attr(data-mk); position: absolute; left: 0; top: 0; white-space: pre; }
     /* Erledigt: Strich durch den Text. Die Markierung liegt absolut und bleibt davon unberührt – so bleibt
        der Punkt bzw. die Zahl lesbar. Gleiche Regel im Bild (Canvas) und auf dem Server (render.js). */
-    .note .editor .ln.durch { text-decoration: line-through; text-decoration-thickness: .05em; opacity: .78; }
+    /* Kein opacity auf der Zeile: das Bild kennt keins, und der grüne Haken soll kräftig bleiben. */
+    .note .editor .ln.durch { text-decoration: line-through; text-decoration-thickness: .05em; }
     /* Der Haken hängt hinten an, etwas größer und **ohne** Strich: als inline-block gibt die Zeile
        ihre Textdekoration nicht an ihn weiter (CSS: atomare Inline-Boxen werden nicht mitdekoriert). */
     .note .editor .ln[data-done]::after { content: attr(data-done); display: inline-block;
-      margin-left: .2em; font-size: 1.18em; text-decoration: none; }
+      margin-left: .2em; font-size: 1.18em; text-decoration: none;
+      color: var(--haken); -webkit-text-stroke: .05em var(--haken); }
     .note .editor.empty .ln:first-child::after { content: "Was soll auf den Zettel?"; color: rgba(42,42,46,.35); }
     /* Überschrift: erste Zeile unterstrichen, mit etwas Luft darunter (Werte auch in fitNote und render.js).
        Kein fett: die Handschriften haben nur einen Schnitt, der Browser würde künstlich fetten, satori nicht. */
@@ -509,7 +512,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.53.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.53.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -552,6 +555,7 @@
     // „Erledigt“: bei der Kästchenliste zeigt das Häkchen im Kasten (☑), bei jeder anderen Liste ein Haken
     // hinten an der Zeile **und** ein dünner Strich durch den Text. Dieselbe Regel steht in lib/render.js.
     const DONE = '✓';
+    const HAKEN_GRUEN = '#1a7f3c';   // steht ein zweites Mal als --haken im CSS
     const DONE_RE = /\s*✓$/;
     const istErledigt = l => { const m = l.match(PREFIX_RE); return !!((m && m[1] === '☑') || DONE_RE.test(l)); };
     const ohneHaken = l => l.replace(DONE_RE, '');
@@ -1988,8 +1992,13 @@
           const br = ctx.measureText(rumpf).width;
           const fh = Math.round(f * 1.18), blH = baselineOf(fh);
           ctx.font = `${weight} ${fh}px ${family}`;
-          ctx.fillText(DONE, tx + br + f * 0.2, ty + bl - blH);           // Grundlinien aufeinander
-          ctx.font = `${weight} ${f}px ${family}`;
+          // Grün und kräftiger: füllen **und** umranden. Handschriften haben nur einen Schnitt – künstlich
+          // fetten würde der Browser, satori nicht; die Umrandung sieht überall gleich aus. Farbe = --haken.
+          ctx.fillStyle = HAKEN_GRUEN; ctx.strokeStyle = HAKEN_GRUEN;
+          ctx.lineWidth = Math.max(1, fh * 0.05); ctx.lineJoin = 'round';
+          const hx = tx + br + f * 0.2, hy = ty + bl - blH;               // Grundlinien aufeinander
+          ctx.fillText(DONE, hx, hy); ctx.strokeText(DONE, hx, hy);
+          ctx.fillStyle = ink; ctx.font = `${weight} ${f}px ${family}`;
         }
         // Unterstrich von Hand: Canvas kennt keine Textdekoration. Glattes Papier: Lage wie im CSS
         // (text-underline-offset .1em, Stärke .05em) unter der Grundlinie – die liegt je nach Schrift verschieden
