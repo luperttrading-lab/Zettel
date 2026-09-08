@@ -14,6 +14,16 @@ const page = await ctx.newPage();
 const errors = []; page.on('pageerror', e => errors.push(e.message + ' @ ' + (e.stack || '').split('\n').slice(0, 3).join(' | '))); page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 let fails = 0;
 const check = (name, cond, extra = '') => { console.log((cond ? 'OK  ' : 'FAIL') + ' ' + name + (extra ? ' – ' + extra : '')); if (!cond) fails++; };
+// Seit 1.46.0 liegen ausblenden/teilen/leeren und das Hintergrundfoto im Fenster „Und jetzt?“:
+// aufmachen, tippen, wieder zumachen – genau wie beim Menschen. Bleibt es offen, verdeckt es alles.
+const imFenster = async (sel, opt) => {
+  await page.evaluate(() => { const s = document.getElementById('sheet'); if (s && s.hidden) document.getElementById('mehr-btn').click(); });
+  await page.waitForTimeout(150);
+  try { await page.click(sel, opt); } finally {
+    await page.evaluate(() => { const s = document.getElementById('sheet'); if (s && !s.hidden) document.getElementById('sheet-zu').click(); });
+    await page.waitForTimeout(120);
+  }
+};
 const txt = sel => page.evaluate(s => document.querySelector(s).textContent, sel);
 const zeile = () => txt('#satz');
 const meldungText = () => page.evaluate(() => meldung);   // Zustand und Meldung teilen sich seit 1.39 eine Zeile
@@ -51,12 +61,12 @@ await page.click('#stick'); await page.waitForTimeout(1200);
 check('Kleben gesperrt mit Meldung', (await zeile()).startsWith('Hintergrundfoto ließ sich nicht laden'), await zeile());
 check('kein Bild bereit', !(await page.evaluate(() => isPinnedCurrent())));
 check('Zwischenablage unverändert', (await page.evaluate(() => navigator.clipboard.readText())) === 'unverändert');
-await page.click('#share'); await page.waitForTimeout(800);
+await imFenster('#share'); await page.waitForTimeout(800);
 check('Teilen gesperrt mit Meldung', (await zeile()).startsWith('Hintergrundfoto ließ sich nicht laden'), await zeile());
 check('Vorschau-Overlay bleibt zu', await page.evaluate(() => document.getElementById('overlay').hidden));
 await page.screenshot({ path: out + '/t4_fehler.png' });
 // ✕ → Sperre weg, Banner weg, Kleben geht wieder
-await page.click('#bgclear'); await page.waitForTimeout(300);
+await imFenster('#bgclear'); await page.waitForTimeout(300);
 check('nach ✕ kein Fehler mehr, Daten weg', await page.evaluate(() => bgFehler === false && document.getElementById('bgclear').hidden && localStorage.getItem('zettel.bg') === null));
 check('nach ✕ keine Meldung mehr', (await meldungText()) === '', await zeile());
 check('Banner jetzt „entfernt“', (await txt('#update-text')) === 'Hintergrundfoto entfernt', await txt('#update-text'));
@@ -74,7 +84,7 @@ await page.reload(); await page.waitForTimeout(800);
 check('Banner beim Start', (await page.evaluate(() => !document.getElementById('update').hidden)) && (await txt('#update-text')).startsWith('Hintergrundfoto ließ sich nicht laden'), await txt('#update-text'));
 check('Zustand: Foto-Fehler hat Vorrang', (await zeile()).startsWith('Hintergrundfoto ließ sich nicht laden') && (await page.evaluate(() => lage())) === 'geaendert', await zeile());
 // 4) Ohne Foto: Ausgabe sofort möglich (bgReady erfüllt), Verlauf im Bild
-await page.click('#bgclear'); await page.waitForTimeout(200);
+await imFenster('#bgclear'); await page.waitForTimeout(200);
 const r4 = await page.evaluate(async () => { const blob = await renderPng(); const bmp = await createImageBitmap(blob); const c = document.createElement('canvas'); c.width = 20; c.height = 20; const g = c.getContext('2d'); g.drawImage(bmp, 0, 0); return [...g.getImageData(10, 10, 1, 1).data].slice(0, 3); });
 check('ohne Foto dunkler Verlauf', r4[0] < 40 && r4[2] < 40, JSON.stringify(r4));
 const sw = await page.evaluate(() => document.documentElement.scrollWidth);

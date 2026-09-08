@@ -11,6 +11,16 @@ const page = await (await b.newContext({ viewport: { width: 430, height: 900 }, 
 const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 let fails = 0;
 const check = (name, cond, extra = '') => { console.log((cond ? 'OK  ' : 'FAIL') + ' ' + name + (extra ? ' – ' + extra : '')); if (!cond) fails++; };
+// Seit 1.46.0 liegen ausblenden/teilen/leeren und das Hintergrundfoto im Fenster „Und jetzt?“:
+// aufmachen, tippen, wieder zumachen – genau wie beim Menschen. Bleibt es offen, verdeckt es alles.
+const imFenster = async (sel, opt) => {
+  await page.evaluate(() => { const s = document.getElementById('sheet'); if (s && s.hidden) document.getElementById('mehr-btn').click(); });
+  await page.waitForTimeout(150);
+  try { await page.click(sel, opt); } finally {
+    await page.evaluate(() => { const s = document.getElementById('sheet'); if (s && !s.hidden) document.getElementById('sheet-zu').click(); });
+    await page.waitForTimeout(120);
+  }
+};
 await page.goto('http://localhost:8766/index.html?t=' + Date.now()); await page.waitForTimeout(800);
 await page.evaluate(() => { localStorage.clear(); }); await page.reload(); await page.waitForTimeout(800);
 await page.click('#text'); await page.keyboard.type('Milch kaufen'); await page.waitForTimeout(400);
@@ -31,7 +41,7 @@ await page.evaluate(() => markPinned());
 check('pinned enthält nur die Kennung', await page.evaluate(() => /^\d+:[0-9a-f]+$/.test(state.pinned.bg) && !JSON.stringify(state.pinned).includes('data:image')));
 // Zettel leeren lässt das Foto stehen
 page.once('dialog', d => d.accept());
-await page.click('#clear'); await page.waitForTimeout(300);
+await imFenster('#clear'); await page.waitForTimeout(300);
 check('Leeren: Text weg, Foto bleibt', await page.evaluate(() => state.text === '' && !!localStorage.getItem('zettel.bg') && !!bgImage));
 // Anleitung nennt Abzug und Original
 check('Anleitung beschriftet', await page.evaluate(() => /zugeschnittenen JPEG-Abzug/.test(document.querySelector('.setup').textContent) && /nicht das Original/.test(document.querySelector('.setup').textContent)));

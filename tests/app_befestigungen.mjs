@@ -213,6 +213,27 @@ check('Karte lässt den Zettel frei', lage.karte >= lage.zettel, JSON.stringify(
 check('Karte lässt den Befestigungs-Schieber frei', lage.karte >= lage.schieber);
 check('kein Griff unter der Karte', lage.griffe.every(y => y <= lage.karte));
 
+// 10) Ohne Scrollen: Zustandszeile und Hauptknopf sind immer sichtbar
+await page.evaluate(() => { $('text').value = ''; $('text').dispatchEvent(new Event('input')); });
+await page.waitForTimeout(500);
+const lage2 = await page.evaluate(() => ({
+  seite: Math.round(document.documentElement.scrollHeight), fenster: window.innerHeight,
+  knopf: Math.round($('stick').getBoundingClientRect().bottom),
+  status: Math.round($('status').getBoundingClientRect().bottom),
+  notez: getComputedStyle(document.documentElement).getPropertyValue('--notez').trim(),
+}));
+check('Seite passt ohne Scrollen', lage2.seite - lage2.fenster <= 1, JSON.stringify(lage2));
+check('Hauptknopf ohne Scrollen sichtbar', lage2.knopf <= lage2.fenster, String(lage2.knopf) + ' ≤ ' + lage2.fenster);
+check('Zustandszeile sichtbar', lage2.status <= lage2.fenster);
+// Das Fenster „Und jetzt?“ auf und zu
+check('Fenster ist zu', await page.evaluate(() => $('sheet').hidden));
+await page.click('#mehr-btn'); await page.waitForTimeout(250);
+check('Fenster geht auf', await page.evaluate(() => !$('sheet').hidden));
+check('die drei Knöpfe stehen darin', await page.evaluate(() => $('sheet').contains($('hide')) && $('sheet').contains($('share')) && $('sheet').contains($('clear'))));
+check('Hintergrundfoto und Kurzbefehl auch', await page.evaluate(() => $('sheet').contains($('bgpick')) && $('sheet').contains(document.querySelector('.setup'))));
+await page.click('#sheet-zu'); await page.waitForTimeout(250);
+check('Fertig schließt es', await page.evaluate(() => $('sheet').hidden));
+
 check('scrollWidth ≤ 408 bei 390 px', await page.evaluate(() => document.documentElement.scrollWidth) <= 408, String(await page.evaluate(() => document.documentElement.scrollWidth)));
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();
