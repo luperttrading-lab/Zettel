@@ -462,7 +462,7 @@
     <label>Name des Kurzbefehls <input id="shortcut" type="text" autocapitalize="words" spellcheck="false"></label>
     <label class="row"><input id="autorun" type="checkbox"> Kurzbefehl automatisch öffnen</label>
     <p>Aus = das Bild wird nur in die Zwischenablage gelegt. Den Kurzbefehl startest du dann selbst über sein Icon auf dem Home-Bildschirm (Kurzbefehl-Details → „Zum Home-Bildschirm“) oder auf dem iPhone per Doppeltipp auf die Rückseite (Einstellungen → Bedienungshilfen → Tippen → Auf Rückseite tippen). So gestartet öffnet sich die Kurzbefehle-App nicht, und nach dem Entsperren landest du auf dem Home-Bildschirm.</p>
-    <p class="version">Version <span id="version"></span> · aktualisiert sich beim Öffnen von selbst</p>
+    <p class="version">Version <span id="version"></span> · Bild <span id="bildmass"></span> · aktualisiert sich beim Öffnen von selbst</p>
   </details>
 
 
@@ -492,7 +492,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.50.4'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.50.5'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -2064,6 +2064,9 @@
 
     // ---------- Offline / Installierbar / Selbst-Aktualisierung ----------
     $('version').textContent = APP_VERSION; $('ver').textContent = 'v' + APP_VERSION;
+    // Maße des erzeugten Bildes dauerhaft sichtbar: weichen sie von der Displayauflösung ab, skaliert iOS
+    // den Sperrbildschirm – daran erkennt man, ob die App oder der gespeicherte Zuschnitt des Paars schuld ist.
+    { const t = targetCanvas(); $('bildmass').textContent = t.w + ' × ' + t.h; }
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
     // Neue Version auf dem Server? Geprüft beim Öffnen, beim Zurückholen in den Vordergrund und alle 60 s,
