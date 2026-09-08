@@ -226,6 +226,20 @@ check('Zustandszeile ganz im Bild', lage2.statusUnten <= lage2.fenster, JSON.str
 check('Hauptknopf schaut hervor', lage2.vomKnopf >= 24, lage2.vomKnopf + ' px sichtbar');
 check('kein Fenster mehr, alles im Fluss', await page.evaluate(() => !document.getElementById('sheet') && !!document.getElementById('hide') && !!document.querySelector('.setup')));
 
+// 11) Der Rahmen sitzt genau um die Zeichnung – nicht um ein geschätztes Rechteck
+for (const art of ['pushpin', 'clip', 'magnet', 'tape']) {
+  await page.evaluate(a => { state.fasteners = [{ art: a, color: 'red', decor: 'none' }]; state.fastener = a; aktiveBef = 0; applyFastener(); if ($('fcolors').hidden) toggleFcolors(true); }, art);
+  await page.waitForTimeout(350);
+  const d = await page.evaluate(() => {
+    const g = document.querySelector('.griff.aktiv'), grp = document.querySelector('#fastener-preview [data-b="0"]');
+    if (!g || !grp) return null;
+    const a = g.getBoundingClientRect(), b = grp.getBoundingClientRect();
+    return [b.left - a.left, a.right - b.right, b.top - a.top, a.bottom - b.bottom].map(x => Math.round(x));
+  });
+  check('Rahmen sitzt mittig um ' + art, d && d.every(x => x >= 0 && Math.abs(x - d[0]) <= 2), JSON.stringify(d));
+}
+await page.evaluate(() => toggleFcolors(false));
+
 check('scrollWidth ≤ 408 bei 390 px', await page.evaluate(() => document.documentElement.scrollWidth) <= 408, String(await page.evaluate(() => document.documentElement.scrollWidth)));
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();

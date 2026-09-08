@@ -492,7 +492,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.49.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.49.3'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -1142,18 +1142,24 @@
       aktiveBef = Math.min(aktiveBef, befAnzahl() - 1);
       applyFastener(); persist();
     }
-    // Griffflächen je Befestigung, in Vielfachen des Innenabstands p (so bleiben sie proportional).
-    const GRIFF = { magnet: [3, 3], photo: [3, 3], thumbtack: [2.4, 2.3], pushpin: [2.4, 3.1], pin: [2.1, 2.6],
-                    tape: [3.8, 1.9], tape2: [2.75, 2.75], clip: [2.2, 3.2], pin2: [2.1, 2.6] };
-    // Wo die Griffe einer Befestigung sitzen. Eckstreifen haben zwei bzw. vier, alle für dasselbe Stück.
-    function griffPunkte(b, i, W, H, p) {
-      const [gw, gh] = GRIFF[b.art] || [3, 3];
+    // Wo die Griffe einer Befestigung sitzen. Maß und Lage kommen aus der **tatsächlichen Zeichnung**
+    // (getBBox der Gruppe im Overlay-SVG) – ein geschätztes Rechteck saß bei Pinnadel und Klammer
+    // sichtbar schief. Nur die Eckstreifen behalten feste Punkte: sie sind ein Stück mit zwei bzw.
+    // vier getrennten Streifen, deren gemeinsame BBox der halbe Zettel wäre.
+    const GRIFF_RAND = 8;          // etwas Luft, damit auch dünne Formen leicht zu treffen sind
+    function griffPunkte(b, i, W, H, p, svg) {
       if (b.art === 'tape2') {
         const e = p * 0.7, pts = [[e, e], [W - e, e]];
         if (b.vier) pts.push([e, H - e], [W - e, H - e]);
-        return pts.map(([x, y]) => ({ i, x, y, w: gw * p, h: gh * p }));
+        return pts.map(([x, y]) => ({ i, x, y, w: p * 2.75, h: p * 2.75 }));
       }
-      return [{ i, x: b.x, y: b.y, w: gw * p, h: gh * p }];
+      const g = svg && svg.querySelector(`[data-b="${i}"]`);
+      let bb = null;
+      try { bb = g && g.getBBox(); } catch (_) {}
+      if (!bb || !bb.width) return [{ i, x: b.x, y: b.y, w: p * 3, h: p * 3 }];   // vor dem ersten Zeichnen
+      const home = fastenerHome(b.art, W, H, p);       // getBBox misst ohne die eigene Verschiebung
+      return [{ i, x: bb.x + bb.width / 2 + (b.x - home.x), y: bb.y + bb.height / 2 + (b.y - home.y),
+                w: bb.width + GRIFF_RAND, h: bb.height + GRIFF_RAND }];
     }
     let letzteMasse = null;               // die zuletzt gerechneten Zettelmaße, für ＋ und die Griffe
     // Die Griffe werden nur neu gebaut, wenn sich die Struktur ändert. Wer sie beim Ziehen neu erzeugt,
@@ -1162,8 +1168,10 @@
     let griffSig = null;
     function zeichneGriffe(f, scale) {
       const liste = befPixel(f.noteW, f.noteH, f.pad);
-      const punkte = liste.flatMap((b, i) => griffPunkte(b, i, f.noteW, f.noteH, f.pad));
+      const svg = $('fastener-preview').querySelector('svg');
+      const punkte = liste.flatMap((b, i) => griffPunkte(b, i, f.noteW, f.noteH, f.pad, svg));
       const sig = liste.map(b => b.art + (b.vier ? '4' : '')).join('|') + '@' + Math.round(scale * 1000);
+      // (die Maße kommen aus der Zeichnung, deshalb genügt hier die Struktur – platziert wird jedes Mal)
       if (griffSig !== sig) {
         noteEl.querySelectorAll('.griff').forEach(g => g.remove());
         punkte.forEach((pkt, n) => {
