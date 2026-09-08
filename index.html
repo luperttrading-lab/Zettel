@@ -122,17 +122,21 @@
     .note .editor .ln.durch { text-decoration: line-through; text-decoration-thickness: .05em; }
     /* Der Haken hängt hinten an, etwas größer und **ohne** Strich: als inline-block gibt die Zeile
        ihre Textdekoration nicht an ihn weiter (CSS: atomare Inline-Boxen werden nicht mitdekoriert). */
-    /* Wegweiser: Auf einer Listenzeile, die noch nicht erledigt ist, steht rechts ein blasser Haken – er
-       zeigt, wo man tippen muss. Nur in der App: das Bild zeichnet der Canvas, der kennt ihn nicht.
-       Als Hintergrundbild der Zeile, damit er keinen Platz belegt und den Umbruch nicht verschiebt. */
-    .note .editor .ln[data-mk]:not([data-done]):not([data-mk="☐"]):not([data-mk="☑"]) {
-      background: var(--haken-geist) no-repeat right center / 1em 1em;
-    }
-    /* Der Haken ist ein gezeichneter Pfad, kein Zeichen: als inline-block erbt er die Textdekoration der
-       Zeile nicht, der Strich endet also vor ihm. Bild und Farbe setzt das Skript über --haken-bild. */
-    .note .editor .ln[data-done]::after { content: ''; display: inline-block; vertical-align: -.15em;
+    /* **Eine** Box am Zeilenende für jede Listenzeile (außer Kästchen – dort sitzt das Zeichen vorn im
+       Kasten). Offen zeigt sie den blassen Wegweiser, erledigt den gewählten Haken. Dass die Box **immer**
+       da ist, ist wichtig: nur so hält der Browser denselben Platz frei wie die Breitenrechnung in wrap(),
+       der Umbruch springt beim Abhaken nicht, und der Wegweiser gerät nie in den abgeschnittenen Bereich.
+       Als inline-block erbt sie die Textdekoration der Zeile nicht – der Strich endet vor dem Haken. */
+    .note .editor .ln[data-mk]:not([data-mk="☐"]):not([data-mk="☑"])::after {
+      content: ''; display: inline-block; vertical-align: -.15em;
       width: 1em; height: 1em; margin-left: .22em; margin-right: -.5em; text-decoration: none;
-      background: var(--haken-bild) no-repeat center / contain; }
+      background: var(--haken-geist) no-repeat center / contain;
+    }
+    /* Muss **mindestens so genau** treffen wie die Regel darüber, sonst gewinnt der Wegweiser
+       (:not() zählt für die Spezifität mit – genau das ging im ersten Anlauf schief). */
+    .note .editor .ln[data-mk][data-done]:not([data-mk="☐"]):not([data-mk="☑"])::after {
+      background-image: var(--haken-bild);
+    }
     .note .editor.empty .ln:first-child::after { content: "Was soll auf den Zettel?"; color: rgba(42,42,46,.35); }
     /* Überschrift: erste Zeile unterstrichen, mit etwas Luft darunter (Werte auch in fitNote und render.js).
        Kein fett: die Handschriften haben nur einen Schnitt, der Browser würde künstlich fetten, satori nicht. */
@@ -527,7 +531,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.56.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.57.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -677,13 +681,6 @@
         [...this.el.children].forEach((d, i) => {
           const ind = Math.round(this.indentFn(lines[i] || '') * 100) / 100;
           d.style.paddingLeft = ind ? ind + 'px' : '';
-          // Wegweiser hinter das Zeilenende legen – am Spaltenrand lag er sonst über dem letzten Wort
-          if (d.hasAttribute('data-mk') && !d.hasAttribute('data-done')) {
-            let x = null;
-            try { const r = document.createRange(); r.selectNodeContents(d);
-              x = r.getBoundingClientRect().right - d.getBoundingClientRect().left; } catch (_) {}
-            d.style.backgroundPosition = x === null ? '' : Math.round(x + 6) + 'px center';
-          } else d.style.backgroundPosition = '';
           if (i === 0) {   // Überschrift im Linienraster (syncPreview setzt titleStyle), sonst gilt das CSS
             const t = this.titleStyle || {};
             d.style.marginTop = t.marginTop || ''; d.style.marginBottom = t.marginBottom || ''; d.style.textUnderlineOffset = t.textUnderlineOffset || '';
@@ -1761,7 +1758,12 @@
         const m = para.match(PREFIX_RE);
         const mk = m ? m[0] : '';
         const body = durch ? ohneHaken(para.slice(mk.length)) : para.slice(mk.length);
-        const frei = durch && hakenFs ? HAKEN_EM * hakenFs(pi) : 0;      // Platz für den Haken am Zeilenende
+        // Platz für den Haken am Zeilenende – **auf jeder Listenzeile**, nicht nur auf erledigten.
+        // Sonst läuft eine offene Zeile bis an den Rand, der Wegweiser landet im abgeschnittenen Bereich
+        // und ist nicht antippbar; außerdem verschöbe sich der Umbruch beim Abhaken.
+        // Die Kästchenliste braucht ihn nicht, dort sitzt das Zeichen im Kasten vorn.
+        const kasten = !!m && (m[1] === '☐' || m[1] === '☑');
+        const frei = mk && !kasten && hakenFs ? HAKEN_EM * hakenFs(pi) : 0;
         const indent = mk ? ctx.measureText(mk).width : 0, limit = maxW - indent - frei;
         let line = '', first = true;
         const push = t => { lines.push({ t, x: indent, mk: first ? mk.trim() : '', p: pi, durch }); first = false; };

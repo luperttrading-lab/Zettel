@@ -167,14 +167,18 @@ await page.mouse.click(hinten.x, hinten.y); await page.waitForTimeout(250);
 check('Tipp hinter dem Text erledigt die Zeile',
   (await page.evaluate(() => textEl.value)) === 'Kopf\n• Rasen wässern ✓\n• Nadine anrufen',
   JSON.stringify(await page.evaluate(() => textEl.value)));
-check('Wegweiser nur auf offenen Punktzeilen', await page.evaluate(() => {
-  const g = d => getComputedStyle(d).backgroundImage !== 'none';
-  return !g(textEl.el.children[0]) && !g(textEl.el.children[1]) && g(textEl.el.children[2]);
+// Die Box am Zeilenende gibt es auf **jeder** Punktzeile – offen zeigt sie den Wegweiser, erledigt den Haken.
+// Nur so hält der Browser denselben Platz frei wie die Breitenrechnung, und der Wegweiser bleibt antippbar.
+const boxen = await page.evaluate(() => [...textEl.el.children].map(d => {
+  const c = getComputedStyle(d, '::after');
+  return c.content === 'none' ? 'keine' : (c.backgroundImage.includes('%230') || c.backgroundImage.includes('0.22') ? 'geist' : 'haken');
 }));
+check('Überschrift ohne Box, Punktzeilen mit', boxen[0] === 'keine' && boxen[1] !== 'keine' && boxen[2] !== 'keine', JSON.stringify(boxen));
+check('erledigt zeigt den Haken, offen den Wegweiser', boxen[1] !== boxen[2], JSON.stringify(boxen));
 await page.evaluate(() => { state.list = 'check'; persist(); });
 await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(500);
-check('Kästchenliste ohne Wegweiser', await page.evaluate(() =>
-  [...textEl.el.children].every(d => getComputedStyle(d).backgroundImage === 'none')));
+check('Kästchenliste ohne Box am Zeilenende', await page.evaluate(() =>
+  [...textEl.el.children].every(d => getComputedStyle(d, '::after').content === 'none')));
 
 check('scrollWidth ≤ 448', sw <= 448, String(sw));
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
