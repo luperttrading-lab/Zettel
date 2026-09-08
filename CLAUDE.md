@@ -10,78 +10,44 @@ Zustimmungsfloskeln, unbequeme Wahrheit zuerst).
 
 ## Kostenzeile am Ende jeder Antwort – Pflicht
 
-Der Auftraggeber will nach **jeder** Antwort wissen, was sie gekostet hat. Ganz am Ende der Antwort, genau
-einmal, als **kleine Tabelle** – kein Codeblock (der graue Kasten war zu auffällig, 8.9.2026), keine
-Fettschrift. Die Tabelle ist die einzige Form, in der die Spalten wirklich fluchten; Tabs und ausgleichende
-Leerzeichen tun das im Fließtext nicht. **Zahlen rechtsbündig** (`|---:|`), damit `$` und `ct` untereinander
-stehen. Kennzeichnung links, Komma als Dezimaltrenner, eine Nachkommastelle:
+Der Auftraggeber will nach **jeder** Antwort wissen, was sie gekostet hat. Ablauf: **erst**
+`python3 tools/kosten.py` ausführen, dann dessen Ausgabe **wörtlich** als letzte Zeile der Antwort setzen.
+Nicht umformatieren, nicht schätzen, nichts danach anhängen. Sieht so aus:
 
-| | Claude | RouteLLM |
-|---|---:|---:|
-| diese Frage | 1,1 $ | 0,0 ct |
-| heute | 55,0 $ | 0,0 ct |
-| dieser Chat | 338,9 $ | 72,0 ct |
+```
+<sub>08.09. 19:11 Uhr · Frage 0,25 · heute 18,85 · ges. 229,16 $</sub>
+```
 
-**Drei Zeilen seit 8.9.2026.** „Heute“ wird **nach Datum aus dem Protokoll** gerechnet, nicht kumulativ
-weitergezählt – sonst wandert der Vortag mit über Mitternacht (genau dieser Fehler passierte am 8.9.:
-gemeldet waren 471 $ „heute“, tatsächlich 40 $). „Chat“ ist die Summe dieser Sitzung **inklusive
-Unteragenten**.
+`<sub>` macht die Schrift kleiner; das versteht die App. Deutsches Zahlenformat, Dollarzeichen nur am Ende,
+Ortszeit. `-v` gibt zusätzlich Summen je Tag und Modell aus (nur auf Nachfrage zeigen).
 
-Komma als Dezimaltrenner, eine Nachkommastelle.
+**Zwei Zeilen sind in der App nicht möglich** – vom Auftraggeber alles durchprobiert: `<br>`, zwei Leerzeichen
+und Backslash am Zeilenende werden verworfen; Leerzeile oder Liste reißen ein sichtbares Loch (126–133 statt
+82 px); ein Codeblock steht in einem Kasten mit Kopfzeile „Code“ und Kopierknopf; `<div style=…>` erscheint als
+roher HTML-Text. Deshalb genau **eine** Zeile.
 
-Regeln:
-- **Gemessen, nicht geschätzt.** „Diese Frage“ umfasst alles seit der letzten Nachricht des Auftraggebers:
-  jeden Befehl, jedes Bild, jeden Zwischentext. Nur die letzten Sätze der Antwort selbst sind noch nicht
-  im Zähler; das sind Cent-Beträge.
-- Ist eine Zahl doch geschätzt (z. B. nach einem Kontextwechsel), Tilde davor: `~0,40 $`.
-- **RouteLLM** (Bilder über Abacus.AI): `usage.compute_points_used` je Anfrage; 100 Punkte = 1 Credit;
-  ChatLLM Pro 20 $/Monat für 30 000 Credits → 1 Credit ≈ 0,06 ct. Beispiel: 730 Punkte = 7,3 Credits ≈ 0,44 ct.
-- **Claude**: Tokens aus dem Sitzungsprotokoll summieren, **je API-Antwort einmal** (nach `message.id`
-  entdoppeln – jeder Inhaltsblock steht sonst als eigene Zeile drin), mit den Preisen des jeweils
-  servierenden Modells (`message.model`), pro Million Tokens:
+Was das Skript macht und worauf es ankommt:
+- Liest `~/.claude/projects/<Arbeitsverzeichnis mit - statt />/*.jsonl`, also **nur diese Sitzung**.
+- Zählt jede Antwort **einmal** (nach `message.id`); ohne Entdopplung kommt etwa das Dreifache heraus.
+- „Frage“ = alle Antworten seit dem letzten **echten** Nutzerbeitrag; Werkzeugergebnisse stehen im Protokoll
+  ebenfalls als `user` und zählen nicht.
+- Preise je Modell aus der Tabelle im Skript, **je Nachricht mit dem Preis ihres eigenen Modells** – bei einem
+  Modellwechsel mitten im Chat darf nicht alles mit einem Preis gerechnet werden.
+- **Cache-Schreibpreis:** Standard ist der **1-Stunden-Cache** (Opus 5: 10 $/Mio, Fable 5.1: 20 $/Mio), denn so
+  läuft diese Umgebung. `--ttl5` rechnet mit dem 5-Minuten-Preis (6,25 / 12,50) – das ergibt für diesen Chat
+  rund 30 $ weniger. Wer die Zahl anzweifelt, sollte zuerst hier nachsehen.
+- Die Zeile entsteht, **bevor** die Antwort geschrieben ist; die Token der Antwort selbst fehlen und tauchen
+  erst in der nächsten Zeile auf (10 bis 50 Cent).
+- Zeitzone steht auf UTC+2, im Winter auf 1 ändern.
 
-  | Modell | input | output | cache write (1 h) | cache read |
-  |---|---|---|---|---|
-  | claude-opus-5 | 5 $ | 25 $ | 10 $ | 0,50 $ |
-  | claude-fable-5-1 | 10 $ | 50 $ | 20 $ | 0,25 $ |
+Zum Einordnen: Nach einem Modellwechsel oder einer Pause über einer Stunde kostet die nächste Frage 3 bis 10 $,
+weil der ganze Verlauf neu in den Cache geschrieben wird; sonst liegt eine Frage bei 10 bis 30 Cent. Dem
+Auftraggeber sagen, wenn ein neuer Chat billiger wäre. Der Betrag ist ein **Gegenwert zu API-Listenpreisen**,
+keine Rechnung – im Abo zahlt er den Pauschalpreis.
 
-  Preise nur aus der Skill-Referenz `claude-api` übernehmen, nie aus dem Gedächtnis (die Sitzung am
-  6.9.2026 hat mit 15/75 $ dreifach zu hoch gerechnet). Skript:
-
-  ```
-  cd /root/.claude/projects/-home-user-Zettel && python3 -c "
-  import json,glob
-  seen={}
-  for f in glob.glob('*.jsonl'):
-    for line in open(f):
-      try: o=json.loads(line)
-      except: continue
-      if o.get('type')!='assistant': continue
-      m=o.get('message',{}); u=m.get('usage')
-      if u: seen[m.get('id')]=(u, m.get('model'))
-  k=0
-  for u,model in seen.values():
-    i,o_,cw,cr = (10,50,20,0.25) if (model and 'fable' in model) else (5,25,10,0.5)
-    k += u.get('input_tokens',0)*i/1e6+u.get('output_tokens',0)*o_/1e6+u.get('cache_creation_input_tokens',0)*cw/1e6+u.get('cache_read_input_tokens',0)*cr/1e6
-  print(round(k,2))"
-  ```
-
-  Der Wert ist kumulativ für die Sitzung; die Differenz zur vorigen Messung ist der Aufwand seit der letzten
-  Nachricht. Für **„Heute“ nach Datum gruppieren** (`o['timestamp'][:10]`) – nie den Vortag mitschleppen:
-
-  **Nicht als langen Einzeiler tippen** – dafür liegt `tools/kosten.py` im Repo:
-
-  ```
-  python3 tools/kosten.py     # gibt „<heute> <chat>“ aus
-  ```
-
-  Der ausgeschriebene Befehl kostete jedes Mal rund 220 Ausgabe-Token (≈ 0,6 ct), das Skript kostet 11.
-  Es gruppiert nach `timestamp[:10]`, nimmt `datetime.date.today()` für „heute“ und liest rekursiv,
-  also **inklusive Unteragenten**.
-- Der Claude-Betrag ist ein **Gegenwert zu API-Preisen**. Solange das Abo nicht in Überziehung ist, wird er
-  nicht in Rechnung gestellt; der Auftraggeber will ihn trotzdem sehen.
-- Nach einer Pause von mehr als einer Stunde muss der Gesprächsspeicher neu aufgebaut werden; das kostet bei
-  langen Sitzungen mehrere Dollar auf einen Schlag. Dem Auftraggeber sagen, wenn ein neuer Chat billiger wäre.
+Bilder über RouteLLM (Abacus.AI) rechnet das Skript nicht mit: `usage.compute_points_used` je Anfrage,
+100 Punkte = 1 Credit, ChatLLM Pro 20 $/Monat für 30 000 Credits → 1 Credit ≈ 0,06 ct. Wenn in einer Antwort
+Bilder erzeugt wurden, den Cent-Betrag im Text nennen.
 
 ## Arbeitsweise im Repo
 
