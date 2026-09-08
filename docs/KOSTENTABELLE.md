@@ -107,10 +107,26 @@ $ je Million Token:
 | Claude Sonnet 5 | 2,00 | 10,00 | 4,00 | 2,50 | 0,20 |
 | Claude Haiku 4.5 | 1,00 | 5,00 | 2,00 | 1,25 | 0,10 |
 
-**Zwei Cache-Preise, das ist die wichtigste Stellschraube.** Claude Code in der Cloud-Umgebung läuft
-mit dem **Stunden-Cache**, dessen Schreibpreis doppelt so hoch ist. Deshalb ist das im Skript der
-Standard; `--ttl5` rechnet mit dem Fünf-Minuten-Preis. Für einen langen Chat sind das schnell 70 $
-Unterschied. Wer eine Zahl anzweifelt, prüft zuerst das hier.
+**Zwei Cache-Preise, das ist die wichtigste Stellschraube.** Der Verlauf wird als Präfix
+zwischengespeichert. Wird er innerhalb der Haltbarkeit wieder gelesen, kostet das fast nichts und die
+Uhr startet neu; läuft sie ab, muss der ganze Verlauf bei der nächsten Frage neu geschrieben werden.
+Schreiben kostet **1,25 × Eingabepreis beim Fünf-Minuten-Cache, 2 × beim Stunden-Cache**; Lesen ist in
+beiden Fällen gleich billig. Claude Code in der Cloud-Umgebung läuft mit dem **Stunden-Cache**, deshalb
+ist das im Skript der Standard.
+
+`--ttl5` ist **nur ein Umrechnungsschalter**: Er bewertet dieselben Token mit dem niedrigeren
+Schreibpreis. Er sagt **nicht**, was ein Fünf-Minuten-Cache tatsächlich gekostet hätte – dazu müsste er
+die zusätzlichen abgelaufenen Einträge mitzählen. Der niedrigere Wert ist also eine Untergrenze, keine
+Alternativrechnung.
+
+**Gemessen an diesem Chat** (818 Aufrufe, Median-Abstand 20 Sekunden, 54 Pausen über fünf Minuten,
+davon 9 über einer Stunde): Der Stunden-Cache kostete 265,70 $. Dieselben Token zum Fünf-Minuten-Preis
+wären 196,85 $, aber der Fünf-Minuten-Cache wäre 45 Mal zusätzlich abgelaufen, bei einem Verlauf von im
+Schnitt 300.000 Token – geschätzt 234 $ zusätzliche Schreibkosten, zusammen also rund 431 $. Der
+Stunden-Cache war hier **die günstigere Wahl**, nicht die teurere.
+
+Faustregel: Bei Pausen unter fünf Minuten ist der Fünf-Minuten-Cache billiger, bei Pausen zwischen fünf
+und sechzig Minuten der Stunden-Cache. Wer über eine Stunde weg ist, zahlt in beiden Fällen neu.
 
 Jede Nachricht wird mit dem Preis **ihres eigenen Modells** bewertet. Bei einem Modellwechsel mitten
 im Chat darf nicht alles mit einem Preis gerechnet werden. Nach jedem Wechsel und nach jeder Pause,

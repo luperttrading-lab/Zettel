@@ -73,11 +73,11 @@ $ je Million Token:
 | Claude Sonnet 5 | 2,00 | 10,00 | 4,00 | 2,50 | 0,20 |
 | Claude Haiku 4.5 | 1,00 | 5,00 | 2,00 | 1,25 | 0,10 |
 
-**Zwei Cache-Preise, das ist die wichtigste Stellschraube.** Wie lange ein zwischengespeicherter Verlauf
-gültig bleibt, entscheidet die Umgebung: fünf Minuten oder eine Stunde. Der Stundencache kostet beim
-Schreiben doppelt so viel. Claude Code in der Cloud-Umgebung läuft mit **einer Stunde**, deshalb ist das
-im Skript der Standard; `--ttl5` rechnet mit dem Fünf-Minuten-Preis. Für einen langen Chat sind das
-schnell 30 $ Unterschied. Wer eine Zahl anzweifelt, prüft zuerst das hier.
+**Zwei Cache-Preise.** Schreiben kostet 1,25 × Eingabepreis beim Fünf-Minuten-Cache, 2 × beim
+Stunden-Cache; Lesen ist gleich billig. Diese Umgebung läuft mit dem Stunden-Cache, deshalb ist das der
+Standard. `--ttl5` bewertet nur dieselben Token billiger und ist **keine** Alternativrechnung – ein
+Fünf-Minuten-Cache wäre öfter abgelaufen und dadurch in diesem Chat rund 165 $ teurer gewesen.
+Einzelheiten und die Messung stehen in `docs/KOSTENTABELLE.md`.
 
 Jede Nachricht wird mit dem Preis **ihres eigenen Modells** bewertet. Wird das Modell mitten im
 Chat gewechselt, darf nicht alles mit einem Preis gerechnet werden.
