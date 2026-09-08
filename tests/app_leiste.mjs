@@ -35,7 +35,7 @@ await page.evaluate(() => localStorage.clear()); await page.reload(); await page
 
 // 1) Leerer Anfang
 const l0 = await leiste();
-check('leer: „noch nicht übertragen“', l0.lage === 'leer' && l0.satz === 'noch nicht übertragen' && l0.punkt === '', JSON.stringify(l0));
+check('leer: „noch nicht übertragen“', l0.lage === 'leer' && l0.satz === 'noch nichts übertragen' && l0.punkt === '', JSON.stringify(l0));
 check('leer: Knopf lädt ein zum Übertragen', l0.knopf === 'Neuen Zettel auf Sperrbildschirm' && !l0.ansage, JSON.stringify(l0));
 await page.evaluate(() => { textEl.value = 'Milch kaufen'; onTextChanged(); flush(); }); await page.waitForTimeout(300);
 
@@ -75,7 +75,7 @@ const aenderungen = [
 for (const [name, hin, zurueck] of aenderungen) {
   await page.evaluate(hin); await page.waitForTimeout(250);
   const a = await leiste();
-  check(`${name} geändert → „alter Zettel drauf“`, a.lage === 'geaendert' && a.satz === 'alter Zettel drauf' && a.punkt === 'warn', JSON.stringify(a));
+  check(`${name} geändert → „noch nicht übertragen“`, a.lage === 'geaendert' && a.satz === 'Zettel geändert – noch nicht übertragen' && a.punkt === 'warn', JSON.stringify(a));
   await page.evaluate(zurueck); await page.waitForTimeout(250);
   check(`${name} zurückgenommen → wieder aktuell`, (await leiste()).lage === 'fertig');
 }
@@ -126,7 +126,7 @@ await page.evaluate(() => { state.text = ''; textEl.value = ''; persist(); }); a
 await page.click('#stick'); await page.waitForTimeout(400);
 check('leerer Zettel: Meldung statt Zustand', (await page.evaluate(() => document.getElementById('satz').textContent)) === 'Erst was draufschreiben.');
 await page.evaluate(() => { textEl.value = 'Milch'; onTextChanged(); flush(); }); await page.waitForTimeout(300);
-check('nach dem Tippen: wieder der Zustand', (await leiste()).satz === 'alter Zettel drauf', (await leiste()).satz);
+check('nach dem Tippen: wieder der Zustand', (await leiste()).satz === 'Zettel geändert – noch nicht übertragen', (await leiste()).satz);
 
 // 12) Eintrag einer älteren Version
 await page.evaluate(() => { state.pinned = { text: state.text, color: state.color, at: Date.now() }; updatePinBadge(); }); await page.waitForTimeout(150);
