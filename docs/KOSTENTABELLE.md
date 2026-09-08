@@ -1,8 +1,10 @@
 # Kostentabelle unter jeder Antwort (Claude Code)
 
 Zweite Bauform neben der einzeiligen `docs/KOSTENZEILE.md`. **Nur eine von beiden verwenden.**
-Diese hier zeigt zusätzlich eine Spalte für RouteLLM (Abacus.AI), also für Bildgenerierung und
-andere fremde Dienste, die auf einer eigenen Rechnung landen.
+Diese hier zeigt neben Claude **je eine eigene Spalte für jeden weiteren Dienst**, der Geld kostet –
+Bildgenerierung über RouteLLM, ein Hosting, eine Wetter-API, was auch immer im Projekt dazukommt.
+Die Spalten sind nicht fest verdrahtet: Das Skript erzeugt sie aus dem, was in `tools/fremdkosten.json`
+steht. Ein neuer Dienst braucht also keine Änderung am Skript, nur einen Eintrag mit seinem Namen.
 
 ## Wenn du diese Datei in einem Chat bekommst
 
@@ -19,47 +21,61 @@ das offen sagen statt eine Zahl zu erfinden.
 
 ## So muss es aussehen
 
-Datum und Uhrzeit stehen **in der Kopfzeile links**, dort wo sonst die Spaltenüberschrift stünde:
+Datum und Uhrzeit stehen **in der Kopfzeile links**, dort wo sonst die Spaltenüberschrift stünde.
+Ohne Fremdkosten bleibt es bei einer Spalte:
 
-```
-| 08.09. 19:26 | Claude | RouteLLM |
-|---|---:|---:|
-| diese Frage | 0,30 $ | 0,0 ct |
-| heute | 29,65 $ | 0,0 ct |
-| dieser Chat | 299,35 $ | 0,0 ct |
-```
+| 08.09. 19:30 | Claude |
+|---|---:|
+| diese Frage | 0,26 $ |
+| heute | 31,47 $ |
+| dieser Chat | 301,16 $ |
 
-Gerendert:
+Sobald andere Dienste eingetragen sind, kommt für jeden eine Spalte dazu, die teuerste zuerst:
 
-| 08.09. 19:26 | Claude | RouteLLM |
-|---|---:|---:|
-| diese Frage | 0,30 $ | 0,0 ct |
-| heute | 29,65 $ | 0,0 ct |
-| dieser Chat | 299,35 $ | 0,0 ct |
+| 08.09. 19:30 | Claude | Vercel | RouteLLM |
+|---|---:|---:|---:|
+| diese Frage | 0,26 $ | 1,20 $ | 38,0 ct |
+| heute | 31,47 $ | 1,20 $ | 72,0 ct |
+| dieser Chat | 301,16 $ | 1,20 $ | 72,0 ct |
 
 Regeln:
 - Zahlen rechtsbündig, deutsches Format mit Komma.
-- Claude in Dollar, RouteLLM in Cent, weil dort meist Kleinbeträge stehen.
+- Einheit **je Spalte**: Dollar, sobald die Spalte insgesamt einen Dollar erreicht, sonst Cent.
 - Ortszeit, nicht UTC. Kein Jahr, das spart Breite auf dem Telefon.
 - Drei Zeilen, immer dieselben Beschriftungen: diese Frage, heute, dieser Chat.
+- Höchstens drei Zusatzspalten; alles Weitere fasst das Skript als „Sonstige" zusammen, sonst wird
+  die Tabelle auf dem Telefon zu breit.
 
 **Platzbedarf:** Die Tabelle braucht rund viermal so viel Höhe wie die einzeilige Fassung.
-Wer es knapp will, nimmt `docs/KOSTENZEILE.md`. Wer RouteLLM getrennt sehen will, diese hier.
+Wer es knapp will, nimmt `docs/KOSTENZEILE.md`. Wer die Dienste getrennt sehen will, diese hier.
 
-## Die zweite Spalte füttern
+## Die weiteren Spalten füttern
 
-Das Skript kann fremde Dienste nicht messen. Es liest sie aus `tools/routellm.json`:
+Das Skript kann fremde Dienste nicht messen. Es liest sie aus `tools/fremdkosten.json`:
 
 ```json
 [
-  {"ts": "2026-09-08T17:20:00Z", "usd": 0.34, "was": "gpt_image2 Panda"},
-  {"ts": "2026-09-08T17:41:00Z", "usd": 0.38, "was": "nano_banana_pro Frosch"}
+  {"ts": "2026-09-08T17:20:00Z", "usd": 0.34, "dienst": "RouteLLM", "was": "gpt_image2 Panda"},
+  {"ts": "2026-09-08T17:41:00Z", "usd": 0.38, "dienst": "RouteLLM", "was": "nano_banana_pro Frosch"},
+  {"ts": "2026-09-08T18:02:00Z", "usd": 1.20, "dienst": "Vercel",   "was": "Renderer, September"}
 ]
 ```
 
-Nach **jedem** erzeugten Bild einen Eintrag anhängen, Zeitstempel in UTC. Fehlt die Datei, steht
-in der Spalte 0,0 ct. Den Dollarbetrag entnimmst du der Antwort der API oder dem Credits-Verbrauch
-im Web; wenn beides fehlt, lieber nichts eintragen als raten.
+Pflichtfelder: `ts` (UTC), `usd`, `dienst`. `was` ist frei und dient nur dem Nachvollziehen.
+
+**Regel für den Chat, der damit arbeitet:** Sobald in diesem Projekt ein Dienst Geld kostet, der noch
+keine Spalte hat, legst du selbst einen Eintrag mit passendem `dienst`-Namen an. Nicht nachfragen,
+nicht auf eine Anweisung warten, und den Namen nicht bei jedem Eintrag anders schreiben – ein Dienst,
+eine Schreibweise, sonst entstehen zwei Spalten für dasselbe. Typische Kandidaten neben der
+Bildgenerierung: Hosting, Speicher, Karten- oder Wetterdaten, Sprachausgabe, ein zweiter Modellanbieter.
+
+Nach **jedem** kostenpflichtigen Aufruf einen Eintrag anhängen. Den Betrag entnimmst du der Antwort
+der jeweiligen API oder der Abrechnungsseite des Dienstes; wenn beides fehlt, lieber nichts eintragen
+als raten – und den fehlenden Betrag im Text erwähnen. Bei Pauschalen (z. B. ein Monatspreis) einen
+Eintrag am Buchungstag anlegen, nicht auf die Tage verteilen.
+
+Fehlt die Datei, zeigt die Tabelle nur die Claude-Spalte. `tools/routellm.json` im alten Format wird
+weiterhin gelesen und als Dienst „RouteLLM" gewertet.
 
 ## Preise, Stand September 2026
 
@@ -100,7 +116,22 @@ Drei Feinheiten, die leicht falsch gemacht werden:
 
 ```python
 #!/usr/bin/env python3
-"""Kostentabelle für Claude Code: Claude neben RouteLLM, Datum und Uhrzeit in der Kopfzeile."""
+"""Kostentabelle für Claude Code: Claude neben jedem weiteren Dienst, Datum und Uhrzeit in der Kopfzeile.
+
+Aufruf:  python3 tools/kostentabelle.py [-v] [--ttl5]
+  -v      zusätzlich Summen je Tag und je Modell
+  --ttl5  Cache-Schreibpreis für 5-Minuten-Cache statt 1 Stunde
+
+Fremdkosten (Bildgenerierung, Hosting, fremde APIs) kommen aus tools/fremdkosten.json:
+  [{"ts": "2026-09-08T17:20:00Z", "usd": 0.34, "dienst": "RouteLLM", "was": "gpt_image2 Panda"}, ...]
+Für jeden Namen unter "dienst" entsteht automatisch eine Spalte – neue Dienste brauchen keine
+Änderung am Skript, nur einen Eintrag. Fehlt die Datei, bleibt es bei der Claude-Spalte.
+
+Zwei Feinheiten, die leicht falsch gemacht werden:
+ 1. Jede Nachricht wird EINMAL gezählt (nach message.id entdoppeln) – sonst etwa das Dreifache.
+ 2. „diese Frage" = alle Antworten ab dem letzten ECHTEN Nutzerbeitrag; Werkzeugergebnisse
+    stehen im Protokoll ebenfalls als `user`, zählen aber nicht als Frage.
+"""
 import json, os, glob, collections, datetime, sys
 
 # $ je Million Token: Eingabe, Ausgabe, Cache schreiben (1 h / 5 min), Cache lesen
@@ -152,23 +183,42 @@ c_ges   = sum(cost(mo, u) for _, mo, u in seen.values())
 c_heute = sum(cost(mo, u) for ts, mo, u in seen.values() if lokal(ts) == heute_lokal)
 c_frage = sum(cost(mo, u) for ts, mo, u in seen.values() if last_user and ts >= last_user)
 
-# Zweite Spalte: selbst gepflegte RouteLLM-Ausgaben (Bildgenerierung u. Ä.)
-r_ges = r_heute = r_frage = 0.0
-try:
-    for e in json.load(open(os.path.join('tools', 'routellm.json'))):
+# Weitere Spalten: selbst gepflegte Fremdkosten (Bildgenerierung, andere Dienste, was auch immer)
+# tools/fremdkosten.json: [{"ts": "...Z", "usd": 0.34, "dienst": "RouteLLM", "was": "gpt_image2 Panda"}, ...]
+# Für jeden Dienst, der dort auftaucht, entsteht automatisch eine eigene Spalte.
+fremd = collections.defaultdict(lambda: [0.0, 0.0, 0.0])   # Dienst -> [Frage, heute, gesamt]
+for datei, standard in (('fremdkosten.json', None), ('routellm.json', 'RouteLLM')):
+    try: eintraege = json.load(open(os.path.join('tools', datei)))
+    except Exception: continue
+    for e in eintraege:
         usd, ts = float(e.get('usd', 0)), e.get('ts', '')
-        r_ges += usd
-        if lokal(ts) == heute_lokal: r_heute += usd
-        if last_user and ts >= last_user: r_frage += usd
-except Exception: pass
+        d = fremd[e.get('dienst') or standard or 'Sonstige']
+        d[2] += usd
+        if lokal(ts) == heute_lokal: d[1] += usd
+        if last_user and ts >= last_user: d[0] += usd
+
+# Auf dem Telefon passen höchstens drei Zusatzspalten; der Rest wird zu „Sonstige" zusammengefasst
+dienste = sorted(fremd, key=lambda k: -fremd[k][2])
+if len(dienste) > 3:
+    rest = dienste[3:]
+    for k in rest:
+        for i in range(3): fremd['Sonstige'][i] += fremd[k][i]
+        del fremd[k]
+    dienste = dienste[:3] + ['Sonstige']
 
 de = lambda x: f'{x:.2f}'.replace('.', ',')
 ct = lambda x: f'{x*100:.1f}'.replace('.', ',')
-print(f"| {jetzt.strftime('%d.%m. %H:%M')} | Claude | RouteLLM |")
-print('|---|---:|---:|')
-print(f'| diese Frage | {de(c_frage)} $ | {ct(r_frage)} ct |')
-print(f'| heute | {de(c_heute)} $ | {ct(r_heute)} ct |')
-print(f'| dieser Chat | {de(c_ges)} $ | {ct(r_ges)} ct |')
+# Einheit je Spalte: Dollar, sobald der Gesamtwert der Spalte einen Dollar erreicht, sonst Cent
+def zelle(wert, gesamt): return f'{de(wert)} $' if gesamt >= 1 else f'{ct(wert)} ct'
+
+kopf  = [jetzt.strftime('%d.%m. %H:%M'), 'Claude'] + dienste
+zeile = ['diese Frage', 'heute', 'dieser Chat']
+werte = [[c_frage, c_heute, c_ges]] + [fremd[d] for d in dienste]
+print('| ' + ' | '.join(kopf) + ' |')
+print('|---' + '|---:' * (len(kopf) - 1) + '|')
+for r in range(3):
+    zellen = [zelle(werte[s][r], werte[s][2]) for s in range(len(werte))]
+    print(f'| {zeile[r]} | ' + ' | '.join(zellen) + ' |')
 
 if '-v' in sys.argv:
     days, mods = collections.Counter(), collections.Counter()
@@ -185,4 +235,5 @@ if '-v' in sys.argv:
   und tauchen erst beim nächsten Mal auf. Bei „diese Frage" sind das 10 bis 50 Cent.
 - Nur diese eine Sitzung wird gezählt. Andere Chats zum selben Projekt stehen in eigenen Protokollen.
 - Zeitzone fest auf UTC+2. Im Winter auf 1 ändern.
-- Die RouteLLM-Spalte ist nur so gut wie `tools/routellm.json` gepflegt wird.
+- Die Fremdspalten sind nur so gut wie `tools/fremdkosten.json` gepflegt wird. Ein Dienst, den
+  niemand einträgt, taucht nirgends auf – die Tabelle sieht dann vollständig aus, ohne es zu sein.

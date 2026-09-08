@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Kostentabelle für Claude Code: Claude neben RouteLLM, Datum und Uhrzeit in der Kopfzeile.
+"""Kostentabelle für Claude Code: Claude neben jedem weiteren Dienst, Datum und Uhrzeit in der Kopfzeile.
 
 Aufruf:  python3 tools/kostentabelle.py [-v] [--ttl5]
   -v      zusätzlich Summen je Tag und je Modell
   --ttl5  Cache-Schreibpreis für 5-Minuten-Cache statt 1 Stunde
 
-RouteLLM-Beträge kommen aus tools/routellm.json (fehlt sie, steht dort 0,0 ct):
-  [{"ts": "2026-09-08T17:20:00Z", "usd": 0.34, "was": "gpt_image2 Panda"}, ...]
-Nach jedem Bild einen Eintrag anhängen, dann stimmt die zweite Spalte von selbst.
+Fremdkosten (Bildgenerierung, Hosting, fremde APIs) kommen aus tools/fremdkosten.json:
+  [{"ts": "2026-09-08T17:20:00Z", "usd": 0.34, "dienst": "RouteLLM", "was": "gpt_image2 Panda"}, ...]
+Für jeden Namen unter "dienst" entsteht automatisch eine Spalte – neue Dienste brauchen keine
+Änderung am Skript, nur einen Eintrag. Fehlt die Datei, bleibt es bei der Claude-Spalte.
 
 Zwei Feinheiten, die leicht falsch gemacht werden:
  1. Jede Nachricht wird EINMAL gezählt (nach message.id entdoppeln) – sonst etwa das Dreifache.
@@ -65,23 +66,42 @@ c_ges   = sum(cost(mo, u) for _, mo, u in seen.values())
 c_heute = sum(cost(mo, u) for ts, mo, u in seen.values() if lokal(ts) == heute_lokal)
 c_frage = sum(cost(mo, u) for ts, mo, u in seen.values() if last_user and ts >= last_user)
 
-# Zweite Spalte: selbst gepflegte RouteLLM-Ausgaben (Bildgenerierung u. Ä.)
-r_ges = r_heute = r_frage = 0.0
-try:
-    for e in json.load(open(os.path.join('tools', 'routellm.json'))):
+# Weitere Spalten: selbst gepflegte Fremdkosten (Bildgenerierung, andere Dienste, was auch immer)
+# tools/fremdkosten.json: [{"ts": "...Z", "usd": 0.34, "dienst": "RouteLLM", "was": "gpt_image2 Panda"}, ...]
+# Für jeden Dienst, der dort auftaucht, entsteht automatisch eine eigene Spalte.
+fremd = collections.defaultdict(lambda: [0.0, 0.0, 0.0])   # Dienst -> [Frage, heute, gesamt]
+for datei, standard in (('fremdkosten.json', None), ('routellm.json', 'RouteLLM')):
+    try: eintraege = json.load(open(os.path.join('tools', datei)))
+    except Exception: continue
+    for e in eintraege:
         usd, ts = float(e.get('usd', 0)), e.get('ts', '')
-        r_ges += usd
-        if lokal(ts) == heute_lokal: r_heute += usd
-        if last_user and ts >= last_user: r_frage += usd
-except Exception: pass
+        d = fremd[e.get('dienst') or standard or 'Sonstige']
+        d[2] += usd
+        if lokal(ts) == heute_lokal: d[1] += usd
+        if last_user and ts >= last_user: d[0] += usd
+
+# Auf dem Telefon passen höchstens drei Zusatzspalten; der Rest wird zu „Sonstige" zusammengefasst
+dienste = sorted(fremd, key=lambda k: -fremd[k][2])
+if len(dienste) > 3:
+    rest = dienste[3:]
+    for k in rest:
+        for i in range(3): fremd['Sonstige'][i] += fremd[k][i]
+        del fremd[k]
+    dienste = dienste[:3] + ['Sonstige']
 
 de = lambda x: f'{x:.2f}'.replace('.', ',')
 ct = lambda x: f'{x*100:.1f}'.replace('.', ',')
-print(f"| {jetzt.strftime('%d.%m. %H:%M')} | Claude | RouteLLM |")
-print('|---|---:|---:|')
-print(f'| diese Frage | {de(c_frage)} $ | {ct(r_frage)} ct |')
-print(f'| heute | {de(c_heute)} $ | {ct(r_heute)} ct |')
-print(f'| dieser Chat | {de(c_ges)} $ | {ct(r_ges)} ct |')
+# Einheit je Spalte: Dollar, sobald der Gesamtwert der Spalte einen Dollar erreicht, sonst Cent
+def zelle(wert, gesamt): return f'{de(wert)} $' if gesamt >= 1 else f'{ct(wert)} ct'
+
+kopf  = [jetzt.strftime('%d.%m. %H:%M'), 'Claude'] + dienste
+zeile = ['diese Frage', 'heute', 'dieser Chat']
+werte = [[c_frage, c_heute, c_ges]] + [fremd[d] for d in dienste]
+print('| ' + ' | '.join(kopf) + ' |')
+print('|---' + '|---:' * (len(kopf) - 1) + '|')
+for r in range(3):
+    zellen = [zelle(werte[s][r], werte[s][2]) for s in range(len(werte))]
+    print(f'| {zeile[r]} | ' + ' | '.join(zellen) + ' |')
 
 if '-v' in sys.argv:
     days, mods = collections.Counter(), collections.Counter()
