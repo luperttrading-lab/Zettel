@@ -69,23 +69,15 @@ Regeln:
   Der Wert ist kumulativ für die Sitzung; die Differenz zur vorigen Messung ist der Aufwand seit der letzten
   Nachricht. Für **„Heute“ nach Datum gruppieren** (`o['timestamp'][:10]`) – nie den Vortag mitschleppen:
 
+  **Nicht als langen Einzeiler tippen** – dafür liegt `tools/kosten.py` im Repo:
+
   ```
-  python3 -c "
-  import json,glob,collections
-  seen={}
-  for f in glob.glob('/root/.claude/projects/-home-user-Zettel/**/*.jsonl', recursive=True):
-    for line in open(f, encoding='utf-8'):
-      try: o=json.loads(line)
-      except: continue
-      m=o.get('message') if isinstance(o,dict) else None
-      if isinstance(m,dict) and m.get('usage') and m.get('id'): seen[m['id']]=(m['usage'],m.get('model'),(o.get('timestamp') or '')[:10])
-  tag=collections.defaultdict(float)
-  for u,mo,d in seen.values():
-    i,o_,cw,cr=(10,50,20,0.25) if (mo and 'fable' in mo) else (5,25,10,0.5)
-    tag[d]+=u.get('input_tokens',0)*i/1e6+u.get('output_tokens',0)*o_/1e6+u.get('cache_creation_input_tokens',0)*cw/1e6+u.get('cache_read_input_tokens',0)*cr/1e6
-  for d in sorted(tag): print(d, round(tag[d],2))
-  print('CHAT', round(sum(tag.values()),2))"
+  python3 tools/kosten.py     # gibt „<heute> <chat>“ aus
   ```
+
+  Der ausgeschriebene Befehl kostete jedes Mal rund 220 Ausgabe-Token (≈ 0,6 ct), das Skript kostet 11.
+  Es gruppiert nach `timestamp[:10]`, nimmt `datetime.date.today()` für „heute“ und liest rekursiv,
+  also **inklusive Unteragenten**.
 - Der Claude-Betrag ist ein **Gegenwert zu API-Preisen**. Solange das Abo nicht in Überziehung ist, wird er
   nicht in Rechnung gestellt; der Auftraggeber will ihn trotzdem sehen.
 - Nach einer Pause von mehr als einer Stunde muss der Gesprächsspeicher neu aufgebaut werden; das kostet bei
