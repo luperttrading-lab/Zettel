@@ -14,18 +14,7 @@ await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'htt
 const page = await ctx.newPage();
 const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 let fails = 0;
-const check = (name, cond, extra = '') => { console.log((cond ? 'OK  ' : 'FAIL') + ' ' + name + (extra ? ' – ' + extra : '')); if (!cond) fails++; };
-// Seit 1.46.0 liegen ausblenden/teilen/leeren und das Hintergrundfoto im Fenster „Und jetzt?“:
-// aufmachen, tippen, wieder zumachen – genau wie beim Menschen. Bleibt es offen, verdeckt es alles.
-const imFenster = async (sel, opt) => {
-  await page.evaluate(() => { const s = document.getElementById('sheet'); if (s && s.hidden) document.getElementById('mehr-btn').click(); });
-  await page.waitForTimeout(150);
-  try { await page.click(sel, opt); } finally {
-    await page.evaluate(() => { const s = document.getElementById('sheet'); if (s && !s.hidden) document.getElementById('sheet-zu').click(); });
-    await page.waitForTimeout(120);
-  }
-};
-const leiste = () => page.evaluate(() => ({
+const check = (name, cond, extra = '') => { console.log((cond ? 'OK  ' : 'FAIL') + ' ' + name + (extra ? ' – ' + extra : '')); if (!cond) fails++; };const leiste = () => page.evaluate(() => ({
   lage: lage(), satz: document.getElementById('satz').textContent, punkt: document.getElementById('punkt').className.replace('punkt', '').trim(),
   knopf: document.getElementById('stick').hidden ? null : document.getElementById('stick1').textContent,
   ansage: !document.getElementById('ansage').hidden,
@@ -102,7 +91,7 @@ await page.click('#stick'); await page.waitForTimeout(1500); await zurueckInDieA
 check('mit Foto übertragen → aktuell', (await leiste()).lage === 'fertig');
 
 // 8) Ausblenden: nur das Foto, Zettel verschwindet auch in der App
-await imFenster('#hide'); await page.waitForTimeout(1500);
+await page.click('#hide'); await page.waitForTimeout(1500);
 const l3 = await leiste();
 check('ausblenden: „Foto fertig · wartet …“', l3.lage === 'wartet' && l3.satz === 'Foto fertig · wartet auf den Kurzbefehl', JSON.stringify(l3));
 check('ausblenden: Zettel in der App weg', await page.evaluate(() => document.getElementById('note').classList.contains('weg') && !document.getElementById('weghint').hidden));

@@ -40,7 +40,8 @@
       color: var(--fg);
       font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       padding: max(env(safe-area-inset-top), 20px) 20px max(env(safe-area-inset-bottom), 20px);
-      display: flex; flex-direction: column; align-items: center; gap: 14px;
+      /* eng gesetzt: der gewonnene Platz kommt der Vorschau zugute */
+      display: flex; flex-direction: column; align-items: center; gap: 9px;
       -webkit-tap-highlight-color: transparent;
     }
     /* Kopf + Zettel bleiben oben stehen, die Einstellungen scrollen darunter durch */
@@ -114,7 +115,7 @@
     /* --- Auswahl-Schieber: Befestigung · Schrift · Liste ---
        Eine Reihe pro Einstellung, nach links/rechts wischen; das Element in der Mitte ist die Auswahl,
        die Nachbarn sind gedimmt sichtbar. --iw = Breite eines Elements. */
-    .strips { width: min(86vw, 380px); display: flex; flex-direction: column; gap: 8px; }
+    .strips { width: min(86vw, 380px); display: flex; flex-direction: column; gap: 6px; }
     .strip-wrap { position: relative; background: #1e1e21; border-radius: 14px; --iw: 96px; }
     .strip-wrap::before { /* Markierung der Mitte */
       content: ""; position: absolute; top: 4px; bottom: 4px; left: 50%; width: var(--iw); margin-left: calc(var(--iw) / -2);
@@ -139,31 +140,6 @@
     .strip .item.active span { font-weight: 600; }
     .strip .item svg { width: 60px; height: 40px; overflow: visible; display: block; }
     .strip-fastener { --iw: 92px; } .strip-fastener .item { height: 62px; }
-    /* Knopf „···“ am rechten Rand der Zustandszeile – kostet keine eigene Höhe */
-    .status .mehr {
-      margin-left: auto; flex: 0 0 auto; appearance: none; border: 0; cursor: pointer;
-      background: #2d2d33; color: var(--fg); border-radius: 999px; width: 38px; height: 26px;
-      font: 700 15px/1 inherit; letter-spacing: 1px; -webkit-tap-highlight-color: transparent;
-    }
-    /* Das Fenster: von unten eingeblendet, der Inhalt scrollt darin */
-    .sheet { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; }
-    .sheet[hidden] { display: none !important; }
-    .sheet-box {
-      width: 100%; max-height: 86vh; background: #232327; border-radius: 20px 20px 0 0;
-      border-top: 1px solid #3a3a42; display: flex; flex-direction: column;
-      padding-bottom: max(env(safe-area-inset-bottom), 10px);
-      animation: sheetauf .18s cubic-bezier(.32,.72,.3,1);
-    }
-    @keyframes sheetauf { from { transform: translateY(12%); opacity: .6; } }
-    .sheet-kopf { display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      padding: 14px 16px 8px; font-weight: 700; font-size: 17px; }
-    .sheet-kopf button { appearance: none; border: 0; background: none; color: var(--acc, #ffd60a);
-      font: 600 15px/1 inherit; cursor: pointer; padding: 6px 2px; }
-    /* min-height: 0 ist Pflicht – ein scrollendes Flex-Kind wächst sonst über die max-height hinaus
-       und der Kurzbefehl-Eintrag rutscht unten aus dem Kasten heraus. */
-    .sheet-inhalt { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 14px 8px; display: flex; flex-direction: column; gap: 12px; }
-    .sheet-inhalt .setup { margin: 0; }
-    @media (prefers-reduced-motion: reduce) { .sheet-box { animation: none; } }
     .strip-fastener .item.gesperrt { opacity: .3; }
     /* Zeile „Anzahl“ in der Auswahlkarte: zwei Knöpfe und die Zahl daneben */
     #fcolors .chip.plus, #fcolors .chip.minus { font-size: 20px; line-height: 1; font-weight: 600; }
@@ -217,7 +193,7 @@
     .colors, .strips > *, .scale, .actions, .status, .setup { transition: opacity .2s; }
 
     /* --- Farben --- */
-    .colors { display: flex; gap: 14px; }
+    .colors { display: flex; gap: 14px; margin-top: 2px; }
     .colors button {
       width: 34px; height: 34px; border-radius: 50%; border: 3px solid transparent; cursor: pointer;
       box-shadow: 0 2px 6px rgba(0,0,0,.5);
@@ -421,34 +397,26 @@
   <!-- Untere Leiste: Zustand, ein Hauptknopf (bzw. die Ansage für Schritt 2), drei Symbolknöpfe.
        Höhe und Anordnung bleiben in jedem Zustand gleich – es springt nichts. -->
   <div class="actions">
-    <p class="status" id="status"><span class="punkt" id="punkt"></span><span class="satz" id="satz"></span><button class="mehr" id="mehr-btn" type="button" aria-label="Und jetzt? Weitere Aktionen">···</button></p>
+    <p class="status" id="status"><span class="punkt" id="punkt"></span><span class="satz" id="satz"></span></p>
     <button class="haupt" id="stick" type="button"><span class="z1" id="stick1"></span><span class="z2" id="stick2"></span></button>
     <div class="ansage" id="ansage" role="button" tabindex="0" hidden>
       <span class="z1">Jetzt bist du dran</span>
       <span class="z2">App schließen · Icon <b>„%s“</b> antippen</span>
     </div>
+    <div class="icons">
+      <button type="button" id="hide"><svg id="hide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></svg><span id="hide-text"></span></button>
+      <button type="button" id="share" title="Bild teilen oder in Fotos sichern"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg><span>Teilen /<br>sichern</span></button>
+      <button type="button" id="clear" title="Den Text auf dem Zettel löschen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg><span>Zettel<br>leeren</span></button>
+    </div>
   </div>
 
-  <!-- „Und jetzt?“ – alles, was mit dem fertigen Zettel passiert. Steht in einem Fenster, damit
-       Zustandszeile und Hauptknopf ohne Scrollen sichtbar bleiben (Wunsch des Auftraggebers). -->
-  <div class="sheet" id="sheet" hidden>
-    <div class="sheet-box" role="dialog" aria-modal="true" aria-label="Und jetzt?">
-      <div class="sheet-kopf"><span>Und jetzt?</span><button type="button" id="sheet-zu">Fertig</button></div>
-      <div class="sheet-inhalt">
-        <div class="icons">
-          <button type="button" id="hide"><svg id="hide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></svg><span id="hide-text"></span></button>
-          <button type="button" id="share" title="Bild teilen oder in Fotos sichern"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg><span>Teilen /<br>sichern</span></button>
-          <button type="button" id="clear" title="Den Text auf dem Zettel löschen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg><span>Zettel<br>leeren</span></button>
-        </div>
-
-        <div class="bgrow">
-        <button class="btn ghost" type="button" id="bgpick" title="Gespeichert wird ein auf Displaygröße zugeschnittener JPEG-Abzug, nicht das Original">Eigenes Hintergrundfoto</button>
-        <button class="btn ghost off" type="button" id="bgclear" hidden aria-label="Hintergrundfoto entfernen">✕</button>
-        <input id="bgfile" type="file" accept="image/*" hidden>
+  <div class="bgrow">
+    <button class="btn ghost" type="button" id="bgpick" title="Gespeichert wird ein auf Displaygröße zugeschnittener JPEG-Abzug, nicht das Original">Eigenes Hintergrundfoto</button>
+    <button class="btn ghost off" type="button" id="bgclear" hidden aria-label="Hintergrundfoto entfernen">✕</button>
+    <input id="bgfile" type="file" accept="image/*" hidden>
   </div>
 
-
-        <details class="setup">
+  <details class="setup">
     <summary>Kurzbefehl einrichten (einmalig)</summary>
     <p>„Aufs Display kleben“ kopiert das Bild in die Zwischenablage und startet einen Kurzbefehl, der es als Hintergrund setzt. Drei Schritte, alle nur einmal:</p>
     <p><strong>1. Kurzbefehl anlegen</strong></p>
@@ -474,9 +442,7 @@
     <p>Aus = das Bild wird nur in die Zwischenablage gelegt. Den Kurzbefehl startest du dann selbst über sein Icon auf dem Home-Bildschirm (Kurzbefehl-Details → „Zum Home-Bildschirm“) oder auf dem iPhone per Doppeltipp auf die Rückseite (Einstellungen → Bedienungshilfen → Tippen → Auf Rückseite tippen). So gestartet öffnet sich die Kurzbefehle-App nicht, und nach dem Entsperren landest du auf dem Home-Bildschirm.</p>
     <p class="version">Version <span id="version"></span> · aktualisiert sich beim Öffnen von selbst</p>
   </details>
-      </div>
-    </div>
-  </div>
+
 
 
   <div class="update" id="update" hidden><span id="update-text"></span><button class="btn" id="update-go">Jetzt laden</button></div>
@@ -504,7 +470,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.46.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.47.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -1258,32 +1224,22 @@
           ? FASTENERS[v].label + ': davon gehen nur ' + (FASTENER_MAX[v] || 1) + ' auf den Zettel'
           : FASTENERS[v].label + ' passt nicht zu diesen Plätzen – erst eine wegnehmen oder nach oben schieben'));
     }
-    // ---------- Fenster „Und jetzt?“ ----------
-    // Zustandszeile und Hauptknopf bleiben oben stehen; alles Weitere liegt hier drin.
-    const sheetEl = $('sheet');
-    function sheetAuf(auf = sheetEl.hidden) {
-      sheetEl.hidden = !auf;
-      document.body.style.overflow = auf ? 'hidden' : '';
-      if (auf) $('sheet-zu').focus();
-    }
-    $('mehr-btn').addEventListener('click', () => sheetAuf(true));
-    $('sheet-zu').addEventListener('click', () => sheetAuf(false));
-    sheetEl.addEventListener('click', e => { if (e.target === sheetEl) sheetAuf(false); });   // Tipp daneben schließt
-    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !sheetEl.hidden) sheetAuf(false); });
-
-    // Die Seite soll ohne Scrollen auf den Bildschirm passen. Alles außer der Vorschau hat eine
-    // feste Höhe – also gibt der Zettel nach, bis es passt (Untergrenze 62 %, darunter wird er unleserlich).
+    // Es muss **nicht** alles auf einen Bildschirm passen – man muss nur sehen, dass unten noch
+    // etwas kommt. Deshalb: die Vorschau gibt so weit nach, bis die Zustandszeile ganz im Bild ist
+    // und der Hauptknopf darunter **angeschnitten** hervorschaut. Der Anschnitt ist der Hinweis
+    // „hier geht es weiter“ – ein Knopf dafür wäre kleiner und würde übersehen (1.46.0).
+    const ANSCHNITT = 26;                // so viel vom Hauptknopf muss zu sehen sein
     let notez = 1;
     function passeHoehe() {
-      const root = document.documentElement;
-      const zuViel = () => root.scrollHeight - window.innerHeight > 1;
+      const root = document.documentElement, st = $('status');
+      const zuTief = () => st.getBoundingClientRect().bottom + ANSCHNITT > window.innerHeight;
       notez = 1; root.style.setProperty('--notez', '1');
-      if (!zuViel()) { syncPreview(); return; }
-      for (let i = 0; i < 12 && notez > 0.62; i++) {
-        notez = Math.max(0.62, notez - 0.04);
+      if (!zuTief()) { syncPreview(); return; }
+      for (let i = 0; i < 12 && notez > 0.66; i++) {
+        notez = Math.max(0.66, notez - 0.04);
         root.style.setProperty('--notez', String(notez));
-        syncPreview();                       // die Schriftgröße hängt an der Breite
-        if (!zuViel()) break;
+        syncPreview();                   // die Schriftgröße hängt an der Breite
+        if (!zuTief()) break;
       }
     }
     let hoeheTimer = null;

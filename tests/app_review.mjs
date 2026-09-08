@@ -14,18 +14,7 @@ await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'htt
 const page = await ctx.newPage();
 const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 let fails = 0;
-const check = (name, cond, extra = '') => { console.log((cond ? 'OK  ' : 'FAIL') + ' ' + name + (extra ? ' – ' + extra : '')); if (!cond) fails++; };
-// Seit 1.46.0 liegen ausblenden/teilen/leeren und das Hintergrundfoto im Fenster „Und jetzt?“:
-// aufmachen, tippen, wieder zumachen – genau wie beim Menschen. Bleibt es offen, verdeckt es alles.
-const imFenster = async (sel, opt) => {
-  await page.evaluate(() => { const s = document.getElementById('sheet'); if (s && s.hidden) document.getElementById('mehr-btn').click(); });
-  await page.waitForTimeout(150);
-  try { await page.click(sel, opt); } finally {
-    await page.evaluate(() => { const s = document.getElementById('sheet'); if (s && !s.hidden) document.getElementById('sheet-zu').click(); });
-    await page.waitForTimeout(120);
-  }
-};
-const txt = sel => page.evaluate(s => document.querySelector(s).textContent, sel);
+const check = (name, cond, extra = '') => { console.log((cond ? 'OK  ' : 'FAIL') + ' ' + name + (extra ? ' – ' + extra : '')); if (!cond) fails++; };const txt = sel => page.evaluate(s => document.querySelector(s).textContent, sel);
 const zeile = () => page.evaluate(() => document.getElementById('satz').textContent);
 const meldungText = () => page.evaluate(() => meldung);   // seit 1.39 teilen sich Zustand und Meldung eine Zeile
 
@@ -77,14 +66,14 @@ const rD = await page.evaluate(async () => {
 check('D: Fallback meldet Fehler', rD.startsWith('Zu viel Text'), rD);
 await page.evaluate(() => { textEl.value = 'Milch kaufen'; onTextChanged(); flush(); }); await page.waitForTimeout(200);
 // E) Hinweis „Kein Hintergrundfoto“ verschwindet, sobald ein Foto gewählt ist
-await imFenster('#bgclear').catch(() => {}); await page.waitForTimeout(100);
-await imFenster('#hide'); await page.waitForTimeout(500);
+await page.click('#bgclear').catch(() => {}); await page.waitForTimeout(100);
+await page.click('#hide'); await page.waitForTimeout(500);
 check('E: Hinweis ohne Foto', (await zeile()).startsWith('Kein Hintergrundfoto'), await zeile());
 await page.evaluate(async () => { const c = document.createElement('canvas'); c.width = 3000; c.height = 4000; const g = c.getContext('2d'); g.fillStyle = '#204080'; g.fillRect(0, 0, 3000, 4000); const blob = await new Promise(r => c.toBlob(r, 'image/png')); await bgSetzen(new File([blob], 'f.png', { type: 'image/png' })); await bgReady; });
 check('E: Hinweis nach Fotowahl weg', (await meldungText()) === '', await zeile());
 // F) Überlauf + Ausblenden: der Hinweis „nur Hintergrund“ überlebt weitere syncPreview-Läufe; beide Marken sichtbar, nicht überlappend
 await page.evaluate(() => { textEl.value = 'Zeile 1\n'.repeat(45); onTextChanged(); flush(); }); await page.waitForTimeout(200);
-await imFenster('#hide'); await page.waitForTimeout(1500);
+await page.click('#hide'); await page.waitForTimeout(1500);
 check('F: ausgeblendet trotz Überlauf', (await page.evaluate(() => state.hidden === true && lage() === 'wartet')), await zeile());
 await page.evaluate(() => { syncPreview(); window.dispatchEvent(new Event('resize')); }); await page.waitForTimeout(200);
 check('F: Zustand überlebt syncPreview', (await page.evaluate(() => lage() === 'wartet')), await zeile());

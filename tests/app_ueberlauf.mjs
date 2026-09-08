@@ -14,18 +14,7 @@ await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'htt
 const page = await ctx.newPage();
 const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 let fails = 0;
-const check = (name, cond, extra = '') => { console.log((cond ? 'OK  ' : 'FAIL') + ' ' + name + (extra ? ' – ' + extra : '')); if (!cond) fails++; };
-// Seit 1.46.0 liegen ausblenden/teilen/leeren und das Hintergrundfoto im Fenster „Und jetzt?“:
-// aufmachen, tippen, wieder zumachen – genau wie beim Menschen. Bleibt es offen, verdeckt es alles.
-const imFenster = async (sel, opt) => {
-  await page.evaluate(() => { const s = document.getElementById('sheet'); if (s && s.hidden) document.getElementById('mehr-btn').click(); });
-  await page.waitForTimeout(150);
-  try { await page.click(sel, opt); } finally {
-    await page.evaluate(() => { const s = document.getElementById('sheet'); if (s && !s.hidden) document.getElementById('sheet-zu').click(); });
-    await page.waitForTimeout(120);
-  }
-};
-const txt = sel => page.evaluate(s => document.querySelector(s).textContent, sel);
+const check = (name, cond, extra = '') => { console.log((cond ? 'OK  ' : 'FAIL') + ' ' + name + (extra ? ' – ' + extra : '')); if (!cond) fails++; };const txt = sel => page.evaluate(s => document.querySelector(s).textContent, sel);
 const zeile = () => page.evaluate(() => meldung);   // seit 1.39 teilen sich Zustand und Meldung eine Zeile
 const zeilen = n => Array.from({ length: n }, (_, i) => 'Zeile ' + (i + 1) + ' Einkauf').join('\n');
 const setText = v => page.evaluate(v => { textEl.value = v; onTextChanged(); flush(); }, v);
@@ -54,15 +43,15 @@ await page.click('#stick'); await page.waitForTimeout(800);
 check('Kleben gesperrt', (await zeile()).startsWith('Zu viel Text'), await zeile());
 check('nichts kopiert', (await page.evaluate(() => navigator.clipboard.readText())) === 'unverändert');
 check('nichts gemerkt', await page.evaluate(() => state.pinned === null));
-await imFenster('#share'); await page.waitForTimeout(800);
+await page.click('#share'); await page.waitForTimeout(800);
 check('Teilen gesperrt', (await zeile()).startsWith('Zu viel Text') && (await page.evaluate(() => document.getElementById('overlay').hidden)));
 // Ausblenden bleibt möglich (Zettel ist nicht im Bild)
 await page.evaluate(async () => { const c = document.createElement('canvas'); c.width = 1179; c.height = 2556; const g = c.getContext('2d'); g.fillStyle = '#204080'; g.fillRect(0, 0, 1179, 2556); localStorage.setItem('zettel.bg', c.toDataURL('image/jpeg', 0.9)); bgLaden(); await bgReady; });
-await imFenster('#hide'); await page.waitForTimeout(1500);
+await page.click('#hide'); await page.waitForTimeout(1500);
 check('Ausblenden trotz Überlauf möglich', await page.evaluate(() => state.hidden === true && lage() === 'wartet'), await txt('#satz'));
 // 3) kürzen: alles wieder frei
 await zurueckInDieApp(); await page.waitForTimeout(200);
-await imFenster('#hide'); await page.waitForTimeout(1500);   // wieder einblenden
+await page.click('#hide'); await page.waitForTimeout(1500);   // wieder einblenden
 await zurueckInDieApp(); await page.waitForTimeout(200);
 await setText(zeilen(3)); await page.waitForTimeout(300);
 const l3 = await lage();
