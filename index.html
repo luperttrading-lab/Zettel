@@ -122,7 +122,10 @@
       border-radius: 11px; background: #2d2d33; pointer-events: none;
     }
     .strip {
-      overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; touch-action: pan-x;
+      /* pan-x **und** pan-y: mit nur pan-x sperrt der Browser die senkrechte Geste ganz – man wischt
+         auf einem Schieber nach unten und die Seite bewegt sich nicht, ohne dass man weiß warum.
+         Mit beiden entscheidet er nach Richtung: waagerecht der Schieber, senkrecht die Seite. */
+      overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; touch-action: pan-x pan-y;
       scrollbar-width: none; border-radius: 14px; display: flex; position: relative;
       -webkit-mask-image: linear-gradient(to right, transparent 0, #000 18%, #000 82%, transparent 100%);
               mask-image: linear-gradient(to right, transparent 0, #000 18%, #000 82%, transparent 100%);
@@ -489,7 +492,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.49.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.49.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },

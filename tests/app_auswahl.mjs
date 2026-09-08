@@ -77,6 +77,12 @@ check('Wechsel während Papier-Karte: jetzt Befestigung', l7.offen && l7.modus =
 await page.reload(); await page.waitForTimeout(900);
 check('nach Neuladen: Auswahl zu', !(await lage()).offen, JSON.stringify(await lage()));
 const sw = await page.evaluate(() => document.documentElement.scrollWidth);
+// Senkrecht über einem Schieber wischen muss die Seite scrollen – mit touch-action: pan-x allein
+// sperrte der Browser die Geste ganz und man wusste nicht, warum sich nichts bewegt (1.49.2).
+check('Schieber lassen die senkrechte Geste durch',
+  await page.evaluate(() => [...document.querySelectorAll('.strip')].every(e => /pan-y/.test(getComputedStyle(e).touchAction))),
+  await page.evaluate(() => getComputedStyle(document.querySelector('.strip')).touchAction));
+
 check('scrollWidth ≤ 448', sw <= 448, String(sw));
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();
