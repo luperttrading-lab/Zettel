@@ -83,6 +83,16 @@ check('Schieber lassen die senkrechte Geste durch',
   await page.evaluate(() => [...document.querySelectorAll('.strip')].every(e => /pan-y/.test(getComputedStyle(e).touchAction))),
   await page.evaluate(() => getComputedStyle(document.querySelector('.strip')).touchAction));
 
+// Die Symbole werden an ihrer tatsächlichen Ausdehnung ausgerichtet – vorher saßen sie je nach
+// Form verschieden hoch im Kasten, die Pinnadel am auffälligsten (1.50.1).
+const mittig = await page.evaluate(() => [...document.querySelectorAll('#strip-fastener .item svg')].map(svg => {
+  let bb; try { bb = svg.getBBox(); } catch { return null; }
+  const vb = (svg.getAttribute('viewBox') || '').split(/\s+/).map(Number);
+  if (!bb || !vb[3]) return null;
+  return Math.abs((bb.y - vb[1]) - (vb[1] + vb[3] - bb.y - bb.height)) / vb[3];
+}).filter(x => x !== null));
+check('Symbole sitzen senkrecht mittig', mittig.length >= 6 && mittig.every(x => x < 0.02), JSON.stringify(mittig.map(x => +x.toFixed(3))));
+
 check('scrollWidth ≤ 448', sw <= 448, String(sw));
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();

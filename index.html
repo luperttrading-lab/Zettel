@@ -492,7 +492,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.50.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.50.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -950,6 +950,23 @@
       }, setHtml(v, html) { const d = inner.querySelector(`.item[data-value="${v}"]`); if (d) d.innerHTML = html; } };
     }
     const fastenerItemHtml = name => fastenerIcon(name, fastenerLook(name)) + `<span>${FASTENERS[name].short}</span>`;
+    // Die Symbole sind in fasteners.js an fest gewählten Stellen gezeichnet – jede Form hat ihren
+    // eigenen Ursprung (bei der Pinnadel der Kopf, beim Magneten die Mitte). In einem Kasten von
+    // 60×40 saßen sie dadurch verschieden hoch. Nach dem Einfügen wird die viewBox auf die
+    // **tatsächliche** Ausdehnung gesetzt: jedes Symbol steht dann mittig und gleich groß.
+    function richteIconsAus(wurzel) {
+      if (!wurzel) return;
+      for (const svg of wurzel.querySelectorAll('svg')) {
+        if (svg.dataset.mittig) continue;
+        let bb = null;
+        try { bb = svg.getBBox(); } catch (_) { continue; }
+        if (!bb || !bb.width || !bb.height) continue;
+        const rand = Math.max(bb.width, bb.height) * 0.06;
+        svg.setAttribute('viewBox', `${bb.x - rand} ${bb.y - rand} ${bb.width + 2 * rand} ${bb.height + 2 * rand}`);
+        svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        svg.dataset.mittig = '1';
+      }
+    }
     // Beim Wechseln der Befestigung erscheint ihre Auswahl (Farben, Muster bzw. Motive) von selbst – sonst
     // sieht man nie, dass es zum Bildmagneten außer dem Fuchs noch andere Tiere gibt. Ein Tipp auf die bereits
     // gewählte Befestigung schließt sie wieder, ebenso ein Tipp irgendwo sonst.
@@ -1078,6 +1095,7 @@
       if (decors.length > (kind === 'photo' ? 0 : 1)) {
         const r2 = row(kind === 'magnet' ? 'Motiv' : kind === 'photo' ? 'Bild' : 'Muster');
         for (const key of decors) chip(r2, 'icon', fastenerIcon(kind, { ...look, color: jetzt, decor: key }), jetztDecor === key, DECOR_LABEL[key], () => setFastenerLook({ decor: key }));
+        richteIconsAus(r2);
         const active = r2.querySelector('.chip[aria-pressed="true"]');
         if (active && active.offsetLeft + active.offsetWidth > r2.clientWidth) r2.scrollLeft = active.offsetLeft - 70;
       }
@@ -1287,6 +1305,7 @@
       // als oben auf dem Zettel liegt (Auftraggeber: „unten wird was angezeigt, das oben ganz anders ist“)
       const bAkt = state.fasteners[aktiveBef] || state.fasteners[0];
       stripFastener.setHtml(state.fastener, fastenerIcon(state.fastener, bAkt) + `<span>${FASTENERS[state.fastener].short}</span>`);
+      richteIconsAus($('strip-fastener'));
       aktualisiereArten();
       if (!fcolorsEl.hidden && cardMode === 'fastener') buildPalette();
       syncPreview(); updatePinBadge();
@@ -1325,7 +1344,7 @@
     updatePinBadge();
     // Erst nach dem vollständigen Durchlauf: passeHoehe ruft syncPreview, das LAYOUTS braucht –
     // und LAYOUTS steht weiter unten. (Dieselbe Falle wie 1.39.0 mit textUeberlauf.)
-    requestAnimationFrame(passeHoehe);
+    requestAnimationFrame(() => { richteIconsAus($('strip-fastener')); passeHoehe(); });
 
     let t = null;
     function onTextChanged() {
