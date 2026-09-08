@@ -113,6 +113,10 @@
     /* Erledigt: Strich durch den Text. Die Markierung liegt absolut und bleibt davon unberührt – so bleibt
        der Punkt bzw. die Zahl lesbar. Gleiche Regel im Bild (Canvas) und auf dem Server (render.js). */
     .note .editor .ln.durch { text-decoration: line-through; text-decoration-thickness: .05em; opacity: .78; }
+    /* Der Haken hängt hinten an, etwas größer und **ohne** Strich: als inline-block gibt die Zeile
+       ihre Textdekoration nicht an ihn weiter (CSS: atomare Inline-Boxen werden nicht mitdekoriert). */
+    .note .editor .ln[data-done]::after { content: attr(data-done); display: inline-block;
+      margin-left: .2em; font-size: 1.18em; text-decoration: none; }
     .note .editor.empty .ln:first-child::after { content: "Was soll auf den Zettel?"; color: rgba(42,42,46,.35); }
     /* Überschrift: erste Zeile unterstrichen, mit etwas Luft darunter (Werte auch in fitNote und render.js).
        Kein fett: die Handschriften haben nur einen Schnitt, der Browser würde künstlich fetten, satori nicht. */
@@ -505,7 +509,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.53.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.53.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -604,6 +608,8 @@
               if (lines.length === before) lines.push('');
               const mk = n.getAttribute && n.getAttribute('data-mk');
               if (mk) lines[before] = mk + NB + lines[before];
+              const hk = n.getAttribute && n.getAttribute('data-done');
+              if (hk) lines[lines.length - 1] += ' ' + hk;
             } else walk(n);
           }
         };
@@ -623,7 +629,9 @@
         this.el.innerHTML = text.split('\n').map(l => {
           const m = l.match(PREFIX_RE);
           const body = m ? l.slice(m[0].length) : l;
-          return `<div class="ln${durchgestrichen(l) ? ' durch' : ''}"${m ? ` data-mk="${esc(m[0].trim())}"` : ''}>${body ? esc(body) : '<br>'}</div>`;
+          const haken = DONE_RE.test(body);           // steht als Attribut, damit der Strich vor ihm endet
+          const rumpf = haken ? ohneHaken(body) : body;
+          return `<div class="ln${haken ? ' durch' : ''}"${m ? ` data-mk="${esc(m[0].trim())}"` : ''}${haken ? ` data-done="${DONE}"` : ''}>${rumpf ? esc(rumpf) : '<br>'}</div>`;
         }).join('');
         this.el.classList.toggle('titled', noteTitleOn);
         this.el.style.setProperty('--titlef', noteTitleF);
@@ -1967,10 +1975,21 @@
         const ty = isTitle && raster ? y - ueber : y;
         if (line.mk) ctx.fillText(line.mk, -noteW / 2 + pad, ty);         // Markierung links
         const tx = -noteW / 2 + pad + line.x;
-        ctx.fillText(line.t, tx, ty);                                     // Text eingerückt
-        if (line.durch && line.t) {   // Strich durch erledigte Zeilen – Canvas kennt keine Textdekoration
+        // Erledigte Zeile: Strich nur durch den Text, der Haken bleibt frei und steht etwas größer dahinter.
+        const hakenHier = line.durch && DONE_RE.test(line.t);
+        const rumpf = hakenHier ? ohneHaken(line.t) : line.t;
+        ctx.fillText(rumpf, tx, ty);                                      // Text eingerückt
+        if (line.durch && rumpf) {   // Strich von Hand – Canvas kennt keine Textdekoration
           const bl = baselineOf(f); ctx.font = `${weight} ${f}px ${family}`;   // baselineOf ändert die Schrift
-          ctx.fillRect(tx, Math.round(ty + bl - f * 0.30), ctx.measureText(line.t).width, Math.max(1, Math.round(f * 0.05)));
+          ctx.fillRect(tx, Math.round(ty + bl - f * 0.30), ctx.measureText(rumpf).width, Math.max(1, Math.round(f * 0.05)));
+        }
+        if (hakenHier) {
+          const bl = baselineOf(f); ctx.font = `${weight} ${f}px ${family}`;
+          const br = ctx.measureText(rumpf).width;
+          const fh = Math.round(f * 1.18), blH = baselineOf(fh);
+          ctx.font = `${weight} ${fh}px ${family}`;
+          ctx.fillText(DONE, tx + br + f * 0.2, ty + bl - blH);           // Grundlinien aufeinander
+          ctx.font = `${weight} ${f}px ${family}`;
         }
         // Unterstrich von Hand: Canvas kennt keine Textdekoration. Glattes Papier: Lage wie im CSS
         // (text-underline-offset .1em, Stärke .05em) unter der Grundlinie – die liegt je nach Schrift verschieden
