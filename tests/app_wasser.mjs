@@ -188,8 +188,11 @@ const mitte = reihen.map(r => (r.oben + r.unten) / 2);
 const d1 = mitte[1] - mitte[0], d2 = mitte[2] - mitte[1];
 check('die Glasreihe sitzt in jeder Zeile gleich – unabhängig von den Glasgrößen',
   Math.abs(d1 - d2) < 0.6, 'Abstände der Mittelpunkte ' + d1.toFixed(1) + ' und ' + d2.toFixed(1) + ' px');
-check('kleine Gläser stehen höher als der alte Kasten sie stellte',
-  reihen[2].unten - reihen[2].oben < reihen[1].unten - reihen[1].oben,
+// 3.9: **fester Boden** – bis 3.8 war die Zeichnung der Zeile mittig gestellt, mit einer Flasche wuchs
+// der Block und die Gläser daneben rutschten nach unten („die Gläser werden kleiner“, Auftraggeber).
+// Jetzt steht jede Zeile auf demselben Boden, egal was darin steht: gleiche Höhe in allen drei Zeilen.
+check('jede Zeile hat denselben Boden, egal was darin steht',
+  reihen.every(r => Math.abs((r.unten - r.oben) - (reihen[0].unten - reihen[0].oben)) < 0.01),
   JSON.stringify(reihen.map(r => +(r.unten - r.oben).toFixed(1))));
 
 // Ein Tipp **rechts neben** die Gläser wählt das Zeitfenster dieser Zeile
@@ -250,6 +253,18 @@ const mitFl  = await glasBreite({ v12: ['klein', 'klein'], v18: ['mittel'], n18:
 const inReihe = await glasBreite({ v12: ['klein', 'fl10'], v18: [], n18: [] });
 check('ein Glas ist gleich groß, ob Flaschen dabei sind oder nicht',
   ohneFl === mitFl && ohneFl === inReihe, JSON.stringify({ ohneFl, mitFl, inReihe }));
+// … und es **bewegt sich nicht**, wenn in derselben Zeile eine Flasche dazukommt (der Sprung aus 3.8)
+const glasBoden = async inhalt => {
+  await page.evaluate(w => { state.wasser = { tag: heuteKennung(), ...w, gestern: null, soll: 3 };
+    persist(); syncPreview(); }, inhalt);
+  await page.waitForTimeout(320);
+  return page.evaluate(() => { const t = wasserTreffer.find(q => q.key === 'v18' && q.n === 0);
+    return t ? +(t.y + t.h).toFixed(2) : null; });
+};
+const bodenOhne = await glasBoden({ v12: [], v18: ['mittel', 'mittel'], n18: [] });
+const bodenMit  = await glasBoden({ v12: [], v18: ['mittel', 'mittel', 'fl10'], n18: [] });
+check('ein Glas rutscht nicht, wenn eine Flasche in die Zeile kommt', bodenOhne === bodenMit,
+  JSON.stringify({ bodenOhne, bodenMit }));
 // Und die Flasche muss trotzdem als das größere Gefäß zu lesen sein
 const rang = await page.evaluate(() => {
   const h = a => GLAS_UNTEN - glasOben(a);
@@ -260,19 +275,27 @@ check('die Flaschen stehen höher als das größte Glas',
 
 // Tagesziel verstellen
 const zielStand = () => page.evaluate(() => ({
-  soll: wasserStand().soll, text: document.getElementById('ziel-wert').textContent,
+  soll: wasserStand().soll, text: (s => s.options[s.selectedIndex] && s.options[s.selectedIndex].textContent)(document.getElementById('ziel-wert')),
   ab: document.getElementById('ziel-ab').disabled, auf: document.getElementById('ziel-auf').disabled,
 }));
 check('Tagesziel steht anfangs auf 3 l', (await zielStand()).soll === 3, JSON.stringify(await zielStand()));
 await page.click('#ziel-auf'); await page.click('#ziel-auf'); await page.waitForTimeout(250);
 const z1 = await zielStand();
-check('„+" erhöht in Viertellitern', Math.abs(z1.soll - 3.5) < 1e-9 && z1.text === '3,5 l', JSON.stringify(z1));
+// Zehntel, nicht Viertel: mit 0,25 zeigte die Leiste „3,3“ und die Skala „3,25“ (3.9)
+check('„+" erhöht in Zehntellitern', Math.abs(z1.soll - 3.2) < 1e-9 && z1.text === '3,2 l', JSON.stringify(z1));
 for (let i = 0; i < 4; i++) { await page.click('#ziel-ab'); }
 await page.waitForTimeout(250);
 const z2 = await zielStand();
-check('„−" verringert wieder', Math.abs(z2.soll - 2.5) < 1e-9, JSON.stringify(z2));
+check('„−" verringert wieder', Math.abs(z2.soll - 2.8) < 1e-9, JSON.stringify(z2));
+// Das Drehrad: die Zahl ist ein <select> mit allen Zehnteln von ZIEL_MIN bis ZIEL_MAX
+const rad = await page.evaluate(() => { const s = document.getElementById('ziel-wert');
+  return { n: s.options.length, erste: s.options[0].textContent, letzte: s.options[s.options.length - 1].textContent }; });
+check('das Drehrad reicht von 0,5 bis 8,0 l in Zehnteln', rad.n === 76 && rad.erste === '0,5 l' && rad.letzte === '8,0 l', JSON.stringify(rad));
+await page.selectOption('#ziel-wert', '5.5'); await page.waitForTimeout(250);
+check('eine Wahl am Drehrad setzt das Ziel', Math.abs((await zielStand()).soll - 5.5) < 1e-9, JSON.stringify(await zielStand()));
 // Untere Grenze: der Knopf sperrt, statt unter ZIEL_MIN zu rutschen
-await page.evaluate(async () => { for (let i = 0; i < 20; i++) document.getElementById('ziel-ab').click(); });
+await page.evaluate(() => { const w = wasserStand(); w.soll = 0.8; state.wasser = w; persist(); wasserLeisteBauen(); });
+await page.evaluate(() => { for (let i = 0; i < 6; i++) document.getElementById('ziel-ab').click(); });
 await page.waitForTimeout(300);
 const z3 = await zielStand();
 check('unten begrenzt und der Knopf sperrt', Math.abs(z3.soll - 0.5) < 1e-9 && z3.ab === true, JSON.stringify(z3));

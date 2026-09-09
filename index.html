@@ -366,7 +366,10 @@
        Höhe wäre die 1-l-Flasche auf Glasgröße gestaucht worden und hätte kleiner gewirkt als das 0,5er. */
     .wasserleiste .glaeser svg { display: block; width: auto; }
     .wasserleiste .ziel { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--fg2); }
-    .wasserleiste .ziel b { font: 600 15px/1.2 inherit; color: var(--fg); min-width: 56px; text-align: center; }
+    .wasserleiste .ziel select {
+      appearance: none; -webkit-appearance: none; border: 0; background: var(--flaeche); color: var(--fg);
+      font: 600 16px/1.2 inherit; min-width: 72px; height: 38px; border-radius: 12px; padding: 0 12px;
+      text-align: center; text-align-last: center; }
     .wasserleiste .ziel button {
       width: 38px; height: 38px; border-radius: 12px; border: 0; background: var(--flaeche);
       color: var(--fg); font: 600 20px/1 inherit; cursor: pointer; }
@@ -563,7 +566,9 @@
       <div class="ziel" id="wasser-ziel">
         <span>Tagesziel</span>
         <button type="button" id="ziel-ab" aria-label="Tagesziel verringern">−</button>
-        <b id="ziel-wert">3,0 l</b>
+        <!-- Die Zahl ist ein <select>: iOS öffnet dafür sein Drehrad, ohne eigenen Code. −/+ bleiben
+             für den Feinschritt daneben. -->
+        <select id="ziel-wert" aria-label="Tagesziel wählen"></select>
         <button type="button" id="ziel-auf" aria-label="Tagesziel erhöhen">+</button>
       </div>
     </div>
@@ -691,7 +696,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.8';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.9';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -865,9 +870,12 @@
     // kommt es ohne Zutun durch `mitZettel`, `zettelSichern` und den Tageswechsel mit, genau wie
     // `gestern`. `zeichneWasser` bekommt es damit als Teil von `w` – wichtig wegen der await-Falle in
     // `zeichneEinenZettel`, wo der Zustand nur **vor** dem ersten `await` gelesen werden darf.
-    const ZIEL_STD = 3, ZIEL_MIN = 0.5, ZIEL_MAX = 8, ZIEL_SCHRITT = 0.25;
+    // Schritt 0,1, nicht 0,25: mit Vierteln zeigte die Leiste „3,3 l“ und „3,8 l“ (auf Zehntel gerundet),
+    // die Skala aber „3,25“ und „3,75“ – dieselbe Zahl in zwei Schreibweisen, und die Schritte sahen
+    // nach 0,3 / 0,2 / 0,3 aus (Auftraggeber, 9.9.2026).
+    const ZIEL_STD = 3, ZIEL_MIN = 0.5, ZIEL_MAX = 8, ZIEL_SCHRITT = 0.1;
     const zielVon = w => { const z = w && w.soll; return typeof z === 'number' && isFinite(z)
-      ? Math.min(ZIEL_MAX, Math.max(ZIEL_MIN, z)) : ZIEL_STD; };
+      ? Math.min(ZIEL_MAX, Math.max(ZIEL_MIN, Math.round(z * 10) / 10)) : ZIEL_STD; };
     // Formen der Tagesanzeige zur Auswahl – die Säule allein überzeugte nicht (9.9.2026)
     const ZIEL_ARTEN = { saeule: 'Säule', ring: 'Ring', krug: 'Krug', balken: 'Balken' };
     // Wie viel die Säule **fasst** – mehr als das Tagesziel, so gewählt vom Auftraggeber („Kopfraum und
@@ -977,8 +985,14 @@
         const freiOben = y + klein * 1.2, freiH = zeilH - klein * 1.35;
         // Mittig gestellt wird die **Zeichnung** dieser Reihe, nicht ihr Kasten: stehen nur kleine
         // Gläser da, ist sie nur halb so hoch wie ein 0,5er und muss entsprechend höher ansetzen.
-        const oben = Math.min(...glaeser.filter(a => GLAeSER[a]).map(glasOben));
-        const glasH = (GLAS_UNTEN - oben) * skala;
+        // **Fester Boden.** Die Reihe wird immer als das höchste Gefäß gerechnet (GLAS_INK), nicht als
+        // das, was heute darin steht. In 3.4 bis 3.8 war die Zeichnung der Zeile mittig gestellt – kam
+        // eine Flasche dazu, wuchs der Block und die Gläser daneben rutschten nach unten. Der
+        // Auftraggeber las das als „die Gläser werden kleiner“: es war ein Sprung, kein Schrumpfen, aber
+        // ein Sprung ist genau, was er nicht will („keine Sprünge mehr, egal was man einfügt“). Preis:
+        // eine Zeile aus lauter 0,2ern steht auf demselben Boden und hat Luft über sich.
+        const oben = GLAS_UNTEN - GLAS_INK;                    // Oberkante des höchsten Gefäßes
+        const glasH = GLAS_INK * skala;
         const kasten = eineZeile ? { y, h: zeilH } : { y: freiOben, h: freiH };
         const gy = kasten.y + (kasten.h - glasH) / 2 - oben * skala;   // gy ist der Ursprung, nicht die Oberkante
         let gx = eineZeile ? kopfB : 0;
@@ -1070,9 +1084,12 @@
         // 2,5 l). Die Schrittweite wächst, sobald zwei Marken näher als 1,6 Schrifthöhen zusammenrücken –
         // bei 8 l Ziel stünden sonst acht Zahlen übereinander.
         let schritt = 1;
-        while (sh * (schritt / fasst) < skFs * 1.6 && schritt < fasst) schritt += schritt < 2 ? 1 : 2;
+        // 2,2 Schrifthöhen, nicht 1,6: bei 6,8 l Ziel standen sieben Zahlen übereinander, lesbar, aber
+        // die Säule wirkte wie ein Lineal statt wie eine Anzeige (Auftraggeber: „macht keinen Sinn“).
+        while (sh * (schritt / fasst) < skFs * 2.2 && schritt < fasst) schritt += schritt < 2 ? 1 : 2;
         const marken = [];
-        for (let l = schritt; l < ziel - 1e-9; l += schritt) marken.push(l);
+        // Eine Zwischenmarke dicht unter dem Ziel entfällt: bei 6,8 l Ziel saß die „6“ auf der „6,8 l“.
+        for (let l = schritt; l < ziel - schritt * 0.55; l += schritt) marken.push(l);
         marken.push(ziel);
         for (const l of marken) {
           const y = yVon(l), istZiel = Math.abs(l - ziel) < 1e-9, nass = y > pegelY + 0.5;
@@ -2213,8 +2230,14 @@
         b.addEventListener('click', () => wasserDazu(art));
         wasserGlaeserEl.appendChild(b);
       }
-      const z = zielVon(w);
-      $('ziel-wert').textContent = literText(z);
+      const z = zielVon(w), sel = $('ziel-wert');
+      if (!sel.options.length) {
+        for (let v = ZIEL_MIN; v <= ZIEL_MAX + 1e-9; v = Math.round((v + ZIEL_SCHRITT) * 10) / 10) {
+          const o = document.createElement('option'); o.value = String(v); o.textContent = literText(v);
+          sel.appendChild(o);
+        }
+      }
+      sel.value = String(z);
       $('ziel-ab').disabled = z <= ZIEL_MIN + 1e-9;
       $('ziel-auf').disabled = z >= ZIEL_MAX - 1e-9;
     }
@@ -2222,13 +2245,17 @@
     // gesichert – ein eigenes Zettelfeld bräuchte einen Eintrag in ZETTEL_STD und in `mitZettel`.
     function zielVerstellen(d) {
       const w = wasserStand();
-      const neu = Math.round((zielVon(w) + d * ZIEL_SCHRITT) / ZIEL_SCHRITT) * ZIEL_SCHRITT;
+      const neu = Math.round((zielVon(w) + d * ZIEL_SCHRITT) * 10) / 10;   // auf Zehntel, gegen 0,30000000004
       w.soll = Math.min(ZIEL_MAX, Math.max(ZIEL_MIN, neu));
       state.wasser = w;
       persist(); syncPreview(); updatePinBadge(); wasserLeisteBauen();
     }
     $('ziel-ab').addEventListener('click', () => zielVerstellen(-1));
     $('ziel-auf').addEventListener('click', () => zielVerstellen(+1));
+    $('ziel-wert').addEventListener('change', e => {
+      const w = wasserStand(); w.soll = +e.target.value; state.wasser = w;
+      persist(); syncPreview(); updatePinBadge(); wasserLeisteBauen();
+    });
     function wasserDazu(art) {
       if (!GLAeSER[art]) return;
       const w = wasserStand();
