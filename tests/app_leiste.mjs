@@ -113,11 +113,13 @@ await page.click('#weghint'); await page.waitForTimeout(1500);
 check('Platzhalter antippen → eingeblendet und übertragen', await page.evaluate(() => state.hidden === false && lage() === 'wartet'));
 await zurueckInDieApp(); await page.waitForTimeout(300);
 
-// 10) Symbolreihe bleibt dreiteilig und gleich breit
+// 10) Symbolreihe bleibt vierteilig und gleich breit (seit 1.58.0 mit „Lage im Bild")
 for (const zustand of [false, true]) {
   await page.evaluate(h => { state.hidden = h; zeigeZettel(); }, zustand); await page.waitForTimeout(150);
   const r = await page.evaluate(() => [...document.querySelectorAll('.icons button')].filter(e => !e.hidden).map(e => Math.round(e.getBoundingClientRect().width)));
-  check(`Symbolreihe ${zustand ? 'ausgeblendet' : 'sichtbar'}: drei gleiche Knöpfe`, r.length === 3 && new Set(r).size === 1, JSON.stringify(r));
+  // 1 px Unterschied kommt vom Aufteilen ungerader Breiten, nicht von verschiedenen Knöpfen
+  check(`Symbolreihe ${zustand ? 'ausgeblendet' : 'sichtbar'}: vier gleiche Knöpfe`,
+    r.length === 4 && Math.max(...r) - Math.min(...r) <= 1, JSON.stringify(r));
 }
 await page.evaluate(() => { state.hidden = false; zeigeZettel(); });
 
