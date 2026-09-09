@@ -33,14 +33,18 @@ mit `?` hinter dem Dienstnamen angezeigt.
 ## Nachricht aufs Handy
 
 Der Auftraggeber arbeitet über die App und will nicht im Chat sitzen bleiben. `PushNotification`
-erreicht sein iPhone (am 9.9.2026 geprüft, kommt an). Geschickt wird eine Nachricht:
+erreicht sein iPhone (am 9.9.2026 geprüft, kommt an).
 
-- wenn eine neue Version auf `main` liegt und Vercel baut – mit Versionsnummer und **einem** Satz dazu,
-- wenn eine längere Aufgabe fertig ist oder eine Entscheidung von ihm ansteht.
+**Am Ende JEDER fertigen Antwort geht eine Nachricht raus** – so ausdrücklich gewählt (9.9.2026), nachdem
+eine engere Regel („nur bei neuer Version“) ihn ohne Nachricht ließ. Also auch nach einer reinen Auskunft,
+einem Doku-Commit oder einer Rückfrage. Der Aufruf gehört an dieselbe Stelle wie die Kostentabelle: zum
+Abschluss, bevor die Antwort steht. Nicht bei Zwischenschritten innerhalb einer Runde.
 
-Nicht bei Zwischenschritten. Liest er ohnehin gerade mit, unterdrückt das Werkzeug die Nachricht selbst.
-Die Überschrift der Benachrichtigung ist der Sitzungstitel, nicht der Text – der Satz muss also für sich
-allein verständlich sein. Das läuft über die laufende Sitzung: Ist sie beendet, geht nichts mehr raus.
+Für den Text: Die Überschrift der Benachrichtigung ist der **Sitzungstitel**, nicht der Text – der Satz
+muss also für sich allein verständlich sein. Unter 200 Zeichen, eine Zeile, kein Markdown, und er soll
+sagen, was passiert ist, nicht dass etwas passiert ist („1.63.0 live: Zettelhöhe folgt dem Text“ statt
+„fertig“). Liest er ohnehin gerade mit, unterdrückt das Werkzeug die Nachricht selbst – die Antwort
+„not sent“ ist kein Fehler. Das läuft über die laufende Sitzung: Ist sie beendet, geht nichts mehr raus.
 
 ## Arbeitsweise im Repo
 
