@@ -35,6 +35,9 @@ check('ein Griff da', await page.evaluate(() => document.querySelectorAll('.grif
 // 1b) Alte Zettel mit „Zwei Nadeln“ werden in zwei einzelne umgeschrieben
 await page.evaluate(() => {
   const alt = JSON.parse(localStorage.getItem('zettel.v1') || '{}');
+  // Ein Stand von vor 1.61.0 kennt weder `zettel` noch `fasteners` – beides weg, sonst überschreibt
+  // das Zettelfeld beim Laden die alten Felder und die Migration käme gar nicht zum Zug.
+  delete alt.zettel; delete alt.aktiv;
   delete alt.fasteners; alt.fastener = 'pin2';
   localStorage.setItem('zettel.v1', JSON.stringify(alt));
 });
