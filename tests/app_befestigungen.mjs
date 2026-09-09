@@ -124,7 +124,10 @@ await page.waitForTimeout(200);
 // 5) Klebestreifen bleibt waagerecht an der Kante, Büroklammer oben
 await ziehen(0, -80, 200);
 const s1 = (await liste())[0];
-check('Streifen springt an die Unterkante', s1.y === 1, JSON.stringify(s1));
+// y ist ein Anteil der **Breite**, nicht der Höhe. Seit 1.63.0 folgt die Höhe dem Text, die Unterkante
+// liegt also bei noteH/noteW (bei „Milch kaufen“ auf der Mindesthöhe 0,45) – nicht mehr fest bei 1.
+const kante = await page.evaluate(() => { const f = letzteMasse; return f.noteH / f.noteW; });
+check('Streifen springt an die Unterkante', Math.abs(s1.y - kante) < 0.01, JSON.stringify(s1) + ' Kante ' + kante.toFixed(3));
 await waehle('clip');
 await ziehen(0, -80, 200);
 const c1 = (await liste())[0];
