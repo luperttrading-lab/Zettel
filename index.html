@@ -676,7 +676,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.65.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '3.0.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -835,42 +835,53 @@
       const treffer = [];
       // Das Layout hängt an der **Fläche**, nicht an der Schriftgröße: sonst genügt ein großer Zettel
       // mit großer Schrift, und für die Gläser bleibt keine Zeilenhöhe übrig (erster Anlauf: negativ).
-      const fussH = bh * 0.22;                       // Tagesmenge unten, darunter klein der Vortag
+      // Die Fußzeile steht ganz unten und nimmt nur so viel Höhe, wie ihre beiden Zeilen brauchen –
+      // alles Übrige gehört den drei Zeitfenstern, damit die Gläser groß werden können.
+      const fussH = bh * 0.15;                       // Tagesmenge unten, daneben klein der Vortag
       const zeilH = (bh - fussH) / 3;                // drei Zeitfenster
       const saeuleB = bw * 0.105;
-      const spalte = bw - saeuleB - bw * 0.06;       // Platz für Beschriftung und Gläser
-      const klein = Math.max(zeilH * 0.27, 8);       // Schrift der Zeilenbeschriftung
-      const gross = Math.max(fussH * 0.46, 10);      // Schrift der Tagesmenge
+      const spalte = bw - saeuleB - bw * 0.055;      // Platz für Beschriftung und Gläser
+      const klein = Math.max(zeilH * 0.22, 8);       // Schrift der Zeilenbeschriftung
+      const gross = Math.max(fussH * 0.62, 10);      // Schrift der Tagesmenge
       ctx.save();
       ctx.fillStyle = ink; ctx.strokeStyle = ink;
       ctx.textBaseline = 'alphabetic';
 
+      const breiteAus = h2 => GLAS_W * (h2 / GLAS_H) * 0.94;   // Glasbreite aus einer Höhe
+      ctx.font = `${weight} ${klein}px ${family}`;
+      const kopfVon = z => z.label + '   ' + literText(wasserSumme(w, z.key));
+      // **Ein** Maßstab für alle drei Zeilen. Je Zeile zu rechnen wäre naheliegend, macht die Anzeige aber
+      // unehrlich: ein 0,5er sähe in einer leeren Zeile größer aus als in einer vollen, obwohl es dieselbe
+      // Menge ist (am Bild gesehen). Der Maßstab kommt darum vom **vollsten** Zeitfenster; damit füllt
+      // genau dieses die Breite bis zur Säule aus und rechts bleibt nichts ungenutzt.
+      const meiste = Math.max(1, ...WASSER_ZEITEN.map(z => (w[z.key] || []).length));
+      const kopfB = Math.max(...WASSER_ZEITEN.map(z => ctx.measureText(kopfVon(z) + '  ').width));
+      const passt = (breite, hoehe) => Math.min(hoehe, (breite / meiste) / 0.94 * GLAS_H / GLAS_W);
+      const hEin = passt(spalte - kopfB, zeilH * 0.86);           // Kopf und Gläser in einer Zeile
+      const hZwei = passt(spalte, Math.min(zeilH - klein * 1.4, zeilH * 0.78));   // Gläser unter dem Kopf
+      const eineZeile = hEin >= hZwei;                            // es gewinnt, was die Gläser größer macht
+      const glasH = eineZeile ? hEin : hZwei;
+      // Feldbreite je Glas: die Gläser stehen in einem gleichmäßigen Raster über die ganze Spalte, statt
+      // links gedrängt zu kleben – so ist die Breite genutzt und die Gläser aller Zeilen fluchten.
+      // Nach oben begrenzt, damit ein einzelnes Glas nicht mitten im Nichts steht.
+      const platz = (eineZeile ? spalte - kopfB : spalte);
+      const glasB = Math.max(breiteAus(glasH), Math.min(platz / meiste, breiteAus(glasH) * 1.7));
+      const skala = glasH / GLAS_H;
+
       WASSER_ZEITEN.forEach((z, i) => {
         const y = i * zeilH;
         ctx.font = `${weight} ${klein}px ${family}`;
-        ctx.fillText(z.label, 0, y + klein);
-        // Die Summe steht **direkt hinter** der Beschriftung. Ganz rechts an der Säule sah sie aus wie
-        // deren Achsenbeschriftung – gemessen am ersten Entwurf.
         const summe = wasserSumme(w, z.key);
-        const st = literText(summe);
-        ctx.globalAlpha = summe > 0 ? 1 : 0.4;
-        ctx.fillText(st, ctx.measureText(z.label + '  ').width, y + klein);
-        ctx.globalAlpha = 1;
-        // Gläser nebeneinander – sie erscheinen erst, wenn etwas getrunken wurde. Passen sie nicht
-        // in eine Reihe, werden sie so weit gestaucht, dass sie es tun (statt zu überlaufen).
         const glaeser = w[z.key] || [];
+        ctx.globalAlpha = summe > 0 ? 1 : 0.4;
+        ctx.fillText(kopfVon(z), 0, y + (eineZeile ? zeilH * 0.5 + klein * 0.36 : klein));
+        ctx.globalAlpha = 1;
         if (!glaeser.length) return;
-        const gy = y + klein * 1.3, frei = zeilH - klein * 1.5;
-        let glasH = Math.min(frei, zeilH * 0.62);
-        let glasB = GLAS_W * (glasH / GLAS_H) * 0.94;
-        if (glasB * glaeser.length > spalte) {         // stauchen, bis die Reihe passt
-          glasB = spalte / glaeser.length;
-          glasH = Math.min(glasH, glasB / 0.94 * GLAS_H / GLAS_W);
-        }
-        const skala = glasH / GLAS_H;
+        const gx0 = eineZeile ? kopfB : 0;
+        const gy = eineZeile ? y + (zeilH - glasH) / 2 : y + klein * 1.25;
         glaeser.forEach((art, n) => {
           const g = GLAeSER[art]; if (!g) return;
-          const gx = n * glasB;
+          const gx = gx0 + n * glasB;
           ctx.save();
           ctx.translate(gx + (glasB - GLAS_W * skala) / 2, gy); ctx.scale(skala, skala);
           // Wasser: Verlauf von hell nach kräftig, darüber ein Lichtstreifen und eine helle Oberkante
@@ -891,16 +902,19 @@
       // Fußzeile: die Tagesmenge groß, darunter klein der Vortag
       const tag = wasserTag(w);
       ctx.font = `${weight} ${gross}px ${family}`;
-      ctx.fillText('Heute ' + literText(tag), 0, bh - fussH + gross);
+      const heute = 'Heute ' + literText(tag);
+      ctx.fillText(heute, 0, bh - gross * 0.12);
       if (typeof w.gestern === 'number') {
+        // Nebeneinander statt untereinander – zwei Zeilen kosteten Höhe, die die Gläser besser brauchen
+        const x = ctx.measureText(heute + '   ').width;
         ctx.font = `${weight} ${klein}px ${family}`;
-        ctx.globalAlpha = 0.55;
-        ctx.fillText('gestern ' + literText(w.gestern), 0, bh - fussH + gross + klein * 1.35);
+        ctx.globalAlpha = 0.5;
+        ctx.fillText('gestern ' + literText(w.gestern), x, bh - gross * 0.12);
         ctx.globalAlpha = 1;
       }
 
       // Säule rechts: Zielmenge WASSER_ZIEL, gefüllt bis zur Tagesmenge, mit Marke bei jedem Liter
-      const sx = bw - saeuleB, sy = 0, sh = bh - fussH * 0.55, r = saeuleB * 0.28;
+      const sx = bw - saeuleB, sy = 0, sh = bh - fussH * 1.15, r = saeuleB * 0.28;
       const rund = (x, y, ww, hh, rr) => { const p = new Path2D(); p.moveTo(x + rr, y); p.arcTo(x + ww, y, x + ww, y + hh, rr); p.arcTo(x + ww, y + hh, x, y + hh, rr); p.arcTo(x, y + hh, x, y, rr); p.arcTo(x, y, x + ww, y, rr); p.closePath(); return p; };
       // Der leere Teil nur schwach angetuscht: mit 0,16 Tinte wurde er auf gelbem Papier olivgrün
       ctx.globalAlpha = 0.09; ctx.fill(rund(sx, sy, saeuleB, sh, r)); ctx.globalAlpha = 1;
@@ -908,12 +922,13 @@
       if (anteil > 0) {
         // Dieselbe Wasserfarbe wie in den Gläsern – die Säule zeigt ja dasselbe Wasser. Der Verlauf läuft
         // über die **gefüllte** Höhe, damit die Oberkante immer die helle Seite zeigt.
+        // **Einfarbig**, kein Verlauf: über die Füllhöhe gelesen wirkte er, als werde der obere Teil
+        // „weniger wichtig" (Auftraggeber, 9.9.2026). In den Gläsern bleibt der Verlauf – dort läuft er
+        // über das Glas, nicht über eine Menge.
         const fh = sh * anteil, fy = sy + sh - fh;
-        const vf = ctx.createLinearGradient(0, fy, 0, sy + sh);
-        vf.addColorStop(0, WASSER_FARBE.oben); vf.addColorStop(0.45, WASSER_FARBE.mitte); vf.addColorStop(1, WASSER_FARBE.unten);
         ctx.save(); ctx.clip(rund(sx, sy, saeuleB, sh, r));
         ctx.globalAlpha = WASSER_FARBE.deckkraft;
-        ctx.fillStyle = vf; ctx.fillRect(sx, fy, saeuleB, fh);
+        ctx.fillStyle = WASSER_FARBE.mitte; ctx.fillRect(sx, fy, saeuleB, fh);
         // Lichtstreifen links, wie im Glas
         ctx.fillStyle = WASSER_FARBE.glanz;
         ctx.fillRect(sx + saeuleB * 0.17, fy + fh * 0.03, saeuleB * 0.11, fh * 0.94);
