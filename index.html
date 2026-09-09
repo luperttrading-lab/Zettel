@@ -585,7 +585,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.62.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.62.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -634,10 +634,16 @@
     // `state` wird erst weiter unten angelegt, der Editor ruft render('') aber schon im Konstruktor –
     // deshalb der Umweg über try/catch statt eines direkten Zugriffs (zeitliche Totzone).
     function listeJetzt() { try { return state.list; } catch (_) { return 'none'; } }
+    // Halbfertiger Kopf beim Tippen: hinter „Fr. “ steht erst „7“, dann „7:“, dann „7:45“. Ohne die
+    // zweite Bedingung gälte schon „Fr. “ als Kopf, der Rumpf „7“ spränge in die gemeinsame Spalte und beim
+    // Weitertippen wieder zurück. Deshalb: ein Kopf **ohne** Ziffer zählt nicht, solange der Rumpf mit einer
+    // Ziffer beginnt – daraus wird gleich die Uhrzeit. Gleiche Regel in lib/render.js.
     function marke(line, modus) {
       if ((modus === undefined ? listeJetzt() : modus) === 'termin') {
         const m = TERMIN_RE.exec(line);
-        return m && m[1].trim() ? m : null;
+        if (!m || !m[1].trim()) return null;
+        if (!/\d/.test(m[1]) && /^\d/.test(line.slice(m[0].length))) return null;
+        return m;
       }
       return PREFIX_RE.exec(line);
     }
@@ -2028,9 +2034,10 @@
     const HAKEN_EM = 0.72;   // 0,22 Abstand + 1,00 Zeichen − 0,50, die in den Zettelrand ragen dürfen
     function wrap(ctx, text, maxW, fontFor, hakenFs) {
       const lines = [];
+      const termine = listeJetzt() === 'termin';
       // Terminliste: eine gemeinsame Spaltenbreite für alle Blöcke, sonst stünden die Uhrzeiten versetzt
       let spalte = 0;
-      if (listeJetzt() === 'termin') {
+      if (termine) {
         if (fontFor) ctx.font = fontFor(1);
         for (const p of text.split('\n')) { const m = marke(p); if (m) spalte = Math.max(spalte, ctx.measureText(m[0]).width); }
       }
@@ -2045,8 +2052,11 @@
         // Sonst läuft eine offene Zeile bis an den Rand, der Wegweiser landet im abgeschnittenen Bereich
         // und ist nicht antippbar; außerdem verschöbe sich der Umbruch beim Abhaken.
         // Die Kästchenliste braucht ihn nicht, dort sitzt das Zeichen im Kasten vorn.
+        // Die Terminliste braucht ihn ebenso wenig: dort gibt es keinen Haken (das CSS blendet die Box aus,
+        // hakenZeile() sperrt den Tipp). Bliebe der Platz hier reserviert, bräche das Bild eine Zeile früher
+        // um als die Vorschau – genau der Paritätsbruch aus 1.62.1.
         const kasten = !!m && (m[1] === '☐' || m[1] === '☑');
-        const frei = mk && !kasten && hakenFs ? HAKEN_EM * hakenFs(pi) : 0;
+        const frei = mk && !kasten && !termine && hakenFs ? HAKEN_EM * hakenFs(pi) : 0;
         const indent = mk ? (spalte || ctx.measureText(mk).width) : 0, limit = maxW - indent - frei;
         let line = '', first = true;
         const push = t => { lines.push({ t, x: indent, mk: first ? mk.trim() : '', p: pi, durch }); first = false; };
@@ -2194,7 +2204,10 @@
     const mirrorEl = document.createElement('div');
     mirrorEl.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;white-space:pre-wrap;overflow-wrap:break-word;padding:0;margin:0;border:0';
     document.body.appendChild(mirrorEl);
-    // Einzug einer Zeile in px (Breite der Listenmarkierung samt geschütztem Leerzeichen) bei gegebener Schrift
+    // Einzug einer Zeile in px (Breite der Listenmarkierung samt geschütztem Leerzeichen) bei gegebener Schrift.
+    // Die Aufrufer messen mit der **Bild**-Schriftgröße und skalieren das Ergebnis erst danach: Schriftmetriken
+    // wachsen nicht exakt linear mit der Größe, und bei der breiten Terminspalte reichten die 0,3 px Unterschied,
+    // um eine Zeile anders umbrechen zu lassen als im Bild.
     function lineIndent(line, family, weight, px) {
       const m = marke(line); if (!m) return 0;
       measureCtx.font = `${weight} ${px}px ${family}`;
@@ -2212,9 +2225,16 @@
       mirrorEl.style.fontSize = px + 'px'; mirrorEl.style.lineHeight = String(f.LH);
       const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
       mirrorEl.innerHTML = text.split('\n').map(l => {
-        const ind = Math.round(lineIndent(l, f.family, f.weight, px) * 100) / 100;
+        const ind = Math.round(lineIndent(l, f.family, f.weight, f.fs) * scale * 100) / 100;
         const q = marke(l), body = q ? l.slice(q[0].length) : l;
-        return `<div style="min-height:1em;padding-left:${ind}px">${body ? esc(body) : '<br>'}</div>`;
+        // Die Haken-Box am Zeilenende gehört mit in den Spiegel – sonst meldet er weniger Zeilen als das
+        // echte Textfeld, widthSlack bleibt bei 1 und Vorschau und Bild brechen verschieden um.
+        // Maße und Bedingung wie im CSS (::after) und in wrap(): 1 em breit, 0,22 em Abstand,
+        // 0,5 em ragen in den Rand; nicht beim Kästchen, nicht bei Terminen.
+        const kasten = q && (q[1] === '☐' || q[1] === '☑');
+        const box = q && !kasten && listeJetzt() !== 'termin'
+          ? '<span style="display:inline-block;width:1em;margin-left:.22em;margin-right:-.5em"></span>' : '';
+        return `<div style="min-height:1em;padding-left:${ind}px">${body ? esc(body) : '<br>'}${box}</div>`;
       }).join('');
       return Math.round(mirrorEl.offsetHeight / (px * f.LH));
     }
@@ -2235,7 +2255,10 @@
     function syncPreview() {
       const t = targetCanvas();
       const text = noteText() || 'Was soll auf den Zettel?';
-      const scale0 = noteEl.clientWidth / (LAYOUTS[t.layout](t.w, t.h).noteW * (state.noteScale || 1));
+      // Der Spiegel muss mit **genau** dem Faktor rechnen, mit dem das Textfeld gleich dargestellt wird –
+      // f.noteW ist gerundet, die Layoutbreite nicht. Die 0,05 % Unterschied reichten bei der breiten
+      // Terminspalte, um eine Zeile anders umbrechen zu lassen als in der Vorschau.
+      const scaleOf = g => noteEl.clientWidth / g.noteW;
       // Umbruch im echten Textfeld nachprüfen: Sicherheitsfaktor jedes Mal neu bestimmen, bis der Browser
       // nicht mehr Zeilen braucht als gemessen. Der Faktor gilt danach auch fürs Bild.
       let f = null;
@@ -2243,7 +2266,7 @@
       for (const s of [1, 0.98, 0.96, 0.94, 0.92, 0.9]) {
         widthSlack = s;
         f = fitNote(t.w, t.h, t.layout, text, s);
-        if (domLines(f, scale0, text) <= f.lines.length) break;
+        if (domLines(f, scaleOf(f), text) <= f.lines.length) break;
       }
       const scale = noteEl.clientWidth / f.noteW;
       // Innenabstand exakt wie im Bild (CSS-Prozent-Padding bezöge sich auf die Breite des Elternelements)
@@ -2263,7 +2286,7 @@
       textEl.style.fontSize = (f.fs * scale) + 'px';
       textEl.style.lineHeight = String(f.LH);
       // Hängender Einzug pro Zeile, gleiche Messung wie fürs Bild; dazu die Lage der Überschrift im Linienraster
-      textEl.indentFn = line => lineIndent(line, f.family, f.weight, f.fs * scale);
+      textEl.indentFn = line => lineIndent(line, f.family, f.weight, f.fs) * scale;
       textEl.titleStyle = f.raster ? titleRasterStyle(f, scale) : null;
       textEl.applyIndents();
       noteEl.style.height = Math.round(f.noteH * scale) + 'px';
