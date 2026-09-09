@@ -12,8 +12,12 @@ Für jeden Namen unter "dienst" entsteht automatisch eine Spalte – neue Dienst
 
 Zwei Feinheiten, die leicht falsch gemacht werden:
  1. Jede Nachricht wird EINMAL gezählt (nach message.id entdoppeln) – sonst etwa das Dreifache.
- 2. „diese Frage" = alle Antworten ab dem letzten ECHTEN Nutzerbeitrag; Werkzeugergebnisse
-    stehen im Protokoll ebenfalls als `user`, zählen aber nicht als Frage.
+ 2. „diese Frage" = alle Antworten ab dem letzten ECHTEN Nutzerbeitrag. Das Protokoll führt vieles
+    als `user`, was keine Frage ist: Werkzeugergebnisse, aber auch die Zeile „[Image: original …]",
+    die entsteht, sobald Claude selbst ein Bild ansieht, dazu Aufgaben-Meldungen, Slash-Befehle und
+    die Zusammenfassung nach einer Kompaktierung. Maßgeblich ist deshalb allein `origin.kind ==
+    "human"` – die Heuristik über die Blocktypen zählte am 9.9.2026 eine Runde mit 87 Antworten als
+    8 und meldete 1,31 $ statt 14,91 $ (Faktor 11), weil dazwischen vier Bilder angesehen wurden.
 """
 import json, os, glob, collections, datetime, sys
 
@@ -33,19 +37,36 @@ slug = os.getcwd().replace('/', '-')
 files = glob.glob(f'{base}/{slug}/*.jsonl') or glob.glob(f'{base}/*/*.jsonl')
 f = max(files, key=os.path.getmtime)
 
-seen, last_user = {}, None
+# MASCHINELL: Zeilen, die das Protokoll als `user` führt, ohne dass jemand etwas getippt hat.
+# `isMeta` trägt unter anderem die Zeile „[Image: original …]", die beim Ansehen eines Bildes entsteht.
+MASCHINELL = ('isMeta', 'isCompactSummary', 'isVisibleInTranscriptOnly')
+MARKER = ('<task-notification>', '<command-name>', '<local-command-stdout>', '<wake ', '<webhook-payload>')
+
+def menschlich(d, m):
+    if (d.get('origin') or {}).get('kind') == 'human': return True
+    if any(d.get(k) for k in MASCHINELL): return False
+    c = m.get('content')                        # Ersatzregel für Protokolle ohne `origin`
+    if isinstance(c, str): txt = c
+    elif isinstance(c, list):
+        if any(b.get('type') == 'tool_result' for b in c if isinstance(b, dict)): return False
+        if not any(b.get('type') == 'text' for b in c if isinstance(b, dict)): return False
+        txt = ' '.join(b.get('text', '') for b in c if isinstance(b, dict) and b.get('type') == 'text')
+    else: return False
+    return not txt.lstrip().startswith(MARKER)
+
+seen, last_user, ersatz = {}, None, None
 for line in open(f):
     try: d = json.loads(line)
     except: continue
     t, m = d.get('type'), d.get('message', {})
-    if t == 'user':                             # nur echte Nutzerfragen, keine Werkzeugergebnisse
-        c = m.get('content')
-        if isinstance(c, str) or (isinstance(c, list)
-                and any(b.get('type') == 'text' for b in c if isinstance(b, dict))
-                and not any(b.get('type') == 'tool_result' for b in c if isinstance(b, dict))):
-            last_user = d.get('timestamp')
+    if t == 'user':
+        if (d.get('origin') or {}).get('kind') == 'human': last_user = d.get('timestamp')
+        elif menschlich(d, m): ersatz = d.get('timestamp')
     if t == 'assistant' and m.get('usage'):     # je Nachricht nur die letzte Fassung zählen
         seen[m.get('id') or d.get('uuid')] = (d.get('timestamp', ''), m.get('model'), m['usage'])
+# Kennt das Protokoll `origin` gar nicht (andere Claude-Code-Fassung), gilt die Ersatzregel.
+# Ohne diesen Rückfall stünde bei „diese Frage" stillschweigend 0,00 $.
+if last_user is None: last_user = ersatz
 
 def cost(model, u):
     p = PREISE.get(model, STD)

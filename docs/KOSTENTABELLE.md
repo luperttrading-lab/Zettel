@@ -144,8 +144,15 @@ Drei Feinheiten, die leicht falsch gemacht werden:
 
 1. Jede Nachricht **einmal** zählen, nach `message.id`. Im Protokoll steht dieselbe Nachricht beim
    Streamen mehrfach; ohne Entdopplung kommt etwa das Dreifache heraus.
-2. „diese Frage" heißt: alle Antworten ab dem letzten **echten** Nutzerbeitrag. Werkzeugergebnisse
-   stehen im Protokoll ebenfalls als `user`, zählen aber nicht als Frage.
+2. „diese Frage" heißt: alle Antworten ab dem letzten **echten** Nutzerbeitrag – und maßgeblich dafür
+   ist allein `origin.kind == "human"`. Das Protokoll führt vieles als `user`, was niemand getippt hat:
+   Werkzeugergebnisse, Aufgabenmeldungen, Slash-Befehle, die Zusammenfassung nach einer Kompaktierung
+   und vor allem die Zeile `[Image: original …]` mit `isMeta`, die **jedes Mal entsteht, wenn Claude
+   selbst ein Bild ansieht** – was diese Anleitung an anderer Stelle ausdrücklich verlangt.
+   **Am 9.9.2026 gemessen:** eine Runde mit 87 Antworten wurde als 8 gezählt und mit 1,31 $ statt
+   14,91 $ gemeldet (Faktor 11), weil dazwischen vier Bilder angesehen wurden. Über den ganzen Tag
+   summierten sich die Einzelmeldungen auf 46,17 $ statt 80,04 $ – **42 % zu wenig**. „heute" und
+   „dieser Chat" waren nie betroffen, sie zählen alles. Prüfung: `python3 tests/kosten.py`.
 3. Die Tagesgrenze in **Ortszeit** ziehen. Wer das UTC-Datum mit einer lokal angezeigten Uhrzeit
    vergleicht, bekommt zwischen 22 und 24 Uhr ein falsches „heute".
 
