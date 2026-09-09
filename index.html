@@ -691,7 +691,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.7';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.8';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -785,8 +785,8 @@
       klein:  { label: '0,2 l', liter: 0.2, bo: 5.4, bu: 4.0, y0: 15.0 },
       mittel: { label: '0,3 l', liter: 0.3, bo: 7.2, bu: 5.4, y0:  9.0 },
       gross:  { label: '0,5 l', liter: 0.5, bo: 9.4, bu: 7.0, y0:  1.5 },
-      fl07:   { label: '0,7 l', liter: 0.7, bo: 6.2, bu: 6.2, y0: -3.0, hals: 2.2, schulter: 7.0 },
-      fl10:   { label: '1,0 l', liter: 1.0, bo: 7.0, bu: 7.0, y0: -9.0, hals: 2.5, schulter: 2.0 },
+      fl07:   { label: '0,7 l', liter: 0.7, bo: 7.4, bu: 7.4, y0: -2.0, hals: 2.3, schulter:  8.0 },
+      fl10:   { label: '1,0 l', liter: 1.0, bo: 8.2, bu: 8.2, y0: -6.0, hals: 2.6, schulter:  5.0 },
     };
     const istFlasche = g => typeof g.hals === 'number';
     const GLAS_H = 32, GLAS_W = 24, GLAS_BODEN = 30;
@@ -797,12 +797,14 @@
     const GLAS_STRICH = 1.9;                                     // Strichstärke in Glaskoordinaten
     const GLAS_UNTEN = GLAS_BODEN + GLAS_STRICH / 2;             // gemeinsamer Boden aller Gläser
     const glasOben = art => GLAeSER[art].y0 - GLAS_STRICH / 2;   // Oberkante dieser Sorte, samt Strich
-    // Wie hoch die Reihe gerechnet wird. **Nicht** fest auf das höchste Gefäß: eine 1-l-Flasche ist gut
-    // 1,4-mal so hoch wie das 0,5er-Glas, und danach wäre die Anzeige auch an Tagen ohne Flasche um ein
-    // Drittel kleiner. Also nach dem, was wirklich dasteht – mindestens aber ein großes Glas, damit ein
-    // leerer Zettel dieselbe Größe hat wie bisher. Die erste Flasche des Tages verkleinert die Gläser
-    // einmalig; das ist ehrlich, sie ist ja auch wirklich größer.
-    const inkHoehe = arten => GLAS_UNTEN - Math.min(glasOben('gross'), ...arten.filter(a => GLAeSER[a]).map(glasOben));
+    // Wie hoch die Reihe gerechnet wird: **fest**, über alle Sorten, unabhängig davon, was heute dasteht.
+    // In 3.7 folgte der Wert dem Inhalt – ein 0,2er-Glas war dann in einer Zeile mit Flasche kleiner als
+    // in einer ohne, und dieselbe Menge sah von Tag zu Tag verschieden aus („die Größe der Gläser
+    // unterschiedlich, je nachdem ob Flaschen dabei sind – das musst du konsistent gestalten",
+    // Auftraggeber, 9.9.2026). Der Preis: jede Einheit Flaschenhöhe verkleinert **alle** Gefäße, auch an
+    // reinen Glastagen. Deshalb sind die Flaschen nur so hoch wie nötig, um neben dem 0,5er-Glas als
+    // größer zu lesen – 37,9 gegen 30,4 Einheiten, also 20 % kleinerer Maßstab als vor den Flaschen.
+    const GLAS_INK = GLAS_UNTEN - Math.min(...Object.keys(GLAeSER).map(glasOben));
     // Farben der Füllung – **eine** Quelle für Canvas (Verlauf) und Knöpfe (SVG-defs), sonst sähen die
     // Knöpfe anders aus als der Zettel. Angelehnt an den Tropfen 💧 des Listenknopfs: oben hell, unten
     // kräftig, dazu ein Lichtstreifen. Deckkraft unter 1, damit Papier und Karos durchscheinen –
@@ -947,10 +949,9 @@
       // **Ein** Maßstab für alle drei Zeilen: je Zeile gerechnet sähe ein 0,5er in einer leeren Zeile
       // größer aus als in einer vollen, obwohl es dieselbe Menge ist (am Bild gesehen).
       const bedarf = Math.max(reserve, ...WASSER_ZEITEN.map(z => bedarfVon(w[z.key] || [])));
-      // Höhe gegen das, was wirklich gezeichnet wird (siehe inkHoehe) – der Kasten war einmal 32
-      // Einheiten hoch, gezeichnet wurden höchstens 30,4; die Gläser blieben dadurch unnötig klein.
-      const hoehenBedarf = inkHoehe(WASSER_ZEITEN.flatMap(z => w[z.key] || []));
-      const skalaFuer = (breite, hoehe) => Math.min(hoehe / hoehenBedarf, breite / bedarf);
+      // Höhe gegen GLAS_INK, das größte Gefäß samt Strich – **nicht** gegen den Kasten (der war einmal 32
+      // Einheiten hoch, gezeichnet wurden höchstens 30,4) und **nicht** gegen den heutigen Inhalt.
+      const skalaFuer = (breite, hoehe) => Math.min(hoehe / GLAS_INK, breite / bedarf);
       const sEin = skalaFuer(spalte - kopfB, zeilH * 0.86);        // Kopf und Gläser in einer Zeile
       // 1,6 statt 1,4 Zeilenhöhen Abzug: mit 1,4 blieben zwischen der untersten Glasreihe und „Heute …“
       // nur 2,6 px – gemessen, kein Überlauf, aber sichtbar gedrängt (Auftraggeber: „Zeilenumbrüche prüfen“).

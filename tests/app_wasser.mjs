@@ -234,14 +234,29 @@ await fenster(0); await glas(4); await glas(3);          // 1,0 + 0,7
 const s5 = await stand();
 check('Flaschen landen im Zeitfenster und zählen richtig',
   JSON.stringify(s5.v12) === JSON.stringify(['fl10', 'fl07']) && Math.abs(s5.tag - 1.7) < 1e-9, JSON.stringify(s5));
-// Eine Flasche ist höher als das größte Glas – die Reihe muss dafür Platz schaffen
-const hoehen = await page.evaluate(() => ({
-  nurGlaeser: inkHoehe(['klein', 'gross']),
-  mitFlasche: inkHoehe(['klein', 'fl10']),
-  leer: inkHoehe([]),
-}));
-check('die Reihenhöhe folgt dem Inhalt, mindestens ein großes Glas',
-  hoehen.leer === hoehen.nurGlaeser && hoehen.mitFlasche > hoehen.nurGlaeser, JSON.stringify(hoehen));
+// 3.8: Ein 0,2er-Glas muss **immer gleich groß** sein – auch wenn in derselben Zeile eine Flasche
+// steht. In 3.7 folgte der Maßstab dem Inhalt: dieselbe Menge sah von Tag zu Tag anders aus, und ein
+// Glas neben einer Flasche war kleiner als eins ohne (vom Auftraggeber am Bild gemeldet). Gemessen
+// wird am Trefferfeld, nicht am Zustand – der Fehler war im Zustand nicht zu sehen.
+const glasBreite = async inhalt => {
+  await page.evaluate(w => { state.wasser = { tag: heuteKennung(), ...w, gestern: null, soll: 3 };
+    persist(); syncPreview(); }, inhalt);
+  await page.waitForTimeout(320);
+  return page.evaluate(() => { const t = wasserTreffer.find(q => q.key === 'v12' && q.n === 0);
+    return t ? +t.w.toFixed(2) : null; });
+};
+const ohneFl = await glasBreite({ v12: ['klein', 'klein'], v18: ['mittel'], n18: [] });
+const mitFl  = await glasBreite({ v12: ['klein', 'klein'], v18: ['mittel'], n18: ['fl10'] });
+const inReihe = await glasBreite({ v12: ['klein', 'fl10'], v18: [], n18: [] });
+check('ein Glas ist gleich groß, ob Flaschen dabei sind oder nicht',
+  ohneFl === mitFl && ohneFl === inReihe, JSON.stringify({ ohneFl, mitFl, inReihe }));
+// Und die Flasche muss trotzdem als das größere Gefäß zu lesen sein
+const rang = await page.evaluate(() => {
+  const h = a => GLAS_UNTEN - glasOben(a);
+  return { gross: +h('gross').toFixed(1), fl07: +h('fl07').toFixed(1), fl10: +h('fl10').toFixed(1) };
+});
+check('die Flaschen stehen höher als das größte Glas',
+  rang.fl07 > rang.gross && rang.fl10 > rang.fl07, JSON.stringify(rang));
 
 // Tagesziel verstellen
 const zielStand = () => page.evaluate(() => ({
