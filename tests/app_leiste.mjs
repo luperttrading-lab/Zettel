@@ -71,6 +71,11 @@ const aenderungen = [
   ['Überschrift', () => { state.title = true; noteTitleOn = true; onTextChanged(); flush(); }, () => { state.title = false; noteTitleOn = false; onTextChanged(); flush(); }],
   ['Papierfarbe', () => { state.color = 'blue'; applyColor(); persist(); }, () => { state.color = 'yellow'; applyColor(); persist(); }],
   ['Schrift', () => { state.font = 'kalam'; applyFont(); persist(); }, () => { state.font = 'caveat'; applyFont(); persist(); }],
+  // Seit 1.60.0 vergleicht isPinnedCurrent über SNAP_FIELDS statt über eine zweite, handgepflegte Liste.
+  // Die beiden hier fehlten dort und wurden übersehen: der Zettel galt trotz Änderung als „aktiv".
+  ['Lage', () => { state.noteY = 0.42; persist(); }, () => { state.noteY = 0.585; persist(); }],
+  ['Zettelgröße', () => { state.noteScale = 0.7; persist(); }, () => { state.noteScale = 1; persist(); }],
+  ['Hakenfarbe', () => { state.doneColor = 'rot'; persist(); }, () => { state.doneColor = 'gruen'; persist(); }],
 ];
 for (const [name, hin, zurueck] of aenderungen) {
   await page.evaluate(hin); await page.waitForTimeout(250);

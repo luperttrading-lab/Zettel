@@ -546,7 +546,8 @@
         <button class="btn" type="button" id="eichpick">Eichbild wählen</button>
         <button class="btn" type="button" id="eichclear" hidden>Eichbild entfernen</button>
         <button class="btn" type="button" id="lage-reset">Zurücksetzen</button>
-        <button class="btn primary" type="button" id="lage-fertig">Fertig</button>
+        <button class="btn" type="button" id="lage-fertig">Fertig</button>
+        <button class="btn primary" type="button" id="lage-kleben">Fertig + auf Sperrbildschirm</button>
       </div>
       <input id="eichfile" type="file" accept="image/*" hidden>
     </div>
@@ -575,7 +576,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.59.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.60.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -910,9 +911,18 @@
     // Einmalige Umstellung (Sept. 2026): gespeicherte Installationen von „automatisch öffnen“ auf aus setzen
     if (!state.autoRunReset) { state.autoRun = false; state.autoRunReset = true; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {} }
 
+    let speicherVoll = false;
     function persist() {
       state.updated = Date.now();
-      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {}
+      try { localStorage.setItem(KEY, JSON.stringify(state)); speicherVoll = false; }
+      catch (_) {
+        // Stummes Scheitern war der schlimmste Fall: Änderungen verschwanden beim nächsten Start ohne ein Wort.
+        if (!speicherVoll) {
+          speicherVoll = true;
+          try { showInfo('Speicher voll – Änderungen werden nicht gesichert. Eichbild oder Hintergrundfoto entfernen.', 0); } catch (_) {}
+          try { zeigeMeldung('Speicher voll – nichts gesichert'); } catch (_) {}
+        }
+      }
       updatePinBadge();
     }
 
@@ -935,15 +945,11 @@
     function isPinnedCurrent() {
       const p = state.pinned;
       if (!pinnedGueltig(p)) return false;
-      if (p.bgOnly) return p.bg === bgKennung;   // Zettel ausgeblendet: nur das Foto ist im Bild, der Zettel selbst zählt nicht
-      return p.text === state.text && p.color === state.color
-        && (p.fontScale || 100) === (state.fontScale || 100)
-        && (p.fastener || 'tape') === befKennung() && (p.font || 'caveat') === state.font
-        && (p.fastenerLook || lookKey(fastenerLook())) === lookKey(fastenerLook())
-        && (p.paper || 'plain') === state.paper && (p.pen || 'black') === state.pen
-        && (p.texture || 'smooth') === state.texture && (p.edge || 'straight') === state.edge
-        && p.title === state.title && (!state.title || p.titleSize === state.titleSize)   // Größe zählt nur mit Überschrift
-        && p.bg === bgKennung;
+      // **Eine** Liste, nicht zwei: `SNAP_FIELDS` ist die Wahrheit. Hier stand bis 1.60.0 eine zweite,
+      // handgepflegte Aufzählung – sie verlor 1.54.0 (doneForm/doneColor) und 1.58.0 (noteScale/noteX/noteY).
+      // Die App meldete den Zettel dann als „aktiv“, obwohl er längst anders aussah, und jede Änderung an
+      // Haken oder Lage wirkte, als sei sie nicht gespeichert worden.
+      return gleicherStand(p, pinSnapshot({ bgOnly: !!p.bgOnly }));
     }
     // Die Lage, in der die App gerade ist. Der zweite Schritt (der Kurzbefehl) läuft außerhalb der App;
     // dass er gelaufen ist, nimmt die App an, sobald sie wieder in den Vordergrund kommt (siehe visibilitychange).
@@ -1786,7 +1792,9 @@
       }
     }
     $('lagebtn').addEventListener('click', () => lageOeffnen(true));
-    $('lage-fertig').addEventListener('click', () => lageOeffnen(false));
+    $('lage-fertig').addEventListener('click', () => { lageOeffnen(false); showInfo('Lage gespeichert'); });
+    // Der häufigste Wunsch direkt nach dem Schieben: sehen, wie es wirklich aussieht. Ein Knopf statt zwei Wege.
+    $('lage-kleben').addEventListener('click', () => { lageOeffnen(false); stickViaShortcut(); });
     lageEl.addEventListener('click', e => { if (e.target === lageEl) lageOeffnen(false); });
     $('lage-reset').addEventListener('click', () => {
       state.noteScale = 1; state.noteX = 0.5; state.noteY = 0.585; lagePlatzieren(); persist();
@@ -1823,12 +1831,16 @@
       if (!f) return;
       const t = targetCanvas();
       let img; try { img = await bildAusDatei(f); } catch { showInfo('Bild konnte nicht gelesen werden'); return; }
-      const c = document.createElement('canvas'); c.width = t.w; c.height = t.h;
+      // Klein speichern: das Eichbild erscheint nur in einem Rahmen von wenigen hundert Pixeln. In voller
+      // Displayauflösung fraß es 2 MB und drängte zusammen mit dem Hintergrundfoto den Zustand aus dem
+      // Speicher – dann scheiterte persist() und Änderungen gingen verloren.
+      const EW = 540, EH = Math.round(EW * t.h / t.w);
+      const c = document.createElement('canvas'); c.width = EW; c.height = EH;
       const g = c.getContext('2d');
-      const sk = Math.max(t.w / img.naturalWidth, t.h / img.naturalHeight);
-      g.drawImage(img, (t.w - img.naturalWidth * sk) / 2, (t.h - img.naturalHeight * sk) / 2, img.naturalWidth * sk, img.naturalHeight * sk);
+      const sk = Math.max(EW / img.naturalWidth, EH / img.naturalHeight);
+      g.drawImage(img, (EW - img.naturalWidth * sk) / 2, (EH - img.naturalHeight * sk) / 2, img.naturalWidth * sk, img.naturalHeight * sk);
       let url = '';
-      for (let q = 0.7; ; q -= 0.12) { url = c.toDataURL('image/jpeg', q); if (url.length < 2.0e6 || q <= 0.35) break; }
+      for (let q = 0.72; ; q -= 0.12) { url = c.toDataURL('image/jpeg', q); if (url.length < 2.5e5 || q <= 0.35) break; }
       try { localStorage.setItem(EICH_KEY, url); } catch { showInfo('Eichbild passt nicht in den Speicher'); return; }
       lageHintergrund();
     });
