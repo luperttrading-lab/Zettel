@@ -153,6 +153,11 @@ Drei Feinheiten, die leicht falsch gemacht werden:
    14,91 $ gemeldet (Faktor 11), weil dazwischen vier Bilder angesehen wurden. Über den ganzen Tag
    summierten sich die Einzelmeldungen auf 46,17 $ statt 80,04 $ – **42 % zu wenig**. „heute" und
    „dieser Chat" waren nie betroffen, sie zählen alles. Prüfung: `python3 tests/kosten.py`.
+   **Absicherung:** Das Skript schreibt zusätzlich eine Kontrollzeile nach **stderr** – `» diese Frage:
+   87 Antworten seit 15:44:06 UTC`. In die Antwort gehört weiterhin nur die Tabelle (stdout); die
+   Kontrollzeile ist für Claude selbst und macht den Betrag prüfbar. Beim Fehler oben hätte dort
+   „8 Antworten seit 16:16" gestanden – das wäre aufgefallen. Fehlt jeder Nutzerbeitrag, sagt das
+   Skript das ausdrücklich, statt still 0,00 $ zu melden.
 3. Die Tagesgrenze in **Ortszeit** ziehen. Wer das UTC-Datum mit einer lokal angezeigten Uhrzeit
    vergleicht, bekommt zwischen 22 und 24 Uhr ein falsches „heute".
 

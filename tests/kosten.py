@@ -36,9 +36,10 @@ def lauf(zeilen):
         r = subprocess.run([sys.executable, os.path.join(WURZEL, 'tools', 'kostentabelle.py')],
                            capture_output=True, text=True, cwd=tmp, env=umg)
         if r.returncode: raise SystemExit('Skript brach ab:\n' + r.stderr)
-        return r.stdout
+        return r.stdout, r.stderr
 
-def frage_usd(ausgabe):
+def frage_usd(paar):
+    ausgabe = paar[0] if isinstance(paar, tuple) else paar
     for z in ausgabe.splitlines():
         if z.startswith('| diese Frage'):
             return float(z.split('|')[2].strip().replace(' $', '').replace(',', '.'))
@@ -92,6 +93,17 @@ pruef('ohne origin greift die Ersatzregel', abs(u - 2.00) < 0.01, f'{u} $ statt 
 doppelt = mit_bild + [mit_bild[-1]]
 pruef('doppelte Fassung derselben Nachricht zählt einmal',
       abs(frage_usd(lauf(doppelt)) - frage_usd(lauf(mit_bild))) < 0.001)
+
+# 6) Die Tabelle bleibt sauber: die Kontrollzeile geht nach stderr, nicht in die Antwort
+aus, err = lauf(mit_bild)
+pruef('Tabelle enthält nur Tabellenzeilen', all(z.startswith('|') for z in aus.strip().splitlines()),
+      repr(aus))
+pruef('Kontrollzeile nennt Zahl und Beginn der Runde', '»' in err and 'Antworten seit' in err, repr(err))
+
+# 7) Fehlt jeder Nutzerbeitrag, sagt das Skript das – statt still 0,00 $ zu melden
+nur_antwort = [antwort(T % 1, 40000)]
+aus, err = lauf(nur_antwort)
+pruef('ohne Nutzerbeitrag warnt das Skript', 'KEIN Nutzerbeitrag' in err, repr(err))
 
 print(f'{fehler} Prüfung(en) fehlgeschlagen' if fehler else 'alle Prüfungen bestanden')
 sys.exit(1 if fehler else 0)

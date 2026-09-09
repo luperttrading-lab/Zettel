@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Kostentabelle für Claude Code: Claude neben jedem weiteren Dienst, Datum und Uhrzeit in der Kopfzeile.
 
+In die Antwort gehört **nur die Tabelle** (stdout). Die Zeile mit » davor geht nach stderr und ist eine
+Kontrollzeile für Claude selbst: Sie nennt, wie viele Antworten zur Runde gezählt wurden und ab wann –
+daran erkennt man sofort, wenn der Beginn der Runde falsch bestimmt wurde.
+
 Aufruf:  python3 tools/kostentabelle.py [-v] [--ttl5]
   -v      zusätzlich Summen je Tag und je Modell
   --ttl5  Cache-Schreibpreis für 5-Minuten-Cache statt 1 Stunde
@@ -54,13 +58,14 @@ def menschlich(d, m):
     else: return False
     return not txt.lstrip().startswith(MARKER)
 
-seen, last_user, ersatz = {}, None, None
+seen, last_user, ersatz, ORIGIN_GEFUNDEN = {}, None, None, False
 for line in open(f):
     try: d = json.loads(line)
     except: continue
     t, m = d.get('type'), d.get('message', {})
     if t == 'user':
-        if (d.get('origin') or {}).get('kind') == 'human': last_user = d.get('timestamp')
+        if (d.get('origin') or {}).get('kind') == 'human':
+            last_user = d.get('timestamp'); ORIGIN_GEFUNDEN = True
         elif menschlich(d, m): ersatz = d.get('timestamp')
     if t == 'assistant' and m.get('usage'):     # je Nachricht nur die letzte Fassung zählen
         seen[m.get('id') or d.get('uuid')] = (d.get('timestamp', ''), m.get('model'), m['usage'])
@@ -85,7 +90,19 @@ def lokal(ts):                                  # Tagesgrenze in Ortszeit, nicht
 
 c_ges   = sum(cost(mo, u) for _, mo, u in seen.values())
 c_heute = sum(cost(mo, u) for ts, mo, u in seen.values() if lokal(ts) == heute_lokal)
+runde   = [ts for ts, _, _ in seen.values() if last_user and ts >= last_user]
 c_frage = sum(cost(mo, u) for ts, mo, u in seen.values() if last_user and ts >= last_user)
+
+# Kontrollzeile auf stderr – **nicht** in der Tabelle, die geht wörtlich in die Antwort. Sie macht den
+# Wert prüfbar: Am 9.9.2026 stand hier eine Runde mit 87 Antworten als „8 Antworten seit 16:16" da, und
+# genau das wäre aufgefallen. Wer die Zahl liest, sieht sofort, ob der Beginn der Runde stimmt.
+def hinweis(t):
+    print('» ' + t, file=sys.stderr)
+hinweis(f'diese Frage: {len(runde)} Antworten seit {(last_user or "?")[11:19]} UTC'
+        + ('' if last_user else ' – KEIN Nutzerbeitrag gefunden, Betrag ist 0'))
+if last_user and not ORIGIN_GEFUNDEN:
+    hinweis('Achtung: kein Eintrag mit origin.kind=="human" – die Ersatzregel greift. Wenn Claude Code '
+            'sein Protokollformat geändert hat, bitte tests/kosten.py laufen lassen.')
 
 # Weitere Spalten: selbst gepflegte Fremdkosten (Bildgenerierung, andere Dienste, was auch immer)
 # tools/fremdkosten.json: [{"ts": "...Z", "usd": 0.34, "dienst": "RouteLLM", "was": "gpt_image2 Panda"}, ...]
