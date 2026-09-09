@@ -180,6 +180,28 @@ await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(500);
 check('Kästchenliste ohne Box am Zeilenende', await page.evaluate(() =>
   [...textEl.el.children].every(d => getComputedStyle(d, '::after').content === 'none')));
 
+// Terminliste (1.59.0): der vordere Block wird erkannt, nicht gesetzt – und alle bekommen dieselbe Spalte.
+await page.evaluate(() => { textEl.value = 'Termine\nFr 12:00 Friseur\nMi 9:30 Zahnarzt\n12.9. Elternabend\nOhne Zeit';
+  onTextChanged(); state.title = true; state.list = 'termin'; persist(); });
+await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(500);
+check('Text bleibt unverändert – die App setzt hier keine Markierung',
+  (await page.evaluate(() => textEl.value)) === 'Termine\nFr 12:00 Friseur\nMi 9:30 Zahnarzt\n12.9. Elternabend\nOhne Zeit',
+  JSON.stringify(await page.evaluate(() => textEl.value)));
+const mks = await page.evaluate(() => [...textEl.el.children].map(d => d.getAttribute('data-mk')));
+check('Wochentag, Uhrzeit und Datum werden erkannt',
+  mks[1] === 'Fr 12:00' && mks[2] === 'Mi 9:30' && mks[3] === '12.9.', JSON.stringify(mks));
+check('Überschrift und Zeile ohne Zeitangabe bleiben ohne Block', mks[0] === null && mks[4] === null, JSON.stringify(mks));
+const einz = await page.evaluate(() => [...textEl.el.children].slice(1, 4).map(d => Math.round(parseFloat(getComputedStyle(d).paddingLeft))));
+check('alle Termine teilen sich eine Spalte', new Set(einz).size === 1 && einz[0] > 0, JSON.stringify(einz));
+check('in der Terminliste kein Haken am Zeilenende',
+  (await page.evaluate(() => getComputedStyle(textEl.el.children[1], '::after').content)) === 'none');
+check('Vorschau und Bild brechen gleich um', await page.evaluate(() => {
+  const t = targetCanvas(), f = fitNote(t.w, t.h, t.layout, noteText());
+  const sicht = [...textEl.el.children].reduce((a, d) => {
+    const lh = parseFloat(getComputedStyle(d).lineHeight) || 1;
+    return a + Math.max(1, Math.round(d.getBoundingClientRect().height / lh)); }, 0);
+  return f.lines.length === sicht; }));
+
 check('scrollWidth ≤ 448', sw <= 448, String(sw));
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();

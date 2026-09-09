@@ -127,6 +127,9 @@
        da ist, ist wichtig: nur so hält der Browser denselben Platz frei wie die Breitenrechnung in wrap(),
        der Umbruch springt beim Abhaken nicht, und der Wegweiser gerät nie in den abgeschnittenen Bereich.
        Als inline-block erbt sie die Textdekoration der Zeile nicht – der Strich endet vor dem Haken. */
+    /* In der Terminliste kein Haken am Zeilenende. Muss dieselben :not() tragen wie die Regel darunter,
+       sonst gewinnt die (Spezifität) – dieselbe Falle wie bei 1.57.0. */
+    .note .editor.termine .ln[data-mk]:not([data-mk="☐"]):not([data-mk="☑"])::after { content: none; }
     .note .editor .ln[data-mk]:not([data-mk="☐"]):not([data-mk="☑"])::after {
       content: ''; display: inline-block; vertical-align: -.15em;
       width: 1em; height: 1em; margin-left: .22em; margin-right: -.5em; text-decoration: none;
@@ -572,7 +575,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.58.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.59.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -612,6 +615,22 @@
     // damit Textfeld, Zeichenfläche und Server dort nie umbrechen.
     const NB = ' ';
     const PREFIX_RE = /^(\d+\.|•|▪|–|☐|☑)\s+/;
+    // Terminliste: der vordere Block wird **erkannt**, nicht erzeugt – Wochentag, Datum und Uhrzeit in
+    // beliebiger Kombination, mindestens eines davon. „Fr 12:00 Friseur", „12.9. Zahnarzt", „9:30 Sport".
+    // Er übernimmt dann die Rolle der Listenmarkierung: hängender Einzug, und alle Blöcke bekommen
+    // **dieselbe Spaltenbreite**, damit die Uhrzeiten untereinander stehen. Gleiche Regel in lib/render.js.
+    const TAGE = 'Mo|Di|Mi|Do|Fr|Sa|So|Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonnabend|Sonntag|heute|morgen|übermorgen';
+    const TERMIN_RE = new RegExp('^((?:(?:' + TAGE + ')\\.?)?(?:\\s*\\d{1,2}\\.\\d{1,2}\\.(?:\\d{2,4})?)?(?:\\s*\\d{1,2}[:.]\\d{2}(?:\\s*Uhr)?)?)\\s+(?=\\S)', 'i');
+    // `state` wird erst weiter unten angelegt, der Editor ruft render('') aber schon im Konstruktor –
+    // deshalb der Umweg über try/catch statt eines direkten Zugriffs (zeitliche Totzone).
+    function listeJetzt() { try { return state.list; } catch (_) { return 'none'; } }
+    function marke(line, modus) {
+      if ((modus === undefined ? listeJetzt() : modus) === 'termin') {
+        const m = TERMIN_RE.exec(line);
+        return m && m[1].trim() ? m : null;
+      }
+      return PREFIX_RE.exec(line);
+    }
     // „Erledigt“: bei der Kästchenliste zeigt das Häkchen im Kasten (☑), bei jeder anderen Liste ein Haken
     // hinten an der Zeile **und** ein dünner Strich durch den Text. Dieselbe Regel steht in lib/render.js.
     const DONE = '✓';
@@ -707,13 +726,14 @@
         this._value = text;
         const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
         this.el.innerHTML = text.split('\n').map(l => {
-          const m = l.match(PREFIX_RE);
+          const m = marke(l);
           const body = m ? l.slice(m[0].length) : l;
           const haken = DONE_RE.test(body);           // steht als Attribut, damit der Strich vor ihm endet
           const rumpf = haken ? ohneHaken(body) : body;
           return `<div class="ln${haken ? ' durch' : ''}"${m ? ` data-mk="${esc(m[0].trim())}"` : ''}${haken ? ` data-done="${DONE}"` : ''}>${rumpf ? esc(rumpf) : '<br>'}</div>`;
         }).join('');
         this.el.classList.toggle('titled', noteTitleOn);
+        this.el.classList.toggle('termine', listeJetzt() === 'termin');   // dort kein Haken am Zeilenende
         this.el.style.setProperty('--titlef', noteTitleF);
         this.applyIndents();
       }
@@ -750,7 +770,7 @@
         const lines = this._value.split('\n');
         let li = 0, col = offset;
         while (li < lines.length - 1 && col > lines[li].length) { col -= lines[li].length + 1; li++; }
-        const mk = (lines[li] || '').match(PREFIX_RE); if (mk) col = Math.max(0, col - mk[0].length); // Markierung steht nicht im DOM-Text
+        const mk = marke(lines[li] || ''); if (mk) col = Math.max(0, col - mk[0].length); // Markierung steht nicht im DOM-Text
         const d = this.el.children[li]; if (!d) return;
         const r = document.createRange();
         const tn = [...d.childNodes].find(n => n.nodeType === 3);
@@ -868,7 +888,7 @@
       return fastenerPlace(state.fastener, kandidaten[0][0], kandidaten[0][1], W, H, p);
     }
     if (!FONTS[state.font]) state.font = 'caveat';
-    if (!['none', 'num', 'dot', 'square', 'dash', 'check'].includes(state.list)) state.list = 'none';
+    if (!['none', 'num', 'dot', 'square', 'dash', 'check', 'termin'].includes(state.list)) state.list = 'none';
     if (!HAKEN[state.doneForm]) state.doneForm = 'fein';   // fängt auch das entfernte 'doppel' ab
     // Lage und Größe des Zettels im Bild. Anteile, nicht Pixel – dasselbe Bild entsteht auf jedem Gerät.
     // noteScale ist ein Faktor auf die Breite des Layouts (phone 80 % der Bildbreite), nicht sie selbst.
@@ -1485,8 +1505,10 @@
       square: { label: '▪ Eckig',   mark: () => '▪' + NB },
       dash:   { label: '– Striche', mark: () => '–' + NB },
       check:  { label: '☐ Kästchen', mark: () => '☐' + NB },
+      termin: { label: '⏰ Termine',  mark: () => '' },   // Markierung wird erkannt, nicht gesetzt
     };
     function relist(text, mode) {
+      if (mode === 'termin') return text;   // hier setzt niemand eine Markierung – der Text bleibt, wie er ist
       let n = 0;
       return text.split('\n').map((line, i) => {
         const had = PREFIX_RE.test(line);
@@ -1565,7 +1587,7 @@
     // Trefferzone: die Markierung links **oder** die freie Fläche rechts hinter dem Text – dort, wo der
     // Haken erscheint. Beim Kästchen ist das Ziel sichtbar, beim Punkt zeigt es der blasse Wegweiser.
     function hakenZeile(e) {
-      if (state.list === 'none') return -1;
+      if (state.list === 'none' || state.list === 'termin') return -1;
       const d = e.target.closest && e.target.closest('.ln');
       if (!d || !d.hasAttribute('data-mk')) return -1;
       const kasten = d.getBoundingClientRect();
@@ -1841,7 +1863,7 @@
       const lines = next.split('\n');
       let caret = 0;
       for (let i = 0; i < caretLine && i < lines.length; i++) caret += lines[i].length + 1;
-      if (caretInLine === -1) { const m = (lines[caretLine] || '').match(PREFIX_RE); caret += m ? m[0].length : 0; }
+      if (caretInLine === -1) { const m = marke(lines[caretLine] || ''); caret += m ? m[0].length : 0; }
       textEl.value = next;
       textEl.selectionStart = textEl.selectionEnd = Math.min(caret, next.length);
       onTextChanged();
@@ -1902,11 +1924,17 @@
     const HAKEN_EM = 0.72;   // 0,22 Abstand + 1,00 Zeichen − 0,50, die in den Zettelrand ragen dürfen
     function wrap(ctx, text, maxW, fontFor, hakenFs) {
       const lines = [];
+      // Terminliste: eine gemeinsame Spaltenbreite für alle Blöcke, sonst stünden die Uhrzeiten versetzt
+      let spalte = 0;
+      if (listeJetzt() === 'termin') {
+        if (fontFor) ctx.font = fontFor(1);
+        for (const p of text.split('\n')) { const m = marke(p); if (m) spalte = Math.max(spalte, ctx.measureText(m[0]).width); }
+      }
       text.replace(/\r/g, '').split('\n').forEach((para, pi) => {
         if (fontFor) ctx.font = fontFor(pi);
         if (para.trim() === '') { lines.push({ t: '', x: 0, mk: '', p: pi, durch: false }); return; }
         const durch = durchgestrichen(para);   // gilt für alle Umbruchzeilen des Absatzes
-        const m = para.match(PREFIX_RE);
+        const m = marke(para);
         const mk = m ? m[0] : '';
         const body = durch ? ohneHaken(para.slice(mk.length)) : para.slice(mk.length);
         // Platz für den Haken am Zeilenende – **auf jeder Listenzeile**, nicht nur auf erledigten.
@@ -1915,7 +1943,7 @@
         // Die Kästchenliste braucht ihn nicht, dort sitzt das Zeichen im Kasten vorn.
         const kasten = !!m && (m[1] === '☐' || m[1] === '☑');
         const frei = mk && !kasten && hakenFs ? HAKEN_EM * hakenFs(pi) : 0;
-        const indent = mk ? ctx.measureText(mk).width : 0, limit = maxW - indent - frei;
+        const indent = mk ? (spalte || ctx.measureText(mk).width) : 0, limit = maxW - indent - frei;
         let line = '', first = true;
         const push = t => { lines.push({ t, x: indent, mk: first ? mk.trim() : '', p: pi, durch }); first = false; };
         for (const c of chunksOf(body)) {
@@ -1976,7 +2004,7 @@
       measureCtx.font = `${weight} 100px ${family}`;
       // Je Absatz: Markierung und breitestes Umbruchstück des Textes dahinter (Breiten skalieren linear mit fs)
       const paraInfo = paras.map(p => {
-        const m = p.match(PREFIX_RE), mk = m ? m[0] : '';
+        const m = marke(p), mk = m ? m[0] : '';
         const longest = chunksOf(p.slice(mk.length)).map(c => c.s).reduce((a, b) => (measureCtx.measureText(b).width > measureCtx.measureText(a).width ? b : a), '');
         return { mk, longest };
       });
@@ -2064,8 +2092,13 @@
     document.body.appendChild(mirrorEl);
     // Einzug einer Zeile in px (Breite der Listenmarkierung samt geschütztem Leerzeichen) bei gegebener Schrift
     function lineIndent(line, family, weight, px) {
-      const m = line.match(PREFIX_RE); if (!m) return 0;
+      const m = marke(line); if (!m) return 0;
       measureCtx.font = `${weight} ${px}px ${family}`;
+      if (listeJetzt() === 'termin') {        // gemeinsame Spalte, damit die Uhrzeiten fluchten
+        let max = 0;
+        for (const p of noteText().split('\n')) { const q = marke(p); if (q) max = Math.max(max, measureCtx.measureText(q[0]).width); }
+        return max;
+      }
       return measureCtx.measureText(m[0]).width;
     }
     function domLines(f, scale, text) {
@@ -2076,7 +2109,7 @@
       const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
       mirrorEl.innerHTML = text.split('\n').map(l => {
         const ind = Math.round(lineIndent(l, f.family, f.weight, px) * 100) / 100;
-        const body = l.replace(PREFIX_RE, '');
+        const q = marke(l), body = q ? l.slice(q[0].length) : l;
         return `<div style="min-height:1em;padding-left:${ind}px">${body ? esc(body) : '<br>'}</div>`;
       }).join('');
       return Math.round(mirrorEl.offsetHeight / (px * f.LH));
