@@ -53,6 +53,27 @@ const drin = await page.evaluate(() => { const t = targetCanvas(), f = fitNote(t
   return cx - f.noteW / 2 >= -0.5 && cy - f.noteH / 2 >= -0.5; });
 check('Zettel bleibt ganz im Bild', drin);
 
+// Gespeicherter Wert und gezeichnete Lage müssen **gleich** sein. Bis 1.60.1 wurde auf 0…1 geklemmt,
+// gezeichnet aber auf den Bereich, in dem der Zettel ganz ins Bild passt: nach einem Zug über den oberen
+// Rand stand 0 im Speicher, gezeichnet wurde 0,18 – und der nächste Zug nach unten blieb wirkungslos.
+const lageMessen = async (dx, dy) => {
+  const c = await page.evaluate(() => { const r = document.getElementById('lage-zettel').getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  await page.mouse.move(c.x, c.y); await page.mouse.down();
+  await page.mouse.move(c.x + dx, c.y + dy, { steps: 10 }); await page.mouse.up();
+  await page.waitForTimeout(150);
+  return page.evaluate(() => { const s = document.getElementById('lage-schirm').getBoundingClientRect(),
+      z = document.getElementById('lage-zettel').getBoundingClientRect();
+    return { zustand: state.noteY, gezeichnet: ((z.top + z.height / 2) - s.top) / s.height }; });
+};
+const weitHoch = await lageMessen(0, -400);
+check('nach dem Zug über den Rand: Zustand = gezeichnete Lage',
+  Math.abs(weitHoch.zustand - weitHoch.gezeichnet) < 0.01,
+  weitHoch.zustand.toFixed(4) + ' vs ' + weitHoch.gezeichnet.toFixed(4));
+const kleinRunter = await lageMessen(0, 60);
+check('kleiner Zug zurück wirkt sofort', kleinRunter.gezeichnet - weitHoch.gezeichnet > 0.02,
+  weitHoch.gezeichnet.toFixed(4) + ' → ' + kleinRunter.gezeichnet.toFixed(4));
+
 await page.click('#lage-fertig'); await page.waitForTimeout(300);
 check('Fenster schließt', await page.evaluate(() => document.getElementById('lage').hidden));
 

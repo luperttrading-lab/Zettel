@@ -576,7 +576,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.60.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.60.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -1761,14 +1761,26 @@
         : 'Zettel mit dem Finger schieben. Für die echte Lage von Uhr und Widgets: Screenshot deines Sperrbildschirms als Eichbild wählen.';
     }
 
-    // Der Zettel im Fenster ist eine Miniatur: gleiche Anteile, gleiche Schriftgröße im Maßstab des Rahmens.
-    function lagePlatzieren() {
+    // Grenzen, in denen die Zettelmitte liegen darf, damit der Zettel ganz im Bild bleibt.
+    // **Wichtig:** Der Zustand wird auf genau diese Grenzen geklemmt, nicht auf 0…1. Sonst könnte im
+    // Speicher ein Wert außerhalb stehen (z. B. 0,04), gezeichnet würde 0,13 – und ein Zug zurück nach
+    // unten auf 0,10 bliebe ohne jede Wirkung. Genau das sah nach „speichert nicht“ aus (9.9.2026).
+    function lageGrenzen() {
       const t = targetCanvas();
       const f = fitNote(t.w, t.h, t.layout, noteText() || '…');
+      return { minX: f.noteW / 2 / t.w, maxX: 1 - f.noteW / 2 / t.w,
+               minY: f.noteH / 2 / t.h, maxY: 1 - f.noteH / 2 / t.h, t, f };
+    }
+    // Der Zettel im Fenster ist eine Miniatur: gleiche Anteile, gleiche Schriftgröße im Maßstab des Rahmens.
+    function lagePlatzieren() {
+      const g = lageGrenzen(), t = g.t, f = g.f;
+      // Altbestand heilen: was außerhalb liegt, wird auf die Grenze gezogen und so auch gespeichert
+      state.noteX = klemm(state.noteX, g.minX, g.maxX);
+      state.noteY = klemm(state.noteY, g.minY, g.maxY);
       const rw = schirmEl.clientWidth || 1, k = rw / t.w;
       const bw = f.noteW * k, bh = f.noteH * k;
-      const cx = klemm(state.noteX * t.w, f.noteW / 2, t.w - f.noteW / 2) * k;
-      const cy = klemm(state.noteY * t.h, f.noteH / 2, t.h - f.noteH / 2) * k;
+      const cx = state.noteX * t.w * k;
+      const cy = state.noteY * t.h * k;
       Object.assign(miniEl.style, {
         width: bw + 'px', height: bh + 'px', left: (cx - bw / 2) + 'px', top: (cy - bh / 2) + 'px',
         background: COLORS[state.color].paper, padding: (f.pad * k) + 'px',
@@ -1800,24 +1812,26 @@
       state.noteScale = 1; state.noteX = 0.5; state.noteY = 0.585; lagePlatzieren(); persist();
     });
     sizeEl.addEventListener('input', () => {
-      state.noteScale = klemm(Number(sizeEl.value) / 100, 0.55, 1.15); lagePlatzieren();
+      state.noteScale = klemm(Number(sizeEl.value) / 100, 0.55, 1.15);
+      lagePlatzieren();   // klemmt die Lage nach: ein größerer Zettel braucht mehr Abstand zum Rand
     });
     sizeEl.addEventListener('change', persist);
 
     // Schieben: der Zettel folgt dem Finger, bleibt aber immer ganz im Bild (klemm in lagePlatzieren).
     let zieht = null;
     miniEl.addEventListener('pointerdown', e => {
-      const r = schirmEl.getBoundingClientRect();
-      zieht = { id: e.pointerId, dx: e.clientX - (r.left + state.noteX * r.width), dy: e.clientY - (r.top + state.noteY * r.height) };
+      const r = schirmEl.getBoundingClientRect(), g = lageGrenzen();
+      zieht = { id: e.pointerId, g,
+                dx: e.clientX - (r.left + state.noteX * r.width), dy: e.clientY - (r.top + state.noteY * r.height) };
       miniEl.classList.add('fasst');
       miniEl.setPointerCapture(e.pointerId);
       e.preventDefault();
     });
     miniEl.addEventListener('pointermove', e => {
       if (!zieht || e.pointerId !== zieht.id) return;
-      const r = schirmEl.getBoundingClientRect();
-      state.noteX = klemm((e.clientX - zieht.dx - r.left) / r.width, 0, 1);
-      state.noteY = klemm((e.clientY - zieht.dy - r.top) / r.height, 0, 1);
+      const r = schirmEl.getBoundingClientRect(), g = zieht.g;
+      state.noteX = klemm((e.clientX - zieht.dx - r.left) / r.width, g.minX, g.maxX);
+      state.noteY = klemm((e.clientY - zieht.dy - r.top) / r.height, g.minY, g.maxY);
       lagePlatzieren();
     });
     const zugEnde = e => { if (!zieht || e.pointerId !== zieht.id) return; zieht = null; miniEl.classList.remove('fasst'); persist(); };
