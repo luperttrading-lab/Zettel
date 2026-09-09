@@ -31,13 +31,25 @@ await page.evaluate(() => { textEl.value = 'Sa 18:00 Kino'; onTextChanged(); flu
 check('dritter Zettel, danach kein Plus mehr',
   await page.evaluate(() => state.zettel.length === 3 && !document.querySelector('#zettelwahl button.plus')));
 
+// Beim dritten Zettel legt die App 2 und 3 nebeneinander unter den ersten (1.62.0)
+const drei = await page.evaluate(() => alleZettel().map(z => ({ x: +z.noteX.toFixed(2), y: +z.noteY.toFixed(2), s: z.noteScale })));
+check('2 und 3 stehen nebeneinander auf gleicher Höhe',
+  drei[1].x < 0.4 && drei[2].x > 0.6 && Math.abs(drei[1].y - drei[2].y) < 0.001, JSON.stringify(drei));
+check('beide kleiner als der erste', drei[1].s < drei[0].s && drei[1].s === drei[2].s, JSON.stringify(drei));
+check('alle bleiben ganz im Bild', await page.evaluate(() => { const t = targetCanvas();
+  return alleZettel().every(z => { const f = mitZettel(z, () => fitNote(t.w, t.h, t.layout, (z.text || '').trim() || '…'));
+    return z.noteX - f.noteW / 2 / t.w >= -0.001 && z.noteX + f.noteW / 2 / t.w <= 1.001
+        && z.noteY - f.noteH / 2 / t.h >= -0.001 && z.noteY + f.noteH / 2 / t.h <= 1.001; }); }));
+
 // Die Voreinstellung darf keinen Zettel auf einen anderen setzen
 check('neue Zettel überlappen nicht', await page.evaluate(() => {
   const t = targetCanvas();
-  const r = alleZettel().map(z => { const h = mitZettel(z, () => fitNote(t.w, t.h, t.layout, (z.text || '').trim() || '…').noteH / t.h);
-    return [z.noteY - h / 2, z.noteY + h / 2]; });
+  const r = alleZettel().map(z => { const f = mitZettel(z, () => fitNote(t.w, t.h, t.layout, (z.text || '').trim() || '…'));
+    return { x0: z.noteX - f.noteW / 2 / t.w, x1: z.noteX + f.noteW / 2 / t.w,
+             y0: z.noteY - f.noteH / 2 / t.h, y1: z.noteY + f.noteH / 2 / t.h }; });
   let u = 0;
-  for (let i = 0; i < r.length; i++) for (let j = i + 1; j < r.length; j++) if (r[i][0] < r[j][1] && r[j][0] < r[i][1]) u++;
+  for (let i = 0; i < r.length; i++) for (let j = i + 1; j < r.length; j++)
+    if (r[i].x0 < r[j].x1 && r[j].x0 < r[i].x1 && r[i].y0 < r[j].y1 && r[j].y0 < r[i].y1) u++;
   return u === 0; }));
 
 // Wechseln darf nichts verlieren
