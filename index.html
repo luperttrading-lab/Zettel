@@ -630,7 +630,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.64.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.64.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -2559,16 +2559,22 @@
       // Alles Bildbestimmende VOR dem ersten await lesen – sonst könnte ein Bild halb alten, halb neuen Stand zeigen
       const c = COLORS[state.color], edge = state.edge, paper = state.paper, texture = state.texture, ink = inkColor(), titleOn = state.title;
       const hForm = hakenForm(), hFarbe = hakenFarbe() || ink, hPfad = new Path2D(hForm.d);
-      const nx = state.noteX, ny = state.noteY;
+      // noteRot gehört hierher, **nicht** hinter das await: mitZettel stellt den Zustand schon beim
+      // `return fn()` zurück (das finally läuft, bevor das Promise aufgelöst ist). Nach dem await stünde
+      // wieder der aktive Zettel im state – so drehten sich in 1.64.0 alle Zettel synchron.
+      const nx = state.noteX, ny = state.noteY, rot = noteRot();
       const { layout, noteW, pad, family, weight, fs, lh, lines, noteH, textTop, titleGap, titleF, raster, ueber } = fitNote(w, h, layoutName, noteText() || '…');
       const m = pad * 2.2;
       const fastener = await svgImage(fastenersSvg(befPixel(noteW, noteH, pad), noteW, noteH, pad, fastenerLook())).catch(() => null);
 
       // Lage: aus dem Zustand, in Anteilen des Bildes. Der Zettel bleibt immer ganz im Bild.
-      const cx = klemm(w * nx, noteW / 2, w - noteW / 2), cy = klemm(h * ny, noteH / 2, h - noteH / 2);
+      // Auf den **gedrehten** Umriss klemmen, mit derselben Rechnung wie lageGrenzen() – sonst schnitte
+      // das Bild eine Ecke ab, die im Fenster noch ganz zu sehen war (gemessen: 20 px bei −12°).
+      const dm = drehMasse(noteW, noteH, rot);
+      const cx = klemm(w * nx, dm.w / 2, w - dm.w / 2), cy = klemm(h * ny, dm.h / 2, h - dm.h / 2);
       ctx.save();
       ctx.translate(cx, cy);
-      ctx.rotate(noteRot() * Math.PI / 180);
+      ctx.rotate(rot * Math.PI / 180);
 
       // Papierform: Rechteck oder oben abgerissen – Schatten, Linien und Körnung folgen der Form
       const shape = new Path2D();
