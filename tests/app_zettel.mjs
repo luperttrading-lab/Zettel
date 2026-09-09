@@ -97,6 +97,56 @@ check('Entfernen lässt zwei übrig und wählt einen gültigen', await page.eval
   state.zettel.length === 2 && state.aktiv < 2 && !!document.querySelector('#zettelwahl button.plus')));
 
 await page.screenshot({ path: out + '/zettel_drei.png', clip: { x: 0, y: 0, width: 393, height: 420 } });
+
+// ── 1.63.1: jedes Feld gehört genau EINEM Zettel ────────────────────────────────────────────────
+// Der Fehler: `mitZettel` setzte den Zustand mit Object.assign. Fehlte ein Feld im gespeicherten
+// Zettel – bei `noteRot` traf das jeden vor 1.63.0 angelegten –, blieb der Wert des zuletzt aktiven
+// stehen, und alle Zettel drehten sich gemeinsam. Geprüft wird darum nicht nur die Drehung, sondern
+// **jedes** Feld: ein neues Feld fällt damit von selbst in diese Prüfung.
+const ABWEICHEND = {           // ein vom Standard verschiedener Wert je Feld
+  text: 'anderer Text', color: 'pink', paper: 'lined', pen: 'blue', texture: 'grain', edge: 'torn',
+  font: 'kalam', fontScale: 120, list: 'termin', title: true, titleSize: 3,
+  doneForm: 'kraeftig', doneColor: 'rot', fastener: 'clip', fasteners: [{ art: 'clip' }],
+  fastenerLook: { clip: { color: 'red' } }, noteScale: 0.7, noteX: 0.3, noteY: 0.8,
+  noteFit: false, noteRot: 11,
+};
+const felder = await page.evaluate(() => ZETTEL_FELDER);
+check('jedes Zettelfeld hat einen Prüfwert', felder.every(k => k in ABWEICHEND),
+  'ohne Prüfwert: ' + felder.filter(k => !(k in ABWEICHEND)).join(', '));
+const getrennt = await page.evaluate(([felder, abw]) => {
+  const misch = [];
+  for (const k of felder) {
+    // Zwei Zettel: der zweite ist ein **alter Stand**, dem genau dieses Feld fehlt.
+    state.zettel = [{ ...zettelStd() }, (() => { const z = { ...zettelStd() }; delete z[k]; return z; })()];
+    state.aktiv = 0;
+    Object.assign(state, state.zettel[0]);
+    state[k] = abw[k];                       // nur am aktiven Zettel ändern
+    zettelSichern();
+    const beim2 = mitZettel(state.zettel[1], () => state[k]);
+    // Zettel 2 darf den Wert von Zettel 1 nicht sehen. Auf den Standard prüfen wäre zu eng: für
+    // `fasteners` ist der Standard null („noch nicht normalisiert"), und ein Zettel ohne Liste
+    // bekommt eine aus seiner eigenen Sorte – richtig, aber eben nicht der Standard.
+    if (JSON.stringify(beim2) === JSON.stringify(abw[k])) misch.push(k + ': Zettel 2 hat ' + JSON.stringify(beim2));
+  }
+  return misch;
+}, [felder, ABWEICHEND]);
+check('kein Feld schwappt auf den anderen Zettel über', getrennt.length === 0, getrennt.join(' | '));
+
+// Und derselbe Weg über die Bedienung: im Fenster drehen ändert nur den aktiven Zettel
+await page.evaluate(() => { localStorage.clear(); });
+await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(600);
+await page.evaluate(() => { textEl.value = 'Erster'; onTextChanged(); flush(); zettelSichern(); zettelDazu(); });
+await page.waitForTimeout(400);
+await page.evaluate(() => lageOeffnen(true)); await page.waitForTimeout(400);
+const skala = await page.evaluate(() => { const r = document.getElementById('lage-dreh').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+await page.mouse.move(skala.x, skala.y); await page.mouse.down(); await page.mouse.move(skala.x - 45, skala.y, { steps: 10 }); await page.mouse.up();
+await page.waitForTimeout(300);
+const winkel = await page.evaluate(() => ({ aktiv: state.aktiv, alle: alleZettel().map(z => mitZettel(z, () => noteRot())) }));
+check('Drehen im Fenster trifft nur den aktiven Zettel',
+  winkel.alle[winkel.aktiv] !== -2.5 && winkel.alle.filter((g, i) => i !== winkel.aktiv).every(g => g === -2.5),
+  JSON.stringify(winkel));
+await page.evaluate(() => lageOeffnen(false)); await page.waitForTimeout(200);
+
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();
 console.log(fails ? `${fails} FEHLER` : 'ALLE TESTS OK');

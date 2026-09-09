@@ -623,7 +623,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.63.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.63.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -866,9 +866,18 @@
     // Canvas, Lage-Miniatur und zweimal in render.js). Bereich bewusst eng: darüber ragt der gedrehte
     // Zettel so weit über seine eigene Breite hinaus, dass in den Layouts kaum noch Lage übrig bleibt.
     const NOTE_ROT_STD = -2.5, NOTE_ROT_MAX = 15;
-    const ZETTEL_FELDER = ['text', 'color', 'paper', 'pen', 'texture', 'edge', 'font', 'fontScale', 'list',
-      'title', 'titleSize', 'doneForm', 'doneColor', 'fastener', 'fasteners', 'fastenerLook',
-      'noteScale', 'noteX', 'noteY', 'noteFit', 'noteRot'];
+    // **Eine** Quelle für die Felder eines Zettels **und** ihre Standardwerte. Beides getrennt zu führen
+    // war der Fehler von 1.63.0: `mitZettel` setzte den Zustand mit Object.assign, ein Zettel ohne das
+    // neue Feld `noteRot` behielt darum den Winkel des zuletzt aktiven – und alle drehten sich mit.
+    // Wer ein Feld ergänzt, trägt es hier ein; ZETTEL_FELDER und die Standardwerte folgen von selbst.
+    const ZETTEL_STD = {
+      text: '', color: 'yellow', paper: 'plain', pen: 'black', texture: 'smooth', edge: 'straight',
+      font: 'caveat', fontScale: 100, list: 'none', title: false, titleSize: 1,
+      doneForm: 'fein', doneColor: 'gruen', fastener: 'tape', fasteners: null, fastenerLook: {},
+      noteScale: 1, noteX: 0.5, noteY: 0.585, noteFit: true, noteRot: NOTE_ROT_STD,
+    };
+    const ZETTEL_FELDER = Object.keys(ZETTEL_STD);
+    const zettelStd = () => JSON.parse(JSON.stringify(ZETTEL_STD));   // frische Kopie, nie die Vorlage teilen
     const ZETTEL_MAX = 3;
     function zettelFelder(q) {
       const aus = {}, quelle = q || state;
@@ -891,14 +900,18 @@
     }
     // Einen anderen Zettel kurz einsetzen, rechnen, zurücktauschen. Alles, was `state` liest (fitNote,
     // inkColor, hakenForm …), arbeitet dadurch unverändert weiter.
+    // Jedes Feld **setzen**, nicht nur die im Zettel vorhandenen: Object.assign ließ ein fehlendes Feld
+    // auf dem Wert des zuletzt aktiven Zettels stehen – so drehten sich alle Zettel mit (1.63.1).
     function mitZettel(z, fn) {
-      const merk = zettelFelder();
-      Object.assign(state, z);
+      const merk = zettelFelder(), std = zettelStd();
+      for (const k of ZETTEL_FELDER) state[k] = (z && k in z) ? z[k] : std[k];
+      // Ohne Liste käme befPixel() auf null.map – der Zettel bekommt dann eine aus seiner Sorte
+      if (!Array.isArray(state.fasteners) || !state.fasteners.length) state.fasteners = [{ art: state.fastener || 'tape' }];
       try { return fn(); } finally { Object.assign(state, merk); }
     }
 
-    let state = { text: '', color: 'yellow', shortcut: 'Zettel', autoRun: false, fontScale: 100, fastener: 'tape', fasteners: null, fastenerLook: {}, paper: 'plain', pen: 'black', font: 'caveat', list: 'none', doneForm: 'fein', doneColor: 'gruen',
-      noteScale: 1, noteX: 0.5, noteY: 0.585, noteFit: true, noteRot: NOTE_ROT_STD, zettel: null, aktiv: 0, title: false, titleSize: 1, hidden: false, updated: null, pinned: null };
+    let state = { ...zettelStd(), shortcut: 'Zettel', autoRun: false,
+      zettel: null, aktiv: 0, hidden: false, updated: null, pinned: null };
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) state = { ...state, ...JSON.parse(raw) };
@@ -999,6 +1012,17 @@
     // Ältere Stände kennen nur einen Zettel – dann ist er der erste im Feld.
     if (!Array.isArray(state.zettel) || !state.zettel.length) state.zettel = [zettelFelder()];
     state.zettel = state.zettel.slice(0, ZETTEL_MAX);
+    // Vor 1.63.0 gespeicherte Zettel kennen `noteFit` und `noteRot` nicht. `mitZettel` fängt das ab,
+    // aber die Rohobjekte gehen auch in die Kennung für „ist der geklebte Stand noch aktuell?“ ein –
+    // deshalb hier einmalig auf die volle Feldliste bringen.
+    state.zettel = state.zettel.map(z => {
+      const v = { ...zettelStd(), ...(z || {}) };
+      // `fasteners: null` heißt „noch nicht normalisiert" und gilt nur für den frischen Zustand, den der
+      // Startcode gleich füllt. In einem gespeicherten Zettel wäre es eine Lücke – dort eine Liste aus
+      // seiner Sorte bauen, sonst stünde er ohne Befestigung da.
+      if (!Array.isArray(v.fasteners) || !v.fasteners.length) v.fasteners = [{ art: v.fastener || 'tape' }];
+      return v;
+    });
     state.aktiv = Math.min(Math.max(0, state.aktiv | 0), state.zettel.length - 1);
     Object.assign(state, zettelFelder(state.zettel[state.aktiv]));
     if (!(state.doneColor in HAKEN_FARBEN)) state.doneColor = 'gruen';
