@@ -35,7 +35,7 @@ const start = await page.evaluate(() => ({
   zeiten: document.querySelectorAll('#wasser-zeiten button').length,
   text: state.text,
 }));
-check('Wasser gewählt: Gläser und Zeitfenster erscheinen', start.leiste && start.knoepfe === 3 && start.zeiten === 3, JSON.stringify(start));
+check('Wasser gewählt: fünf Gefäße und drei Zeitfenster erscheinen', start.leiste && start.knoepfe === 5 && start.zeiten === 3, JSON.stringify(start));
 check('Wasser gewählt: gezeichneter Zettel statt Textfeld', start.canvas && start.editorVersteckt, JSON.stringify(start));
 check('Wasser setzt keine Listenmarkierung in den Text', start.text === '', JSON.stringify(start.text));
 
@@ -216,6 +216,71 @@ const nachLoeschen = await page.evaluate(() => ({ f: wasserFenster, v12: wasserS
 check('ein gelöschtes Glas macht seine Zeile aktiv', nachLoeschen.f === 0, JSON.stringify(nachLoeschen));
 check('gelöscht wird genau das angetippte Glas',
   JSON.stringify(nachLoeschen.v12) === JSON.stringify(['mittel', 'gross']), JSON.stringify(nachLoeschen.v12));
+
+// 11) 3.7: Flaschen (0,7 und 1,0 l) und das **einstellbare** Tagesziel.
+//     Das Ziel steht **im** `wasser`-Objekt, nicht als eigenes Zettelfeld – so kommt es ohne Zutun
+//     durch mitZettel, zettelSichern und den Tageswechsel mit, genau wie `gestern`. Genau das prüft
+//     dieser Abschnitt: es muss den Tageswechsel und den Mülleimer überleben.
+await page.evaluate(() => localStorage.clear());
+await page.reload(); await page.waitForTimeout(900);
+await page.evaluate(() => document.querySelector('#strip-list .item[data-value="wasser"]').click());
+await page.waitForTimeout(400);
+const sorten = await page.evaluate(() => Object.entries(GLAeSER).map(([k, g]) => ({ k, l: g.liter, fl: istFlasche(g) })));
+check('fünf Gefäße: drei Gläser, zwei Flaschen',
+  JSON.stringify(sorten.map(v => v.l)) === JSON.stringify([0.2, 0.3, 0.5, 0.7, 1]) &&
+  sorten.filter(v => v.fl).length === 2, JSON.stringify(sorten));
+// Flaschen tragen sich wie Gläser ein und zählen mit ihrem Liter
+await fenster(0); await glas(4); await glas(3);          // 1,0 + 0,7
+const s5 = await stand();
+check('Flaschen landen im Zeitfenster und zählen richtig',
+  JSON.stringify(s5.v12) === JSON.stringify(['fl10', 'fl07']) && Math.abs(s5.tag - 1.7) < 1e-9, JSON.stringify(s5));
+// Eine Flasche ist höher als das größte Glas – die Reihe muss dafür Platz schaffen
+const hoehen = await page.evaluate(() => ({
+  nurGlaeser: inkHoehe(['klein', 'gross']),
+  mitFlasche: inkHoehe(['klein', 'fl10']),
+  leer: inkHoehe([]),
+}));
+check('die Reihenhöhe folgt dem Inhalt, mindestens ein großes Glas',
+  hoehen.leer === hoehen.nurGlaeser && hoehen.mitFlasche > hoehen.nurGlaeser, JSON.stringify(hoehen));
+
+// Tagesziel verstellen
+const zielStand = () => page.evaluate(() => ({
+  soll: wasserStand().soll, text: document.getElementById('ziel-wert').textContent,
+  ab: document.getElementById('ziel-ab').disabled, auf: document.getElementById('ziel-auf').disabled,
+}));
+check('Tagesziel steht anfangs auf 3 l', (await zielStand()).soll === 3, JSON.stringify(await zielStand()));
+await page.click('#ziel-auf'); await page.click('#ziel-auf'); await page.waitForTimeout(250);
+const z1 = await zielStand();
+check('„+" erhöht in Viertellitern', Math.abs(z1.soll - 3.5) < 1e-9 && z1.text === '3,5 l', JSON.stringify(z1));
+for (let i = 0; i < 4; i++) { await page.click('#ziel-ab'); }
+await page.waitForTimeout(250);
+const z2 = await zielStand();
+check('„−" verringert wieder', Math.abs(z2.soll - 2.5) < 1e-9, JSON.stringify(z2));
+// Untere Grenze: der Knopf sperrt, statt unter ZIEL_MIN zu rutschen
+await page.evaluate(async () => { for (let i = 0; i < 20; i++) document.getElementById('ziel-ab').click(); });
+await page.waitForTimeout(300);
+const z3 = await zielStand();
+check('unten begrenzt und der Knopf sperrt', Math.abs(z3.soll - 0.5) < 1e-9 && z3.ab === true, JSON.stringify(z3));
+
+// Das Ziel überlebt Neuladen, Tageswechsel und Mülleimer
+await page.evaluate(() => { const w = wasserStand(); w.soll = 4.5; state.wasser = w; zettelSichern(); persist(); });
+await page.reload(); await page.waitForTimeout(900);
+check('das Ziel übersteht das Neuladen', Math.abs((await zielStand()).soll - 4.5) < 1e-9, JSON.stringify(await zielStand()));
+await page.evaluate(() => {
+  const w = wasserStand(); w.tag = '2020-01-01'; w.v12 = ['gross', 'gross']; state.wasser = w; zettelSichern(); persist();
+});
+await page.reload(); await page.waitForTimeout(900);
+const s6 = await stand();
+check('das Ziel übersteht den Tageswechsel',
+  Math.abs((await zielStand()).soll - 4.5) < 1e-9 && s6.tag === 0, JSON.stringify(await zielStand()));
+await page.evaluate(() => document.getElementById('clear').click()); await page.waitForTimeout(350);
+check('der Mülleimer leert die Gläser, nicht das Ziel',
+  Math.abs((await zielStand()).soll - 4.5) < 1e-9 && (await page.evaluate(() => wasserTag(wasserStand()))) === 0);
+
+// Die Säule fasst mehr als das Ziel – sonst sähe ein übererfüllter Tag aus wie ein genau erfüllter
+const fasst = await page.evaluate(() => [1.5, 2, 3, 5].map(z => saeuleFasst(z)));
+check('die Säule fasst immer mehr als das Ziel', JSON.stringify(fasst) === JSON.stringify([2, 2.5, 4, 6.5]),
+  JSON.stringify(fasst));
 
 await page.screenshot({ path: out + '/wasser.png' });
 check('keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));

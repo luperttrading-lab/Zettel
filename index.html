@@ -355,14 +355,23 @@
     }
     .wasserleiste .zeiten button b { font: 600 14px/1.2 inherit; }
     .wasserleiste .zeiten button[aria-checked="true"] { background: var(--gewaehlt); color: var(--fg); font-weight: 600; }
-    .wasserleiste .glaeser { display: flex; gap: 8px; }
+    .wasserleiste .glaeser { display: flex; gap: 8px; align-items: flex-end; }
     .wasserleiste .glaeser button {
       flex: 1; appearance: none; border: 0; border-radius: 13px; padding: 10px 4px 8px; cursor: pointer;
       background: var(--flaeche); color: var(--fg); font: 600 13px/1.2 inherit;
       display: flex; flex-direction: column; align-items: center; gap: 4px;
     }
     .wasserleiste .glaeser button:active { background: var(--gewaehlt); }
-    .wasserleiste .glaeser svg { display: block; height: 34px; width: auto; }
+    /* Höhe kommt aus dem SVG selbst (glasSvg), damit die Flasche höher steht als das Glas – mit fester
+       Höhe wäre die 1-l-Flasche auf Glasgröße gestaucht worden und hätte kleiner gewirkt als das 0,5er. */
+    .wasserleiste .glaeser svg { display: block; width: auto; }
+    .wasserleiste .ziel { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--fg2); }
+    .wasserleiste .ziel b { font: 600 15px/1.2 inherit; color: var(--fg); min-width: 56px; text-align: center; }
+    .wasserleiste .ziel button {
+      width: 38px; height: 38px; border-radius: 12px; border: 0; background: var(--flaeche);
+      color: var(--fg); font: 600 20px/1 inherit; cursor: pointer; }
+    .wasserleiste .ziel button:active { background: var(--gewaehlt); }
+    .wasserleiste .ziel button:disabled { opacity: .35; }
 
     /* --- Einrichtung --- */
     .setup { width: min(86vw, 380px); color: var(--muted); font-size: 14px; }
@@ -550,7 +559,13 @@
          nimmt es wieder weg. -->
     <div class="wasserleiste" id="wasserleiste" hidden>
       <div class="zeiten" id="wasser-zeiten" role="radiogroup" aria-label="Zeitfenster"></div>
-      <div class="glaeser" id="wasser-glaeser" aria-label="Glas eintragen"></div>
+      <div class="glaeser" id="wasser-glaeser" aria-label="Glas oder Flasche eintragen"></div>
+      <div class="ziel" id="wasser-ziel">
+        <span>Tagesziel</span>
+        <button type="button" id="ziel-ab" aria-label="Tagesziel verringern">−</button>
+        <b id="ziel-wert">3,0 l</b>
+        <button type="button" id="ziel-auf" aria-label="Tagesziel erhöhen">+</button>
+      </div>
     </div>
   </div>
 
@@ -676,7 +691,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.6';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.7';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -762,11 +777,18 @@
     // die Tinte des Zettels an und bleibt in jeder Größe scharf.
     // Jedes Glas ist ein Becher mit leicht schrägen Wänden; `bo` ist die Oberkante, `bu` die Unterkante
     // (halbe Breite, um die Mitte), `y0` die Höhe der Oberkante. Größere Gläser sind höher UND breiter.
+    // Fünf Gefäße. Die drei Gläser sind Trapeze, die zwei Flaschen haben zusätzlich Schulter und Hals
+    // (`hals`, `schulter`) – für größere Ziele als 3 l trinkt man nicht aus 0,2er-Gläsern (Auftraggeber,
+    // 9.9.2026). Der Boden liegt bei allen auf GLAS_BODEN, `y0` ist die Oberkante und **darf negativ
+    // sein**: eine 1-l-Flasche ist höher als der Zeichenraum der Gläser.
     const GLAeSER = {
       klein:  { label: '0,2 l', liter: 0.2, bo: 5.4, bu: 4.0, y0: 15.0 },
       mittel: { label: '0,3 l', liter: 0.3, bo: 7.2, bu: 5.4, y0:  9.0 },
       gross:  { label: '0,5 l', liter: 0.5, bo: 9.4, bu: 7.0, y0:  1.5 },
+      fl07:   { label: '0,7 l', liter: 0.7, bo: 6.2, bu: 6.2, y0: -3.0, hals: 2.2, schulter: 7.0 },
+      fl10:   { label: '1,0 l', liter: 1.0, bo: 7.0, bu: 7.0, y0: -9.0, hals: 2.5, schulter: 2.0 },
     };
+    const istFlasche = g => typeof g.hals === 'number';
     const GLAS_H = 32, GLAS_W = 24, GLAS_BODEN = 30;
     // Ein Glas beginnt bei g.y0 und endet bei GLAS_BODEN – **nicht** bei 0 und GLAS_H. Wer seine Höhe
     // mit GLAS_H rechnet, schiebt eine Reihe aus kleinen Gläsern (y0 = 15) in die untere Hälfte ihres
@@ -775,7 +797,12 @@
     const GLAS_STRICH = 1.9;                                     // Strichstärke in Glaskoordinaten
     const GLAS_UNTEN = GLAS_BODEN + GLAS_STRICH / 2;             // gemeinsamer Boden aller Gläser
     const glasOben = art => GLAeSER[art].y0 - GLAS_STRICH / 2;   // Oberkante dieser Sorte, samt Strich
-    const GLAS_INK = GLAS_UNTEN - glasOben('gross');             // das höchste mögliche Glas
+    // Wie hoch die Reihe gerechnet wird. **Nicht** fest auf das höchste Gefäß: eine 1-l-Flasche ist gut
+    // 1,4-mal so hoch wie das 0,5er-Glas, und danach wäre die Anzeige auch an Tagen ohne Flasche um ein
+    // Drittel kleiner. Also nach dem, was wirklich dasteht – mindestens aber ein großes Glas, damit ein
+    // leerer Zettel dieselbe Größe hat wie bisher. Die erste Flasche des Tages verkleinert die Gläser
+    // einmalig; das ist ehrlich, sie ist ja auch wirklich größer.
+    const inkHoehe = arten => GLAS_UNTEN - Math.min(glasOben('gross'), ...arten.filter(a => GLAeSER[a]).map(glasOben));
     // Farben der Füllung – **eine** Quelle für Canvas (Verlauf) und Knöpfe (SVG-defs), sonst sähen die
     // Knöpfe anders aus als der Zettel. Angelehnt an den Tropfen 💧 des Listenknopfs: oben hell, unten
     // kräftig, dazu ein Lichtstreifen. Deckkraft unter 1, damit Papier und Karos durchscheinen –
@@ -785,15 +812,23 @@
     // Lichtstreifen links in der Füllung – schmal, hochkant, mit dem Trapez leicht schräg
     function glasGlanz(g, fuell = 1) {
       const m = GLAS_W / 2, oben = g.y0 + 1.6, hoehe = (GLAS_BODEN - 1.2) - oben;
-      const yo = GLAS_BODEN - 1.2 - hoehe * Math.max(0, Math.min(1, fuell));
-      const t = yy => { const p = (GLAS_BODEN - yy) / (GLAS_BODEN - g.y0); return g.bu + (g.bo - g.bu) * p; };
+      let yo = GLAS_BODEN - 1.2 - hoehe * Math.max(0, Math.min(1, fuell));
+      // Im Hals wäre der Streifen breiter als das Glas selbst – er beginnt dort erst an der Schulter
+      if (istFlasche(g)) yo = Math.max(yo, g.schulter + 3.2);
+      const t = glasBreiteBei(g);
       const yu = GLAS_BODEN - 2.2;
       const xo = m - t(yo) * 0.62, xu = m - t(yu) * 0.62, b = g.bu * 0.26;
       return `M${xo} ${yo + 1.1} L${xu} ${yu} L${xu + b} ${yu} L${xo + b} ${yo + 1.1} Z`;
     }
-    // Umriss eines Glases als Pfadangabe; fuell = 0…1 füllt es von unten (0 = leer, 1 = randvoll)
+    // Umriss als Pfadangabe. Das Glas ist ein oben offenes Trapez, die Flasche ein Körper mit Schulter
+    // und Hals – auch sie bleibt oben offen (Mündung), damit beide dieselbe Handschrift haben.
     function glasPfad(g) {
       const m = GLAS_W / 2;
+      if (istFlasche(g)) {
+        return `M${m - g.hals} ${g.y0} L${m - g.hals} ${g.schulter - 3} Q${m - g.hals} ${g.schulter} ${m - g.bo} ${g.schulter + 2.4}`
+             + ` L${m - g.bu} ${GLAS_BODEN} L${m + g.bu} ${GLAS_BODEN} L${m + g.bo} ${g.schulter + 2.4}`
+             + ` Q${m + g.hals} ${g.schulter} ${m + g.hals} ${g.schulter - 3} L${m + g.hals} ${g.y0}`;
+      }
       return `M${m - g.bo} ${g.y0} L${m - g.bu} ${GLAS_BODEN} L${m + g.bu} ${GLAS_BODEN} L${m + g.bo} ${g.y0}`;
     }
     // Füllung: dasselbe Trapez, oben abgeschnitten. Ein Rand von 1,6 bleibt frei, sonst klebt das
@@ -801,9 +836,21 @@
     function glasFuellung(g, fuell = 1) {
       const m = GLAS_W / 2, oben = g.y0 + 1.6, hoehe = (GLAS_BODEN - 1.2) - oben;
       const y = GLAS_BODEN - 1.2 - hoehe * Math.max(0, Math.min(1, fuell));
-      const t = (yy) => { const p = (GLAS_BODEN - yy) / (GLAS_BODEN - g.y0); return g.bu + (g.bo - g.bu) * p; };
-      const bY = t(y), bU = g.bu - 0.6;
+      const t = glasBreiteBei(g), bY = t(y), bU = t(GLAS_BODEN) - 0.6;
+      if (istFlasche(g) && y < g.schulter + 2.4) {
+        // Der Pegel steht im Hals oder in der Schulter: dieselbe Kontur wie der Umriss, nur unten zu
+        const bS = g.bo - 0.6;
+        return `M${m - bY} ${y} L${m - bY} ${g.schulter - 3} Q${m - bY} ${g.schulter} ${m - bS} ${g.schulter + 2.4}`
+             + ` L${m - bU} ${GLAS_BODEN - 1.2} L${m + bU} ${GLAS_BODEN - 1.2} L${m + bS} ${g.schulter + 2.4}`
+             + ` Q${m + bY} ${g.schulter} ${m + bY} ${g.schulter - 3} L${m + bY} ${y} Z`;
+      }
       return `M${m - bY} ${y} L${m - bU} ${GLAS_BODEN - 1.2} L${m + bU} ${GLAS_BODEN - 1.2} L${m + bY} ${y} Z`;
+    }
+    // Halbe Innenbreite auf Höhe yy – beim Glas linear vom Boden zur Oberkante, bei der Flasche
+    // unterhalb der Schulter der Körper und darüber der Hals.
+    function glasBreiteBei(g) {
+      if (istFlasche(g)) return yy => (yy >= g.schulter + 2.4 ? g.bo : g.hals) - 0.6;
+      return yy => { const p = (GLAS_BODEN - yy) / (GLAS_BODEN - g.y0); return g.bu + (g.bo - g.bu) * p; };
     }
     // Die drei Zeitfenster des Tages. `bis` = Stunde, bis zu der das Fenster reicht (24 = Tagesende).
     const WASSER_ZEITEN = [
@@ -811,14 +858,23 @@
       { key: 'v18', label: 'bis 18 Uhr', bis: 18 },
       { key: 'n18', label: 'nach 18 Uhr', bis: 24 },
     ];
-    const WASSER_ZIEL = 3;                     // Liter am Tag, Ziel der Tagesanzeige
+    // Tagesziel in Litern – **einstellbar** (Auftraggeber, 9.9.2026: „eigene maximale Liter angeben
+    // statt die 3 Liter Standard"). Es steht **im** `wasser`-Objekt, nicht als eigenes Zettelfeld: so
+    // kommt es ohne Zutun durch `mitZettel`, `zettelSichern` und den Tageswechsel mit, genau wie
+    // `gestern`. `zeichneWasser` bekommt es damit als Teil von `w` – wichtig wegen der await-Falle in
+    // `zeichneEinenZettel`, wo der Zustand nur **vor** dem ersten `await` gelesen werden darf.
+    const ZIEL_STD = 3, ZIEL_MIN = 0.5, ZIEL_MAX = 8, ZIEL_SCHRITT = 0.25;
+    const zielVon = w => { const z = w && w.soll; return typeof z === 'number' && isFinite(z)
+      ? Math.min(ZIEL_MAX, Math.max(ZIEL_MIN, z)) : ZIEL_STD; };
     // Formen der Tagesanzeige zur Auswahl – die Säule allein überzeugte nicht (9.9.2026)
     const ZIEL_ARTEN = { saeule: 'Säule', ring: 'Ring', krug: 'Krug', balken: 'Balken' };
     // Wie viel die Säule **fasst** – mehr als das Tagesziel, so gewählt vom Auftraggeber („Kopfraum und
     // eckig", 9.9.2026). Zwei Dinge hängen daran: die Oberkante ist ein runder Skalenwert und darf
     // deshalb den Abschlussstrich tragen, und wer mehr als 3 l trinkt, sieht das auch – vorher stand die
     // Säule ab 3 l voll da, egal ob es 3,0 oder 4,5 l waren.
-    const SAEULE_FASST = 4;                    // Liter; das Ziel bleibt WASSER_ZIEL = 3
+    // Was die Säule fasst: ein Drittel über dem Ziel, aufgerundet auf halbe Liter. Bei Ziel 3 l ergibt
+    // das genau die 4 l von 3.6.
+    const saeuleFasst = ziel => Math.max(ziel + ZIEL_SCHRITT, Math.round(ziel * (4 / 3) * 2) / 2);
     const SKALA_ALPHA = 0.55;                  // **eine** Deckkraft für alle Zahlen und Striche der Skala
     const heuteKennung = () => new Date().toLocaleDateString('sv');   // ergibt JJJJ-MM-TT in Ortszeit
     // Zeitfenster, in dem wir gerade sind – die Vorauswahl beim Eintragen
@@ -830,13 +886,14 @@
     // Zustand eines Wasserzettels: je Zeitfenster die Liste der getrunkenen Glasgrößen, dazu der Tag,
     // für den das gilt, und die Summe des Vortags. Kein Vorrat leerer Gläser – sie erscheinen erst,
     // wenn etwas eingetragen wird (so ausdrücklich gewünscht).
-    const wasserLeer = () => ({ tag: heuteKennung(), v12: [], v18: [], n18: [], gestern: null });
+    const wasserLeer = () => ({ tag: heuteKennung(), v12: [], v18: [], n18: [], gestern: null, soll: ZIEL_STD });
     function wasserStand(q) {
       const w = (q || state).wasser;
       if (!w || typeof w !== 'object') return wasserLeer();
       const aus = wasserLeer();
       aus.tag = typeof w.tag === 'string' ? w.tag : aus.tag;
       aus.gestern = typeof w.gestern === 'number' && isFinite(w.gestern) ? w.gestern : null;
+      aus.soll = zielVon(w);
       for (const z of WASSER_ZEITEN) aus[z.key] = (Array.isArray(w[z.key]) ? w[z.key] : []).filter(k => GLAeSER[k]);
       return aus;
     }
@@ -844,6 +901,9 @@
     const wasserTag = w => WASSER_ZEITEN.reduce((a, z) => a + wasserSumme(w, z.key), 0);
     // Immer eine Nachkommastelle: „1 l" neben „0,2 l" las sich uneinheitlich (erster Entwurf).
     const literText = l => (Math.round(l * 10) / 10).toFixed(1).replace('.', ',') + ' l';
+    // Skalenzahl ohne Einheit: ganze Liter ohne Nachkomma („2"), halbe mit („2,5")
+    const zahlText = l => { const r = Math.round(l * 100) / 100;
+      return (Number.isInteger(r) ? String(r) : r.toFixed(r * 10 % 1 ? 2 : 1)).replace('.', ','); };
 
     // Den Wasserzettel zeichnen – **eine** Funktion für Vorschau und Bild, wie bei allem anderen auch.
     // Der Ursprung liegt in der linken oberen Ecke der Textfläche, `bw`/`bh` sind deren Maße.
@@ -851,6 +911,7 @@
     function zeichneWasser(ctx, bw, bh, opt) {
       const { w, ink, family, weight } = opt;
       const treffer = [];
+      const ziel = zielVon(w);       // steckt in w, damit es die await-Falle nicht sehen kann
       // Das Layout hängt an der **Fläche**, nicht an der Schriftgröße: sonst genügt ein großer Zettel
       // mit großer Schrift, und für die Gläser bleibt keine Zeilenhöhe übrig (erster Anlauf: negativ).
       // Die Fußzeile steht ganz unten und nimmt nur so viel Höhe, wie ihre beiden Zeilen brauchen –
@@ -886,9 +947,10 @@
       // **Ein** Maßstab für alle drei Zeilen: je Zeile gerechnet sähe ein 0,5er in einer leeren Zeile
       // größer aus als in einer vollen, obwohl es dieselbe Menge ist (am Bild gesehen).
       const bedarf = Math.max(reserve, ...WASSER_ZEITEN.map(z => bedarfVon(w[z.key] || [])));
-      // Höhe gegen GLAS_INK, nicht gegen GLAS_H: der Kasten war 32 Einheiten hoch, gezeichnet wurden
-      // höchstens 30,4 – die Gläser blieben also unnötig klein.
-      const skalaFuer = (breite, hoehe) => Math.min(hoehe / GLAS_INK, breite / bedarf);
+      // Höhe gegen das, was wirklich gezeichnet wird (siehe inkHoehe) – der Kasten war einmal 32
+      // Einheiten hoch, gezeichnet wurden höchstens 30,4; die Gläser blieben dadurch unnötig klein.
+      const hoehenBedarf = inkHoehe(WASSER_ZEITEN.flatMap(z => w[z.key] || []));
+      const skalaFuer = (breite, hoehe) => Math.min(hoehe / hoehenBedarf, breite / bedarf);
       const sEin = skalaFuer(spalte - kopfB, zeilH * 0.86);        // Kopf und Gläser in einer Zeile
       // 1,6 statt 1,4 Zeilenhöhen Abzug: mit 1,4 blieben zwischen der untersten Glasreihe und „Heute …“
       // nur 2,6 px – gemessen, kein Überlauf, aber sichtbar gedrängt (Auftraggeber: „Zeilenumbrüche prüfen“).
@@ -960,7 +1022,7 @@
       // ── Anzeige des Tagesstands ─────────────────────────────────────────────────────────────────
       // Vier Formen zur Auswahl (state.wasserZiel). Die Säule allein überzeugte den Auftraggeber nicht,
       // deshalb steht die Wahl im Zustand statt fest im Code.
-      const anteil = Math.min(1, tag / WASSER_ZIEL);
+      const anteil = Math.min(1, tag / ziel);
       const skFs = Math.max(klein * 0.8, 7);
       const rund = (x, y, ww, hh, rr) => { const p = new Path2D(); p.moveTo(x + rr, y); p.arcTo(x + ww, y, x + ww, y + hh, rr); p.arcTo(x + ww, y + hh, x, y + hh, rr); p.arcTo(x, y + hh, x, y, rr); p.arcTo(x, y, x + ww, y, rr); p.closePath(); return p; };
       const art = ZIEL_ARTEN[state.wasserZiel] ? state.wasserZiel : 'saeule';
@@ -971,9 +1033,10 @@
         // Abschlussstrich auf einer **runden** Oberkante sah falsch aus – „das passt gar nicht".
         const sy = skFs * 0.55, sx = bw - saeuleB;
         const sh = bh - fussH * 1.15 - sy, r = saeuleB * 0.07;
-        const yVon = l => sy + sh - sh * (l / SAEULE_FASST);
+        const fasst = saeuleFasst(ziel);
+        const yVon = l => sy + sh - sh * (l / fasst);
         ctx.globalAlpha = 0.09; ctx.fill(rund(sx, sy, saeuleB, sh, r)); ctx.globalAlpha = 1;
-        const voll = Math.min(1, tag / SAEULE_FASST);
+        const voll = Math.min(1, tag / fasst);
         if (voll > 0) {
           const fh = sh * voll, fy = sy + sh - fh;
           ctx.save(); ctx.clip(rund(sx, sy, saeuleB, sh, r));
@@ -1002,18 +1065,27 @@
         // erreicht hat – also genau dann unsichtbar, wenn man sie sehen will (am Bild bei 4,2 l gesehen).
         // Die **Zahlen** stehen links außerhalb der Säule und bleiben alle im selben Farbton.
         const pegelY = sy + sh - sh * voll;
-        for (let l = 1; l <= WASSER_ZIEL; l++) {
-          const y = yVon(l), ziel = l === WASSER_ZIEL, nass = y > pegelY + 0.5;
+        // Marken: jeder ganze Liter unter dem Ziel, dazu das Ziel selbst (das auch krumm sein darf, etwa
+        // 2,5 l). Die Schrittweite wächst, sobald zwei Marken näher als 1,6 Schrifthöhen zusammenrücken –
+        // bei 8 l Ziel stünden sonst acht Zahlen übereinander.
+        let schritt = 1;
+        while (sh * (schritt / fasst) < skFs * 1.6 && schritt < fasst) schritt += schritt < 2 ? 1 : 2;
+        const marken = [];
+        for (let l = schritt; l < ziel - 1e-9; l += schritt) marken.push(l);
+        marken.push(ziel);
+        for (const l of marken) {
+          const y = yVon(l), istZiel = Math.abs(l - ziel) < 1e-9, nass = y > pegelY + 0.5;
           // Das Ziel ragt wie der Abschluss nach links heraus, geht innen aber **nicht** durch: quer über
           // die ganze Breite las es sich als Trennwand, die Säule wirkte in zwei Kammern geteilt (am Bild).
-          const a = ziel ? sx - saeuleB * 0.28 : sx;
+          const a = istZiel ? sx - saeuleB * 0.28 : sx;
           if (nass) { ctx.strokeStyle = WASSER_FARBE.kante; ctx.globalAlpha = 1; }
-          ctx.beginPath(); ctx.moveTo(a, y); ctx.lineTo(sx + saeuleB * (ziel ? 0.55 : 0.4), y); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(a, y); ctx.lineTo(sx + saeuleB * (istZiel ? 0.55 : 0.4), y); ctx.stroke();
           // Der Überstand nach links liegt auf dem Papier, nicht im Wasser – dort wieder in der Tinte
-          if (nass && ziel) { ctx.strokeStyle = ink; ctx.globalAlpha = SKALA_ALPHA;
+          if (nass && istZiel) { ctx.strokeStyle = ink; ctx.globalAlpha = SKALA_ALPHA;
             ctx.beginPath(); ctx.moveTo(a, y); ctx.lineTo(sx, y); ctx.stroke(); }
           ctx.strokeStyle = ink; ctx.globalAlpha = SKALA_ALPHA;
-          const t2 = l + (ziel ? ' l' : '');
+          // Am Ziel die Einheit, aber ohne erzwungene Nachkommastelle: „5,0 l" war unnötig breit
+          const t2 = zahlText(l) + (istZiel ? ' l' : '');
           ctx.fillText(t2, sx - saeuleB * 0.34 - ctx.measureText(t2).width, y + skFs * 0.36);
         }
         ctx.globalAlpha = 1;
@@ -1031,7 +1103,7 @@
           ctx.globalAlpha = 1; ctx.strokeStyle = ink;
         }
         // Zahl und Ziel sind **ein** Block, mittig im Loch: einzeln gesetzt stieß „von 3 l" an den Bogen.
-        const mt = literText(tag).replace(' l', ''), zt2 = 'von ' + WASSER_ZIEL + ' l';
+        const mt = zahlText(tag), zt2 = 'von ' + zahlText(ziel) + ' l';
         // Beide Zeilen ins Loch einpassen. Fest gesetzt stieß „von 3 l" an den Bogen; und weil das Loch
         // rund ist, hat die untere Zeile **weniger** Platz als die Mitte – maßgeblich ist die Sehne auf
         // ihrer Höhe. Größe und Platz hängen voneinander ab (kleinere Zahl → flacherer Block → mehr
@@ -1075,11 +1147,11 @@
         }
         ctx.lineWidth = Math.max(1, kb * 0.055); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
         ctx.font = `${weight} ${skFs}px ${family}`;
-        for (let l = 1; l <= WASSER_ZIEL; l++) {
-          const y = pegel(l / WASSER_ZIEL), ziel = l === WASSER_ZIEL, b3 = br(y), mx = kx + kb / 2;
-          ctx.globalAlpha = ziel ? 0.8 : 0.4;
-          ctx.beginPath(); ctx.moveTo(mx + b3 - kb * (ziel ? 0.5 : 0.28), y); ctx.lineTo(mx + b3 - kb * 0.06, y); ctx.stroke();
-          const t2 = l + (ziel ? ' l' : '');
+        for (let l = 1; l <= ziel + 1e-9; l++) {
+          const oben3 = l + 1 > ziel + 1e-9, y = pegel(Math.min(1, l / ziel)), b3 = br(y), mx = kx + kb / 2;
+          ctx.globalAlpha = oben3 ? 0.8 : 0.4;
+          ctx.beginPath(); ctx.moveTo(mx + b3 - kb * (oben3 ? 0.5 : 0.28), y); ctx.lineTo(mx + b3 - kb * 0.06, y); ctx.stroke();
+          const t2 = zahlText(oben3 ? ziel : l) + (oben3 ? ' l' : '');
           ctx.fillText(t2, mx - b3 - kb * 0.1 - ctx.measureText(t2).width, y + skFs * 0.36);
           ctx.globalAlpha = 1;
         }
@@ -1096,8 +1168,8 @@
           ctx.globalAlpha = 1; ctx.restore(); ctx.fillStyle = ink;
         }
         ctx.lineWidth = Math.max(1, bhh * 0.10);
-        for (let l = 1; l < WASSER_ZIEL; l++) {
-          const x = bx + voll * (l / WASSER_ZIEL);
+        for (let l = 1; l < ziel; l++) {
+          const x = bx + voll * (l / ziel);
           ctx.globalAlpha = 0.35;
           ctx.beginPath(); ctx.moveTo(x, by + bhh * 0.15); ctx.lineTo(x, by + bhh * 0.85); ctx.stroke();
           ctx.globalAlpha = 1;
@@ -1426,7 +1498,7 @@
       const w = wasserStand(q), heute = heuteKennung();
       if (w.tag === heute) { q.wasser = w; return; }
       const gestern = wasserTag(w);
-      q.wasser = { ...wasserLeer(), tag: heute, gestern: gestern > 0 ? gestern : w.gestern };
+      q.wasser = { ...wasserLeer(), tag: heute, gestern: gestern > 0 ? gestern : w.gestern, soll: w.soll };
     }
     // Ältere Stände kennen nur einen Zettel – dann ist er der erste im Feld.
     if (!Array.isArray(state.zettel) || !state.zettel.length) state.zettel = [zettelFelder()];
@@ -2105,7 +2177,11 @@
     // Glas als SVG für die Knöpfe – gleiche Pfade wie im Bild, damit der Knopf zeigt, was entsteht
     function glasSvg(g, farbe) {
       const id = 'wv' + Math.round(g.liter * 10);
-      return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + GLAS_W + ' ' + GLAS_H + '" aria-hidden="true">'
+      // Der Zeichenraum folgt der Sorte: eine Flasche beginnt oberhalb von y = 0, mit festem viewBox
+      // wäre ihr Hals abgeschnitten. Unten immer bis GLAS_H, damit alle Knöpfe auf einer Linie stehen.
+      const oy = Math.min(0, g.y0 - 1.4), hoch = GLAS_H - oy;
+      return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 ' + oy + ' ' + GLAS_W + ' ' + hoch + '"'
+        + ' style="height:' + (34 * hoch / GLAS_H).toFixed(1) + 'px" aria-hidden="true">'
         + '<defs><linearGradient id="' + id + '" x1="0" y1="' + g.y0 + '" x2="0" y2="' + GLAS_BODEN + '" gradientUnits="userSpaceOnUse">'
         + '<stop offset="0" stop-color="' + WASSER_FARBE.oben + '"/><stop offset="0.45" stop-color="' + WASSER_FARBE.mitte + '"/>'
         + '<stop offset="1" stop-color="' + WASSER_FARBE.unten + '"/></linearGradient></defs>'
@@ -2136,7 +2212,22 @@
         b.addEventListener('click', () => wasserDazu(art));
         wasserGlaeserEl.appendChild(b);
       }
+      const z = zielVon(w);
+      $('ziel-wert').textContent = literText(z);
+      $('ziel-ab').disabled = z <= ZIEL_MIN + 1e-9;
+      $('ziel-auf').disabled = z >= ZIEL_MAX - 1e-9;
     }
+    // Das Ziel in Viertellitern verstellen. Es lebt im `wasser`-Objekt und wird darum wie die Gläser
+    // gesichert – ein eigenes Zettelfeld bräuchte einen Eintrag in ZETTEL_STD und in `mitZettel`.
+    function zielVerstellen(d) {
+      const w = wasserStand();
+      const neu = Math.round((zielVon(w) + d * ZIEL_SCHRITT) / ZIEL_SCHRITT) * ZIEL_SCHRITT;
+      w.soll = Math.min(ZIEL_MAX, Math.max(ZIEL_MIN, neu));
+      state.wasser = w;
+      persist(); syncPreview(); updatePinBadge(); wasserLeisteBauen();
+    }
+    $('ziel-ab').addEventListener('click', () => zielVerstellen(-1));
+    $('ziel-auf').addEventListener('click', () => zielVerstellen(+1));
     function wasserDazu(art) {
       if (!GLAeSER[art]) return;
       const w = wasserStand();
@@ -2606,7 +2697,7 @@
       if (istWasser()) {
         const w = wasserStand();
         if (wasserTag(w) > 0 && !confirm('Alle Gläser von heute löschen?')) return;
-        state.wasser = { ...wasserLeer(), gestern: w.gestern };
+        state.wasser = { ...wasserLeer(), gestern: w.gestern, soll: w.soll };
         persist(); syncPreview(); updatePinBadge(); wasserLeisteBauen();
         return;
       }
