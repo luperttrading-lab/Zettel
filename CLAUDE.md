@@ -50,8 +50,9 @@ sagen, was passiert ist, nicht dass etwas passiert ist („1.63.0 live: Zettelh�
 
 - Eigener Branch `claude/…`, nach jedem abgeschlossenen Schritt auf `main` vorspulen (`--ff-only`) und pushen;
   Vercel baut aus `main`. Vor jedem Push `git fetch origin main` – es kann eine zweite Sitzung parallel arbeiten.
-- `APP_VERSION` in `index.html` bei jeder Änderung hochzählen (Mitte: neue Funktion, hinten: Korrektur),
-  sonst holt die App das Update nicht.
+- `APP_VERSION` in `index.html` bei jeder Änderung hochzählen, sonst holt die App das Update nicht.
+  **Seit 3.3 zwei Stellen** (so gewünscht): vorn die große Sache, hinten jede Änderung – aus 3.3 wird 3.4.
+  Die Update-Prüfung vergleicht nur Zeichenketten, das Format ist ihr gleich.
 - Layoutregeln stehen doppelt in `index.html` und `lib/render.js` (Vorschau/Bild-Parität). Wer eine ändert,
   ändert beide und prüft Schriftgröße und Zeilenzahl für denselben Text.
 - Bilder vor dem Einbauen **anschauen** (Read), nicht nur messen. Jedes Bild, das für den Auftraggeber

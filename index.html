@@ -676,7 +676,9 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.0.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '3.3';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+                                 // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
+                                 // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -853,12 +855,14 @@
       // Der Zwischenraum ist **fest**, nicht die Feldbreite: bei gleich breiten Feldern stand ein kleines
       // Glas mit viel Luft neben einem großen ohne („der Freiraum zwischen den Gläsern identisch",
       // Auftraggeber). Jedes Glas bringt darum seine eigene Breite mit (2 · bo, die Oberkante).
-      const LUFT = GLAS_W * 0.20;
+      const LUFT = GLAS_W * 0.30;
       const eigenB = art => 2 * GLAeSER[art].bo;
       const bedarfVon = l => l.reduce((a, k) => a + (GLAeSER[k] ? eigenB(k) : 0), 0) + Math.max(0, l.length - 1) * LUFT;
       // **Platz für sechs Gläser einplanen**, auch wenn weniger dastehen: so bleibt die Größe gleich,
       // bis wirklich mehr als sechs zusammenkommen – sonst schrumpfte alles bei jedem neuen Glas.
-      const RESERVE = 6;
+      // Fünf, nicht sechs: „es müssen keine 7 0,5-Gläser in eine Reihe passen" (Auftraggeber). Jedes Glas
+      // weniger in der Reserve macht alle übrigen größer; stehen doch mehr da, schrumpfen sie wie bisher.
+      const RESERVE = 5;
       const reserve = RESERVE * 2 * GLAeSER.gross.bo + (RESERVE - 1) * LUFT;
       // **Ein** Maßstab für alle drei Zeilen: je Zeile gerechnet sähe ein 0,5er in einer leeren Zeile
       // größer aus als in einer vollen, obwohl es dieselbe Menge ist (am Bild gesehen).
@@ -920,42 +924,42 @@
         ctx.globalAlpha = 1;
       }
 
-      // Säule rechts: Zielmenge WASSER_ZIEL, gefüllt bis zur Tagesmenge, mit Marke bei jedem Liter
-      const sx = bw - saeuleB, sy = 0, sh = bh - fussH * 1.15, r = saeuleB * 0.28;
+      // Der Tagesstand rechts als schlanke Säule. Ein Versuch, sie als großes Glas zu zeichnen, ging zurück:
+      // bei diesem Seitenverhältnis (1 : 5) sieht ein Trapez wie ein Reagenzglas aus, nicht wie ein Glas –
+      // und breiter gemacht verliert die Anzeige die Auflösung, die sie als Fortschritt erst lesbar macht.
+      // Was ihr wirklich fehlte: eine **beschriftete** Skala. Die Striche waren vorher bedeutungslos.
+      // sy > 0: die oberste Skalenzahl steht auf Höhe der Säulenoberkante und braucht dort Platz,
+      // sonst wird sie am Rand des Zeichenbereichs abgeschnitten (im ersten Anlauf passiert).
+      const skFs0 = Math.max(klein * 0.8, 7);
+      const sy = skFs0 * 0.55, sx = bw - saeuleB, sh = bh - fussH * 1.15 - sy, r = saeuleB * 0.30;
       const rund = (x, y, ww, hh, rr) => { const p = new Path2D(); p.moveTo(x + rr, y); p.arcTo(x + ww, y, x + ww, y + hh, rr); p.arcTo(x + ww, y + hh, x, y + hh, rr); p.arcTo(x, y + hh, x, y, rr); p.arcTo(x, y, x + ww, y, rr); p.closePath(); return p; };
-      // Der leere Teil nur schwach angetuscht: mit 0,16 Tinte wurde er auf gelbem Papier olivgrün
       ctx.globalAlpha = 0.09; ctx.fill(rund(sx, sy, saeuleB, sh, r)); ctx.globalAlpha = 1;
       const anteil = Math.min(1, tag / WASSER_ZIEL);
       if (anteil > 0) {
-        // Dieselbe Wasserfarbe wie in den Gläsern – die Säule zeigt ja dasselbe Wasser. Der Verlauf läuft
-        // über die **gefüllte** Höhe, damit die Oberkante immer die helle Seite zeigt.
-        // **Einfarbig**, kein Verlauf: über die Füllhöhe gelesen wirkte er, als werde der obere Teil
-        // „weniger wichtig" (Auftraggeber, 9.9.2026). In den Gläsern bleibt der Verlauf – dort läuft er
-        // über das Glas, nicht über eine Menge.
+        // Einfarbig – ein Verlauf über die Füllhöhe las sich als Wertung („oben weniger wichtig")
         const fh = sh * anteil, fy = sy + sh - fh;
         ctx.save(); ctx.clip(rund(sx, sy, saeuleB, sh, r));
         ctx.globalAlpha = WASSER_FARBE.deckkraft;
         ctx.fillStyle = WASSER_FARBE.unten; ctx.fillRect(sx, fy, saeuleB, fh);
-        // Lichtstreifen links, wie im Glas
         ctx.fillStyle = WASSER_FARBE.glanz;
         ctx.fillRect(sx + saeuleB * 0.17, fy + fh * 0.03, saeuleB * 0.11, fh * 0.94);
-        ctx.globalAlpha = 1;
-        ctx.restore();
-        ctx.fillStyle = ink;
+        ctx.globalAlpha = 1; ctx.restore(); ctx.fillStyle = ink;
       }
-      ctx.lineWidth = Math.max(1, saeuleB * 0.045);
-      ctx.globalAlpha = 0.45; ctx.stroke(rund(sx, sy, saeuleB, sh, r)); ctx.globalAlpha = 1;
-      for (let l = 1; l < WASSER_ZIEL; l++) {           // Litermarken
+      ctx.lineWidth = Math.max(1, saeuleB * 0.05); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      ctx.globalAlpha = 0.5; ctx.stroke(rund(sx, sy, saeuleB, sh, r)); ctx.globalAlpha = 1;
+      // Skala **mit Zahlen** links neben der Säule: 1, 2 … und oben das Ziel. Ein Strich ohne Zahl sagt
+      // nichts; erst die Beschriftung macht aus der Säule eine ablesbare Anzeige.
+      const skFs = skFs0;
+      ctx.font = `${weight} ${skFs}px ${family}`;
+      for (let l = 1; l <= WASSER_ZIEL; l++) {
         const y = sy + sh - sh * (l / WASSER_ZIEL);
-        ctx.globalAlpha = 0.4;
-        ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx + saeuleB * 0.42, y); ctx.stroke();
+        const ziel = l === WASSER_ZIEL;
+        ctx.globalAlpha = ziel ? 0.85 : 0.45;
+        ctx.beginPath(); ctx.moveTo(sx - (ziel ? saeuleB * 0.22 : 0), y); ctx.lineTo(sx + saeuleB * (ziel ? 1 : 0.4), y); ctx.stroke();
+        const t2 = l + (ziel ? ' l' : '');
+        ctx.fillText(t2, sx - saeuleB * 0.34 - ctx.measureText(t2).width, y + skFs * 0.36);
         ctx.globalAlpha = 1;
       }
-      ctx.font = `${weight} ${klein}px ${family}`;
-      const zt = WASSER_ZIEL + ' l';
-      ctx.globalAlpha = 0.7;
-      ctx.fillText(zt, sx + saeuleB / 2 - ctx.measureText(zt).width / 2, sh + klein * 1.15);
-      ctx.globalAlpha = 1;
       ctx.restore();
       return treffer;
     }
