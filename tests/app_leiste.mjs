@@ -118,15 +118,27 @@ await page.click('#weghint'); await page.waitForTimeout(1500);
 check('Platzhalter antippen → eingeblendet und übertragen', await page.evaluate(() => state.hidden === false && lage() === 'wartet'));
 await zurueckInDieApp(); await page.waitForTimeout(300);
 
-// 10) Symbolreihe bleibt vierteilig und gleich breit (seit 1.58.0 mit „Lage im Bild")
+// 10) Symbolreihe: seit 1.65.0 **drei** Knöpfe – „Zettel leeren" sitzt jetzt am Zettel selbst,
+//     weil der Wasserzettel täglich geleert wird, die Lage im Bild aber einmal eingestellt bleibt.
 for (const zustand of [false, true]) {
   await page.evaluate(h => { state.hidden = h; zeigeZettel(); }, zustand); await page.waitForTimeout(150);
   const r = await page.evaluate(() => [...document.querySelectorAll('.icons button')].filter(e => !e.hidden).map(e => Math.round(e.getBoundingClientRect().width)));
   // 1 px Unterschied kommt vom Aufteilen ungerader Breiten, nicht von verschiedenen Knöpfen
-  check(`Symbolreihe ${zustand ? 'ausgeblendet' : 'sichtbar'}: vier gleiche Knöpfe`,
-    r.length === 4 && Math.max(...r) - Math.min(...r) <= 1, JSON.stringify(r));
+  check(`Symbolreihe ${zustand ? 'ausgeblendet' : 'sichtbar'}: drei gleiche Knöpfe`,
+    r.length === 3 && Math.max(...r) - Math.min(...r) <= 1, JSON.stringify(r));
 }
 await page.evaluate(() => { state.hidden = false; zeigeZettel(); });
+// Der Mülleimer liegt am Zettel und darf keinen Inhalt verdecken: er muss in den Papierrand passen
+const muell = await page.evaluate(() => {
+  const k = document.getElementById('clear'), n = document.getElementById('note');
+  if (!k || k.parentElement !== n) return null;
+  const rk = k.getBoundingClientRect(), rn = n.getBoundingClientRect();
+  return { imZettel: true, breite: Math.round(rk.width), rand: Math.round(parseFloat(getComputedStyle(n).paddingLeft)),
+           linksUnten: rk.left - rn.left < rn.width / 3 && rn.bottom - rk.bottom < rn.height / 3 };
+});
+check('„Zettel leeren" sitzt unten links am Zettel', muell && muell.imZettel && muell.linksUnten, JSON.stringify(muell));
+check('und bleibt im Papierrand, verdeckt also keinen Inhalt', muell && muell.breite <= muell.rand + 2,
+  muell ? muell.breite + ' px breit, Rand ' + muell.rand + ' px' : 'nicht gefunden');
 
 // 11) Meldungen haben Vorrang und verschwinden wieder
 await page.evaluate(() => { state.text = ''; textEl.value = ''; persist(); }); await page.waitForTimeout(200);

@@ -117,6 +117,22 @@ const rand = await page.evaluate(async () => {
 check('gedrehter Zettel am Bildrand bleibt ganz im Bild', Math.abs(rand.hoehe - rand.erwartet) <= 3 && rand.oben >= 0,
   `${rand.hoehe} px hoch, erwartet ${rand.erwartet}, beginnt bei y=${rand.oben}`);
 
+
+// Die Ursache strukturell absichern: In `zeichneEinenZettel` darf hinter dem ersten `await` KEIN
+// Zugriff mehr auf den Zustand stehen. mitZettel stellt ihn beim `return fn()` zurück – alles danach
+// liest den aktiven Zettel. Diese Falle hat in 1.64.1 (Winkel) und 1.65.0 (Wasserzettel) zugeschlagen,
+// beide Male sichtbar erst im fertigen Bild. Ein Blick in den Quelltext fängt sie beim nächsten Mal sofort.
+const quelle = fs.readFileSync('index.html', 'utf8').split('\n');
+const ohneKommentar = z => z.split('//')[0];
+const anfang = quelle.findIndex(z => z.includes('async function zeichneEinenZettel'));
+const ende = quelle.findIndex((z, i) => i > anfang && z.startsWith('    }'));
+const ersteAwait = quelle.findIndex((z, i) => i > anfang && i < ende && / await /.test(ohneKommentar(z)));
+const VERBOTEN = /\bstate\.|noteRot\(\)|istWasser\(\)|wasserStand\(\)|inkColor\(\)|hakenForm\(\)|hakenFarbe\(\)|noteText\(\)|fastenerLook\(\)|befPixel\(|fitNote\(|alleZettel\(/;
+const spaet = [];
+for (let i = ersteAwait + 1; i < ende; i++) if (VERBOTEN.test(ohneKommentar(quelle[i]))) spaet.push((i + 1) + ': ' + quelle[i].trim().slice(0, 80));
+check('zeichneEinenZettel liest den Zustand nur vor dem ersten await',
+  anfang > 0 && ersteAwait > anfang && spaet.length === 0, spaet.join(' | ') || `Funktion ${anfang + 1}–${ende + 1}, await in ${ersteAwait + 1}`);
+
 await page.screenshot({ path: out + '/dreh.png' });
 check('keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));
 console.log(fails ? fails + ' Prüfung(en) fehlgeschlagen' : 'alle Prüfungen bestanden');

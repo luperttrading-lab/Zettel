@@ -109,6 +109,7 @@ const ABWEICHEND = {           // ein vom Standard verschiedener Wert je Feld
   doneForm: 'kraeftig', doneColor: 'rot', fastener: 'clip', fasteners: [{ art: 'clip' }],
   fastenerLook: { clip: { color: 'red' } }, noteScale: 0.7, noteX: 0.3, noteY: 0.8,
   noteFit: false, noteRot: 11,
+  wasser: { tag: '2026-09-09', v12: ['gross'], v18: [], n18: [], gestern: 1.4 },
 };
 const felder = await page.evaluate(() => ZETTEL_FELDER);
 check('jedes Zettelfeld hat einen Prüfwert', felder.every(k => k in ABWEICHEND),
