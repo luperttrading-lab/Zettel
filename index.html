@@ -676,7 +676,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.65.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.65.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -766,6 +766,21 @@
       gross:  { label: '0,5 l', liter: 0.5, bo: 9.4, bu: 7.0, y0:  1.5 },
     };
     const GLAS_H = 32, GLAS_W = 24, GLAS_BODEN = 30;
+    // Farben der Füllung – **eine** Quelle für Canvas (Verlauf) und Knöpfe (SVG-defs), sonst sähen die
+    // Knöpfe anders aus als der Zettel. Angelehnt an den Tropfen 💧 des Listenknopfs: oben hell, unten
+    // kräftig, dazu ein Lichtstreifen. Deckkraft unter 1, damit Papier und Karos durchscheinen –
+    // „eventuell nicht komplett blau" (Auftraggeber, 9.9.2026).
+    const WASSER_FARBE = { oben: '#a8dcf7', mitte: '#4aa8e4', unten: '#1668b0', deckkraft: 0.82,
+                           glanz: 'rgba(255,255,255,.5)', kante: 'rgba(255,255,255,.75)' };
+    // Lichtstreifen links in der Füllung – schmal, hochkant, mit dem Trapez leicht schräg
+    function glasGlanz(g, fuell = 1) {
+      const m = GLAS_W / 2, oben = g.y0 + 1.6, hoehe = (GLAS_BODEN - 1.2) - oben;
+      const yo = GLAS_BODEN - 1.2 - hoehe * Math.max(0, Math.min(1, fuell));
+      const t = yy => { const p = (GLAS_BODEN - yy) / (GLAS_BODEN - g.y0); return g.bu + (g.bo - g.bu) * p; };
+      const yu = GLAS_BODEN - 2.2;
+      const xo = m - t(yo) * 0.62, xu = m - t(yu) * 0.62, b = g.bu * 0.26;
+      return `M${xo} ${yo + 1.1} L${xu} ${yu} L${xu + b} ${yu} L${xo + b} ${yo + 1.1} Z`;
+    }
     // Umriss eines Glases als Pfadangabe; fuell = 0…1 füllt es von unten (0 = leer, 1 = randvoll)
     function glasPfad(g) {
       const m = GLAS_W / 2;
@@ -858,8 +873,14 @@
           const gx = n * glasB;
           ctx.save();
           ctx.translate(gx + (glasB - GLAS_W * skala) / 2, gy); ctx.scale(skala, skala);
-          ctx.globalAlpha = 0.30; ctx.fill(new Path2D(glasFuellung(g, 0.88)));
+          // Wasser: Verlauf von hell nach kräftig, darüber ein Lichtstreifen und eine helle Oberkante
+          const vf = ctx.createLinearGradient(0, g.y0, 0, GLAS_BODEN);
+          vf.addColorStop(0, WASSER_FARBE.oben); vf.addColorStop(0.45, WASSER_FARBE.mitte); vf.addColorStop(1, WASSER_FARBE.unten);
+          ctx.globalAlpha = WASSER_FARBE.deckkraft;
+          ctx.fillStyle = vf; ctx.fill(new Path2D(glasFuellung(g, 0.88)));
+          ctx.fillStyle = WASSER_FARBE.glanz; ctx.fill(new Path2D(glasGlanz(g, 0.88)));
           ctx.globalAlpha = 1;
+          ctx.fillStyle = ink;
           ctx.lineWidth = 1.9; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
           ctx.stroke(new Path2D(glasPfad(g)));
           ctx.restore();
@@ -881,13 +902,24 @@
       // Säule rechts: Zielmenge WASSER_ZIEL, gefüllt bis zur Tagesmenge, mit Marke bei jedem Liter
       const sx = bw - saeuleB, sy = 0, sh = bh - fussH * 0.55, r = saeuleB * 0.28;
       const rund = (x, y, ww, hh, rr) => { const p = new Path2D(); p.moveTo(x + rr, y); p.arcTo(x + ww, y, x + ww, y + hh, rr); p.arcTo(x + ww, y + hh, x, y + hh, rr); p.arcTo(x, y + hh, x, y, rr); p.arcTo(x, y, x + ww, y, rr); p.closePath(); return p; };
-      ctx.globalAlpha = 0.16; ctx.fill(rund(sx, sy, saeuleB, sh, r)); ctx.globalAlpha = 1;
+      // Der leere Teil nur schwach angetuscht: mit 0,16 Tinte wurde er auf gelbem Papier olivgrün
+      ctx.globalAlpha = 0.09; ctx.fill(rund(sx, sy, saeuleB, sh, r)); ctx.globalAlpha = 1;
       const anteil = Math.min(1, tag / WASSER_ZIEL);
       if (anteil > 0) {
-        const fh = sh * anteil;
+        // Dieselbe Wasserfarbe wie in den Gläsern – die Säule zeigt ja dasselbe Wasser. Der Verlauf läuft
+        // über die **gefüllte** Höhe, damit die Oberkante immer die helle Seite zeigt.
+        const fh = sh * anteil, fy = sy + sh - fh;
+        const vf = ctx.createLinearGradient(0, fy, 0, sy + sh);
+        vf.addColorStop(0, WASSER_FARBE.oben); vf.addColorStop(0.45, WASSER_FARBE.mitte); vf.addColorStop(1, WASSER_FARBE.unten);
         ctx.save(); ctx.clip(rund(sx, sy, saeuleB, sh, r));
-        ctx.globalAlpha = 0.45; ctx.fillRect(sx, sy + sh - fh, saeuleB, fh); ctx.globalAlpha = 1;
+        ctx.globalAlpha = WASSER_FARBE.deckkraft;
+        ctx.fillStyle = vf; ctx.fillRect(sx, fy, saeuleB, fh);
+        // Lichtstreifen links, wie im Glas
+        ctx.fillStyle = WASSER_FARBE.glanz;
+        ctx.fillRect(sx + saeuleB * 0.17, fy + fh * 0.03, saeuleB * 0.11, fh * 0.94);
+        ctx.globalAlpha = 1;
         ctx.restore();
+        ctx.fillStyle = ink;
       }
       ctx.lineWidth = Math.max(1, saeuleB * 0.045);
       ctx.globalAlpha = 0.45; ctx.stroke(rund(sx, sy, saeuleB, sh, r)); ctx.globalAlpha = 1;
@@ -1902,8 +1934,14 @@
     let wasserFenster = wasserFensterJetzt();       // welches Zeitfenster ein Tipp gerade bucht
     // Glas als SVG für die Knöpfe – gleiche Pfade wie im Bild, damit der Knopf zeigt, was entsteht
     function glasSvg(g, farbe) {
+      const id = 'wv' + Math.round(g.liter * 10);
       return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + GLAS_W + ' ' + GLAS_H + '" aria-hidden="true">'
-        + '<path d="' + glasFuellung(g, 0.88) + '" fill="' + farbe + '" opacity="0.3"/>'
+        + '<defs><linearGradient id="' + id + '" x1="0" y1="' + g.y0 + '" x2="0" y2="' + GLAS_BODEN + '" gradientUnits="userSpaceOnUse">'
+        + '<stop offset="0" stop-color="' + WASSER_FARBE.oben + '"/><stop offset="0.45" stop-color="' + WASSER_FARBE.mitte + '"/>'
+        + '<stop offset="1" stop-color="' + WASSER_FARBE.unten + '"/></linearGradient></defs>'
+        + '<g opacity="' + WASSER_FARBE.deckkraft + '">'
+        + '<path d="' + glasFuellung(g, 0.88) + '" fill="url(#' + id + ')"/>'
+        + '<path d="' + glasGlanz(g, 0.88) + '" fill="' + WASSER_FARBE.glanz + '"/></g>'
         + '<path d="' + glasPfad(g) + '" fill="none" stroke="' + farbe + '" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     }
     function wasserLeisteBauen() {
