@@ -30,6 +30,18 @@ eigene Spalte. Werkzeuge, die Geld kosten, tragen ihre Kosten **selbst** ein (Vo
 `tools/gen_image.mjs`); ein fehlender Betrag wird als `"usd": null` festgehalten und in der Tabelle
 mit `?` hinter dem Dienstnamen angezeigt.
 
+## Nachricht aufs Handy
+
+Der Auftraggeber arbeitet über die App und will nicht im Chat sitzen bleiben. `PushNotification`
+erreicht sein iPhone (am 9.9.2026 geprüft, kommt an). Geschickt wird eine Nachricht:
+
+- wenn eine neue Version auf `main` liegt und Vercel baut – mit Versionsnummer und **einem** Satz dazu,
+- wenn eine längere Aufgabe fertig ist oder eine Entscheidung von ihm ansteht.
+
+Nicht bei Zwischenschritten. Liest er ohnehin gerade mit, unterdrückt das Werkzeug die Nachricht selbst.
+Die Überschrift der Benachrichtigung ist der Sitzungstitel, nicht der Text – der Satz muss also für sich
+allein verständlich sein. Das läuft über die laufende Sitzung: Ist sie beendet, geht nichts mehr raus.
+
 ## Arbeitsweise im Repo
 
 - Eigener Branch `claude/…`, nach jedem abgeschlossenen Schritt auf `main` vorspulen (`--ff-only`) und pushen;
