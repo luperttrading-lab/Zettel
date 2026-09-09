@@ -107,6 +107,55 @@ check('Zurücksetzen stellt die Vorgabe her',
   await page.evaluate(() => state.noteX === 0.5 && state.noteY === 0.585 && state.noteScale === 1));
 await page.click('#lage-fertig'); await page.waitForTimeout(200);
 
+
+// ── 1.64.0: Das Fenster zeigt die ECHTE Zeichnung, keine nachgebaute Miniatur ──────────────────────
+// Bis 1.63.1 war der Zettel dort ein farbiges Rechteck mit Rohtext: ohne Papiermuster, Befestigung,
+// Durchstreichung, grünen Haken, unterstrichene Überschrift und ohne die gemeinsame Terminspalte –
+// der Auftraggeber hat den Unterschied fotografiert. Jetzt liegt derselbe Canvas darin, der aufs
+// Display geht (nur ohne Hintergrund, darunter steht das Eichbild).
+await page.evaluate(() => localStorage.clear());
+await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(700);
+await page.evaluate(async () => {
+  state.list = 'dash'; state.paper = 'grid'; state.title = true; state.noteScale = 0.9;
+  textEl.value = 'To Do List:\n– Rasen wässern ✓\n– Nadine anrufen\n– Deutsche Bank';
+  onTextChanged(); flush(); await ensureFont(); if (document.fonts) await document.fonts.ready; syncPreview(); zettelSichern();
+  zettelDazu();
+  state.list = 'termin'; state.color = 'pink'; state.paper = 'grid'; state.noteScale = 0.5; state.noteRot = 6;
+  textEl.value = 'Fr. 7:45 Auto Werkstatt\nMo. 13:30 Molly Tierarzt';
+  onTextChanged(); flush(); syncPreview(); zettelSichern();
+});
+await page.evaluate(() => lageOeffnen(true)); await page.waitForTimeout(900);
+const gleich = await page.evaluate(async () => {
+  const t = targetCanvas();
+  const soll = await renderWallpaper(t.w, t.h, t.layout, { nurZettel: true });
+  const ist = document.getElementById('lage-bild');
+  if (ist.width !== soll.width || ist.height !== soll.height) return { fehler: 'Maße', ist: [ist.width, ist.height], soll: [soll.width, soll.height] };
+  const a = ist.getContext('2d').getImageData(0, 0, ist.width, ist.height).data;
+  const c2 = soll.getContext('2d').getImageData(0, 0, soll.width, soll.height).data;
+  let anders = 0, gesetzt = 0;
+  for (let i = 0; i < a.length; i += 4) {
+    if (a[i + 3] > 10 || c2[i + 3] > 10) gesetzt++;
+    if (Math.abs(a[i] - c2[i]) > 2 || Math.abs(a[i + 1] - c2[i + 1]) > 2 || Math.abs(a[i + 2] - c2[i + 2]) > 2 || Math.abs(a[i + 3] - c2[i + 3]) > 2) anders++;
+  }
+  return { anders, gesetzt };
+});
+check('im Fenster steht dasselbe Bild wie auf dem Display', gleich.anders === 0 && gleich.gesetzt > 10000, JSON.stringify(gleich));
+// Die Griffflächen tragen keinen eigenen Text mehr – sonst gäbe es wieder zwei Quellen, die auseinanderlaufen
+const flaechen = await page.evaluate(() => [...document.querySelectorAll('#lage-schirm .zettel')].map(d => ({
+  text: d.textContent.trim(), hg: getComputedStyle(d).backgroundImage, aktiv: !d.classList.contains('andere'),
+  rahmen: getComputedStyle(d).outlineStyle })));
+check('Griffflächen sind leer und ohne eigene Farbe', flaechen.every(f => f.text === '' && f.hg === 'none'), JSON.stringify(flaechen));
+check('nur der aktive Zettel ist umrandet', flaechen.filter(f => f.rahmen === 'dashed').length === 1 &&
+  flaechen.find(f => f.aktiv).rahmen === 'dashed', JSON.stringify(flaechen.map(f => f.aktiv + ':' + f.rahmen)));
+// Ein Tipp auf den anderen Zettel wechselt – und die Überschrift zieht mit
+const titel = () => page.evaluate(() => document.getElementById('lage-titel').textContent);
+const vorher = await titel();
+const ziel = await page.evaluate(() => { const r = document.querySelector('#lage-schirm .zettel.andere').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+await page.mouse.click(ziel.x, ziel.y); await page.waitForTimeout(500);
+check('Wechsel im Fenster zieht die Überschrift mit', (await titel()) !== vorher && /Zettel \d/.test(await titel()),
+  vorher + ' → ' + await titel());
+await page.evaluate(() => lageOeffnen(false)); await page.waitForTimeout(200);
+
 await page.screenshot({ path: out + '/lage_fenster.png' });
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();
