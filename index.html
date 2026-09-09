@@ -676,7 +676,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.0.0'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '3.0.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -861,11 +861,12 @@
       const hZwei = passt(spalte, Math.min(zeilH - klein * 1.4, zeilH * 0.78));   // Gläser unter dem Kopf
       const eineZeile = hEin >= hZwei;                            // es gewinnt, was die Gläser größer macht
       const glasH = eineZeile ? hEin : hZwei;
-      // Feldbreite je Glas: die Gläser stehen in einem gleichmäßigen Raster über die ganze Spalte, statt
-      // links gedrängt zu kleben – so ist die Breite genutzt und die Gläser aller Zeilen fluchten.
-      // Nach oben begrenzt, damit ein einzelnes Glas nicht mitten im Nichts steht.
+      // Feldbreite je Glas: dicht nebeneinander mit einem Zehntel Luft. Der Versuch, sie über die ganze
+      // Spalte zu spreizen (Faktor 1,7), ging zurück – „nicht zu viel Abstand, sonst passen nicht genug
+      // Gläser in eine Reihe. Rechts Luft ist ok" (Auftraggeber, 9.9.2026). Die Gläser aller Zeilen
+      // fluchten weiter, weil die Feldbreite für alle gleich ist.
       const platz = (eineZeile ? spalte - kopfB : spalte);
-      const glasB = Math.max(breiteAus(glasH), Math.min(platz / meiste, breiteAus(glasH) * 1.7));
+      const glasB = Math.min(breiteAus(glasH) * 1.1, platz / meiste);
       const skala = glasH / GLAS_H;
 
       WASSER_ZEITEN.forEach((z, i) => {
