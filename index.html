@@ -676,7 +676,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.5';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.6';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -814,12 +814,11 @@
     const WASSER_ZIEL = 3;                     // Liter am Tag, Ziel der Tagesanzeige
     // Formen der Tagesanzeige zur Auswahl – die Säule allein überzeugte nicht (9.9.2026)
     const ZIEL_ARTEN = { saeule: 'Säule', ring: 'Ring', krug: 'Krug', balken: 'Balken' };
-    // Kopfform der Säule – zur Auswahl gestellt (Auftraggeber, 9.9.2026): der waagerechte 3-l-Strich lag
-    // genau auf der runden Oberkante, gerade Linie gegen runde Ecke, „das passt gar nicht". Absichtlich
-    // **keine** Eigenschaft des Zettels: ohne Bedienelement hätte `ZETTEL_STD` nur ein totes Feld mehr.
-    const SAEULE_KOEPFE = { offen: 'ohne Deckelstrich', kopfraum: 'Skala über das Ziel hinaus',
-                            eckig: 'gerade Kante mit Deckelstrich', aussen: 'Striche neben der Säule' };
-    let saeuleKopf = 'offen';
+    // Wie viel die Säule **fasst** – mehr als das Tagesziel, so gewählt vom Auftraggeber („Kopfraum und
+    // eckig", 9.9.2026). Zwei Dinge hängen daran: die Oberkante ist ein runder Skalenwert und darf
+    // deshalb den Abschlussstrich tragen, und wer mehr als 3 l trinkt, sieht das auch – vorher stand die
+    // Säule ab 3 l voll da, egal ob es 3,0 oder 4,5 l waren.
+    const SAEULE_FASST = 4;                    // Liter; das Ziel bleibt WASSER_ZIEL = 3
     const SKALA_ALPHA = 0.55;                  // **eine** Deckkraft für alle Zahlen und Striche der Skala
     const heuteKennung = () => new Date().toLocaleDateString('sv');   // ergibt JJJJ-MM-TT in Ortszeit
     // Zeitfenster, in dem wir gerade sind – die Vorauswahl beim Eintragen
@@ -967,20 +966,14 @@
       const art = ZIEL_ARTEN[state.wasserZiel] ? state.wasserZiel : 'saeule';
 
       if (art === 'saeule') {
-        // A – schlanke Säule mit beschrifteter Skala. Vier Kopfformen zur Wahl, siehe SAEULE_KOEPFE.
-        const kopf = SAEULE_KOEPFE[saeuleKopf] ? saeuleKopf : 'offen';
-        const eckig = kopf === 'eckig', aussen = kopf === 'aussen';
-        // „kopfraum": die Säule fasst mehr als das Ziel. Damit ist zweierlei gelöst – der Zielstrich liegt
-        // **innen** wie die anderen (keine gerade Linie auf runder Ecke), und wer mehr als 3 l trinkt,
-        // sieht das auch. Bisher stand die Säule ab 3 l voll da, egal ob es 3,0 oder 4,5 l waren.
-        const fasst = WASSER_ZIEL * (kopf === 'kopfraum' ? 1.25 : 1);
-        // Bei „offen" steht „3 l" auf Höhe der Oberkante und braucht eine halbe Zeile Luft darüber;
-        // liegt der oberste Strich innen, reicht ein Fünftel und die Säule wird entsprechend länger.
-        const sy = skFs * (fasst > WASSER_ZIEL ? 0.2 : 0.55), sx = bw - saeuleB;
-        const sh = bh - fussH * 1.15 - sy, r = eckig ? saeuleB * 0.07 : saeuleB * 0.30;
-        const yVon = l => sy + sh - sh * (l / fasst);
+        // A – schlanke Säule mit gerader Kante und beschrifteter Skala bis SAEULE_FASST.
+        // Die Ecken sind fast gerade (r = 0,07 der Breite, nur gegen die harte Ecke): ein waagerechter
+        // Abschlussstrich auf einer **runden** Oberkante sah falsch aus – „das passt gar nicht".
+        const sy = skFs * 0.55, sx = bw - saeuleB;
+        const sh = bh - fussH * 1.15 - sy, r = saeuleB * 0.07;
+        const yVon = l => sy + sh - sh * (l / SAEULE_FASST);
         ctx.globalAlpha = 0.09; ctx.fill(rund(sx, sy, saeuleB, sh, r)); ctx.globalAlpha = 1;
-        const voll = Math.min(1, tag / fasst);
+        const voll = Math.min(1, tag / SAEULE_FASST);
         if (voll > 0) {
           const fh = sh * voll, fy = sy + sh - fh;
           ctx.save(); ctx.clip(rund(sx, sy, saeuleB, sh, r));
@@ -993,22 +986,35 @@
         ctx.globalAlpha = 0.5; ctx.stroke(rund(sx, sy, saeuleB, sh, r)); ctx.globalAlpha = 1;
         ctx.font = `${weight} ${skFs}px ${family}`;
         // **Eine** Deckkraft für alle Zahlen und Striche: die Zielzahl stand auf 0,85, die anderen auf
-        // 0,45 – „die Zahlen sollten alle in dem gleichen Farbton sein" (Auftraggeber).
+        // 0,45 – „die Zahlen sollten alle in dem gleichen Farbton sein" (Auftraggeber). Das Tagesziel
+        // hebt sich jetzt über die **Strichlänge** ab, nicht über die Farbe.
         ctx.globalAlpha = SKALA_ALPHA;
+        // Der Abschlussstrich auf der Oberkante trägt **keine** Zahl. Mit „4 l" daran sah die Oberkante nach
+        // der wichtigsten Marke aus, obwohl das Ziel bei 3 l liegt – beschriftet endet die Skala also bei 3,
+        // darüber bleibt unbeschrifteter Kopfraum. Er ragt nach links über die Säule hinaus: bündig gesetzt
+        // lag er genau auf dem Umriss und war als Strich nicht mehr zu erkennen (am Bild gesehen). Nur nach
+        // links – rechts endet die Säule am Papierrand.
+        ctx.save(); ctx.lineWidth *= 1.5;
+        ctx.beginPath(); ctx.moveTo(sx - saeuleB * 0.14, sy); ctx.lineTo(sx + saeuleB, sy); ctx.stroke();
+        ctx.restore();
+        // Striche **unter** dem Pegel werden hell. Tinte auf der Füllung war kaum zu sehen, und seit die
+        // Skala bis SAEULE_FASST reicht, liegt gerade die Zielmarke im Wasser, sobald man das Ziel
+        // erreicht hat – also genau dann unsichtbar, wenn man sie sehen will (am Bild bei 4,2 l gesehen).
+        // Die **Zahlen** stehen links außerhalb der Säule und bleiben alle im selben Farbton.
+        const pegelY = sy + sh - sh * voll;
         for (let l = 1; l <= WASSER_ZIEL; l++) {
-          const y = yVon(l), oberste = l === WASSER_ZIEL;
-          // „offen": die Oberkante **ist** die Zielmarke, ein Strich darauf wäre doppelt gemoppelt.
-          const strich = !(oberste && kopf === 'offen');
-          if (strich) {
-            // Bei „eckig" muss der Deckelstrich **über die Säule hinausragen**: bündig gesetzt lag er
-            // genau auf dem Umriss und war als Skalenstrich nicht mehr zu erkennen (am Bild gesehen).
-            // Nur nach links – rechts endet die Säule am Papierrand.
-            const a = aussen ? sx - saeuleB * 0.45 : (oberste && eckig ? sx - saeuleB * 0.28 : sx);
-            const b2 = aussen ? sx - saeuleB * 0.06 : sx + saeuleB * (oberste && eckig ? 1 : 0.4);
-            ctx.beginPath(); ctx.moveTo(a, y); ctx.lineTo(b2, y); ctx.stroke();
-          }
-          const t2 = l + (oberste ? ' l' : '');
-          ctx.fillText(t2, sx - saeuleB * (aussen ? 0.58 : 0.34) - ctx.measureText(t2).width, y + skFs * 0.36);
+          const y = yVon(l), ziel = l === WASSER_ZIEL, nass = y > pegelY + 0.5;
+          // Das Ziel ragt wie der Abschluss nach links heraus, geht innen aber **nicht** durch: quer über
+          // die ganze Breite las es sich als Trennwand, die Säule wirkte in zwei Kammern geteilt (am Bild).
+          const a = ziel ? sx - saeuleB * 0.28 : sx;
+          if (nass) { ctx.strokeStyle = WASSER_FARBE.kante; ctx.globalAlpha = 1; }
+          ctx.beginPath(); ctx.moveTo(a, y); ctx.lineTo(sx + saeuleB * (ziel ? 0.55 : 0.4), y); ctx.stroke();
+          // Der Überstand nach links liegt auf dem Papier, nicht im Wasser – dort wieder in der Tinte
+          if (nass && ziel) { ctx.strokeStyle = ink; ctx.globalAlpha = SKALA_ALPHA;
+            ctx.beginPath(); ctx.moveTo(a, y); ctx.lineTo(sx, y); ctx.stroke(); }
+          ctx.strokeStyle = ink; ctx.globalAlpha = SKALA_ALPHA;
+          const t2 = l + (ziel ? ' l' : '');
+          ctx.fillText(t2, sx - saeuleB * 0.34 - ctx.measureText(t2).width, y + skFs * 0.36);
         }
         ctx.globalAlpha = 1;
       } else if (art === 'ring') {
