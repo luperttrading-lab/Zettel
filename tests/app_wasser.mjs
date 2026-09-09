@@ -164,6 +164,59 @@ check('bei einer Textliste leert der Mülleimer den Text', (await page.evaluate(
   JSON.stringify(await page.evaluate(() => state.text)));
 check('Glasknöpfe verschwinden wieder', await page.evaluate(() => document.getElementById('wasserleiste').hidden));
 
+// 10) 3.4: Bedienung der Zeilen und die Lage der Glasreihe im Bild.
+//     Die Reihe wird **nicht** als 32 Einheiten hoher Kasten gestellt, sondern als das, was wirklich
+//     gezeichnet wird: ein kleines Glas fängt bei y0 = 15 an, füllte also nur die untere Hälfte seines
+//     Kastens und stand dadurch tief in der Zeile („schweben an der falschen Stelle", Auftraggeber).
+//     Prüfbar ohne die Formel nachzubauen: sitzt die Zeichnung mittig im freien Raum, ist ihr
+//     Mittelpunkt in allen drei Zeilen gleich weit vom Zeilenanfang entfernt – die drei Mittelpunkte
+//     liegen also in gleichem Abstand untereinander, egal welche Gläser darin stehen.
+await page.evaluate(() => localStorage.clear());
+await page.reload(); await page.waitForTimeout(900);
+await page.evaluate(async () => {
+  document.querySelector('#strip-list .item[data-value="wasser"]').click();
+  await ensureFont(); if (document.fonts) await document.fonts.ready;
+  state.wasser = { tag: heuteKennung(), v12: ['klein', 'mittel', 'gross'], v18: ['gross'], n18: ['klein', 'klein'], gestern: 2.3 };
+  persist(); syncPreview(); wasserLeisteBauen();
+});
+await page.waitForTimeout(400);
+const reihen = await page.evaluate(() => ['v12', 'v18', 'n18'].map(k => {
+  const g = wasserTreffer.filter(t => t.key === k && t.n !== undefined);
+  return { k, n: g.length, oben: Math.min(...g.map(t => t.y)), unten: Math.max(...g.map(t => t.y + t.h)) };
+}));
+const mitte = reihen.map(r => (r.oben + r.unten) / 2);
+const d1 = mitte[1] - mitte[0], d2 = mitte[2] - mitte[1];
+check('die Glasreihe sitzt in jeder Zeile gleich – unabhängig von den Glasgrößen',
+  Math.abs(d1 - d2) < 0.6, 'Abstände der Mittelpunkte ' + d1.toFixed(1) + ' und ' + d2.toFixed(1) + ' px');
+check('kleine Gläser stehen höher als der alte Kasten sie stellte',
+  reihen[2].unten - reihen[2].oben < reihen[1].unten - reihen[1].oben,
+  JSON.stringify(reihen.map(r => +(r.unten - r.oben).toFixed(1))));
+
+// Ein Tipp **rechts neben** die Gläser wählt das Zeitfenster dieser Zeile
+const tippe = async (zeile, anteil) => {
+  const p2 = await page.evaluate(([i, a]) => {
+    const t = wasserTreffer.find(q => q.zeile === i);
+    const r = document.getElementById('wasser-bild').getBoundingClientRect();
+    return { x: r.left + t.x + t.w * a, y: r.top + t.y + t.h / 2 };
+  }, [zeile, anteil]);
+  await page.mouse.click(p2.x, p2.y); await page.waitForTimeout(250);
+  return page.evaluate(() => wasserFenster);
+};
+check('Tipp rechts neben die Gläser macht die Zeile aktiv', (await tippe(2, 0.85)) === 2);
+check('Tipp in die leere zweite Zeile macht sie aktiv', (await tippe(1, 0.9)) === 1);
+
+// Ein gelöschtes Glas macht seine Zeile aktiv – man korrigiert dort weiter, wo man getippt hat
+const g0 = await page.evaluate(() => {
+  const t = wasserTreffer.find(q => q.key === 'v12' && q.n === 0);
+  const r = document.getElementById('wasser-bild').getBoundingClientRect();
+  return { x: r.left + t.x + t.w / 2, y: r.top + t.y + t.h / 2 };
+});
+await page.mouse.click(g0.x, g0.y); await page.waitForTimeout(300);
+const nachLoeschen = await page.evaluate(() => ({ f: wasserFenster, v12: wasserStand().v12 }));
+check('ein gelöschtes Glas macht seine Zeile aktiv', nachLoeschen.f === 0, JSON.stringify(nachLoeschen));
+check('gelöscht wird genau das angetippte Glas',
+  JSON.stringify(nachLoeschen.v12) === JSON.stringify(['mittel', 'gross']), JSON.stringify(nachLoeschen.v12));
+
 await page.screenshot({ path: out + '/wasser.png' });
 check('keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));
 console.log(fails ? fails + ' Prüfung(en) fehlgeschlagen' : 'alle Prüfungen bestanden');
