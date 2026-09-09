@@ -676,7 +676,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.0.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '3.0.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -847,27 +847,30 @@
       ctx.fillStyle = ink; ctx.strokeStyle = ink;
       ctx.textBaseline = 'alphabetic';
 
-      const breiteAus = h2 => GLAS_W * (h2 / GLAS_H) * 0.94;   // Glasbreite aus einer Höhe
       ctx.font = `${weight} ${klein}px ${family}`;
       const kopfVon = z => z.label + '   ' + literText(wasserSumme(w, z.key));
-      // **Ein** Maßstab für alle drei Zeilen. Je Zeile zu rechnen wäre naheliegend, macht die Anzeige aber
-      // unehrlich: ein 0,5er sähe in einer leeren Zeile größer aus als in einer vollen, obwohl es dieselbe
-      // Menge ist (am Bild gesehen). Der Maßstab kommt darum vom **vollsten** Zeitfenster; damit füllt
-      // genau dieses die Breite bis zur Säule aus und rechts bleibt nichts ungenutzt.
-      const meiste = Math.max(1, ...WASSER_ZEITEN.map(z => (w[z.key] || []).length));
       const kopfB = Math.max(...WASSER_ZEITEN.map(z => ctx.measureText(kopfVon(z) + '  ').width));
-      const passt = (breite, hoehe) => Math.min(hoehe, (breite / meiste) / 0.94 * GLAS_H / GLAS_W);
-      const hEin = passt(spalte - kopfB, zeilH * 0.86);           // Kopf und Gläser in einer Zeile
-      const hZwei = passt(spalte, Math.min(zeilH - klein * 1.4, zeilH * 0.78));   // Gläser unter dem Kopf
-      const eineZeile = hEin >= hZwei;                            // es gewinnt, was die Gläser größer macht
-      const glasH = eineZeile ? hEin : hZwei;
-      // Feldbreite je Glas: dicht nebeneinander mit einem Zehntel Luft. Der Versuch, sie über die ganze
-      // Spalte zu spreizen (Faktor 1,7), ging zurück – „nicht zu viel Abstand, sonst passen nicht genug
-      // Gläser in eine Reihe. Rechts Luft ist ok" (Auftraggeber, 9.9.2026). Die Gläser aller Zeilen
-      // fluchten weiter, weil die Feldbreite für alle gleich ist.
-      const platz = (eineZeile ? spalte - kopfB : spalte);
-      const glasB = Math.min(breiteAus(glasH) * 1.1, platz / meiste);
-      const skala = glasH / GLAS_H;
+      // Der Zwischenraum ist **fest**, nicht die Feldbreite: bei gleich breiten Feldern stand ein kleines
+      // Glas mit viel Luft neben einem großen ohne („der Freiraum zwischen den Gläsern identisch",
+      // Auftraggeber). Jedes Glas bringt darum seine eigene Breite mit (2 · bo, die Oberkante).
+      const LUFT = GLAS_W * 0.20;
+      const eigenB = art => 2 * GLAeSER[art].bo;
+      const bedarfVon = l => l.reduce((a, k) => a + (GLAeSER[k] ? eigenB(k) : 0), 0) + Math.max(0, l.length - 1) * LUFT;
+      // **Platz für sechs Gläser einplanen**, auch wenn weniger dastehen: so bleibt die Größe gleich,
+      // bis wirklich mehr als sechs zusammenkommen – sonst schrumpfte alles bei jedem neuen Glas.
+      const RESERVE = 6;
+      const reserve = RESERVE * 2 * GLAeSER.gross.bo + (RESERVE - 1) * LUFT;
+      // **Ein** Maßstab für alle drei Zeilen: je Zeile gerechnet sähe ein 0,5er in einer leeren Zeile
+      // größer aus als in einer vollen, obwohl es dieselbe Menge ist (am Bild gesehen).
+      const bedarf = Math.max(reserve, ...WASSER_ZEITEN.map(z => bedarfVon(w[z.key] || [])));
+      const skalaFuer = (breite, hoehe) => Math.min(hoehe / GLAS_H, breite / bedarf);
+      const sEin = skalaFuer(spalte - kopfB, zeilH * 0.86);        // Kopf und Gläser in einer Zeile
+      // 1,6 statt 1,4 Zeilenhöhen Abzug: mit 1,4 blieben zwischen der untersten Glasreihe und „Heute …“
+      // nur 2,6 px – gemessen, kein Überlauf, aber sichtbar gedrängt (Auftraggeber: „Zeilenumbrüche prüfen“).
+      const sZwei = skalaFuer(spalte, Math.min(zeilH - klein * 1.6, zeilH * 0.72));   // Gläser unter dem Kopf
+      const eineZeile = sEin >= sZwei;                             // es gewinnt, was die Gläser größer macht
+      const skala = eineZeile ? sEin : sZwei;
+      const glasH = GLAS_H * skala;
 
       WASSER_ZEITEN.forEach((z, i) => {
         const y = i * zeilH;
@@ -878,13 +881,14 @@
         ctx.fillText(kopfVon(z), 0, y + (eineZeile ? zeilH * 0.5 + klein * 0.36 : klein));
         ctx.globalAlpha = 1;
         if (!glaeser.length) return;
-        const gx0 = eineZeile ? kopfB : 0;
         const gy = eineZeile ? y + (zeilH - glasH) / 2 : y + klein * 1.25;
+        let gx = eineZeile ? kopfB : 0;
         glaeser.forEach((art, n) => {
           const g = GLAeSER[art]; if (!g) return;
-          const gx = gx0 + n * glasB;
+          const bGlas = eigenB(art) * skala;
           ctx.save();
-          ctx.translate(gx + (glasB - GLAS_W * skala) / 2, gy); ctx.scale(skala, skala);
+          // Der Pfad ist um GLAS_W/2 zentriert – hier auf die **linke Glaskante** setzen
+          ctx.translate(gx - (GLAS_W / 2 - g.bo) * skala, gy); ctx.scale(skala, skala);
           // Wasser: Verlauf von hell nach kräftig, darüber ein Lichtstreifen und eine helle Oberkante
           const vf = ctx.createLinearGradient(0, g.y0, 0, GLAS_BODEN);
           vf.addColorStop(0, WASSER_FARBE.oben); vf.addColorStop(0.45, WASSER_FARBE.mitte); vf.addColorStop(1, WASSER_FARBE.unten);
@@ -896,7 +900,9 @@
           ctx.lineWidth = 1.9; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
           ctx.stroke(new Path2D(glasPfad(g)));
           ctx.restore();
-          treffer.push({ key: z.key, n, x: gx, y: gy, w: glasB, h: glasH });
+          // Trefferfeld etwas größer als das Glas: der halbe Zwischenraum zählt mit dazu
+          treffer.push({ key: z.key, n, x: gx - LUFT * skala / 2, y: gy, w: bGlas + LUFT * skala, h: glasH });
+          gx += bGlas + LUFT * skala;
         });
       });
 
@@ -929,7 +935,7 @@
         const fh = sh * anteil, fy = sy + sh - fh;
         ctx.save(); ctx.clip(rund(sx, sy, saeuleB, sh, r));
         ctx.globalAlpha = WASSER_FARBE.deckkraft;
-        ctx.fillStyle = WASSER_FARBE.mitte; ctx.fillRect(sx, fy, saeuleB, fh);
+        ctx.fillStyle = WASSER_FARBE.unten; ctx.fillRect(sx, fy, saeuleB, fh);
         // Lichtstreifen links, wie im Glas
         ctx.fillStyle = WASSER_FARBE.glanz;
         ctx.fillRect(sx + saeuleB * 0.17, fy + fh * 0.03, saeuleB * 0.11, fh * 0.94);
