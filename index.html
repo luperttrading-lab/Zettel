@@ -676,7 +676,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '1.65.1'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
+    const APP_VERSION = '1.65.2'; // bei jeder Änderung hochzählen (hinten: Korrektur, Mitte: neue Funktion) – die App meldet sich dann selbst
     const KEY = 'zettel.v1';
     const COLORS = {
       yellow: { paper: '#fff59b', ink: '#2a2a2e' },
@@ -2697,6 +2697,18 @@
     // feste Maße und schnitte ab. Darum Warnung in Vorschau und Statuszeile, und Kleben/Teilen sind gesperrt.
     const OVERFLOW_HINT = 'Zu viel Text: passt auch in kleinster Schrift nicht auf den Zettel. Bitte kürzen – so wird nichts geklebt.';
     function ueberlauf() { const t = targetCanvas(); return !!noteText() && fitNote(t.w, t.h, t.layout, noteText()).overflow; }
+    // Hat der Zettel überhaupt etwas zu zeigen? Auf dem Wasserzettel steht kein Text, sondern Gläser –
+    // die Prüfung auf `state.text` sperrte ihn deshalb dauerhaft mit „Erst was draufschreiben"
+    // (Auftraggeber, 9.9.2026). Geprüft wird über **alle** Zettel, denn alle kommen ins Bild: ein leerer
+    // aktiver Zettel neben einem beschriebenen zweiten blockierte das Kleben ebenfalls zu Unrecht.
+    function zettelInhalt(q) {
+      const z = q || state;
+      if (z.list === 'wasser') return wasserTag(wasserStand(z)) > 0;
+      return !!String(z.text || '').trim();
+    }
+    const irgendeinInhalt = () => alleZettel().some(zettelInhalt);
+    // Passender Hinweis: beim Wasserzettel hilft „draufschreiben" nicht weiter
+    const LEER_HINWEIS = () => (istWasser() ? 'Erst ein Glas eintragen.' : 'Erst was draufschreiben.');
 
     // Vorschau in der App: der Zettel wird proportional zum Hintergrundbild skaliert,
     // Schriftgröße und Umbrüche sind dann identisch mit dem, was aufs Display kommt.
@@ -3065,7 +3077,7 @@
       if (nurHintergrund) {
         if (bgFehler) { zeigeMeldung(BG_FEHLER); return; }
         if (!bgKennung) { zeigeMeldung('Kein Hintergrundfoto hinterlegt – erst „Eigenes Hintergrundfoto“ wählen. Ohne Foto gäbe es nur den dunklen Verlauf.'); return; }
-      } else if (!state.text.trim()) { if (state.hidden) { peek = true; zeigeZettel(); } zeigeMeldung('Erst was draufschreiben.'); textEl.focus(); return; }
+      } else if (!irgendeinInhalt()) { if (state.hidden) { peek = true; zeigeZettel(); } zeigeMeldung(LEER_HINWEIS()); if (!istWasser()) textEl.focus(); return; }
       else if (ueberlauf()) { zeigeMeldung(OVERFLOW_HINT); return; }   // das Bild schnitte ab
       zeigeMeldung('Rendere …');
       const snap = pinSnapshot({ requested: !!state.autoRun, bgOnly: nurHintergrund });   // Stand im Moment des Tipps
@@ -3100,7 +3112,7 @@
 
     // Weg 2 (manuell): Teilen-Dialog → Bild sichern → Einstellungen.
     async function stickViaShare() {
-      if (!state.text.trim()) { zeigeMeldung('Erst was draufschreiben.'); textEl.focus(); return; }
+      if (!irgendeinInhalt()) { zeigeMeldung(LEER_HINWEIS()); if (!istWasser()) textEl.focus(); return; }
       if (ueberlauf()) { zeigeMeldung(OVERFLOW_HINT); return; }
       zeigeMeldung('Rendere …');
       let blob;

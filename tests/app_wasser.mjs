@@ -128,8 +128,32 @@ const paar = await page.evaluate(async () => {
 check('das Bild hängt nicht davon ab, welcher Zettel gerade aktiv ist', paar.anders === 0,
   paar.anders + ' von ' + paar.pixel + ' Bildpunkten verschieden');
 
-// 8) Regression: bei einer Textliste leert der Mülleimer weiterhin den Text
+// 8) Übertragen: der Wasserzettel hat keinen Text – die Prüfung darauf sperrte ihn dauerhaft mit
+//    „Erst was draufschreiben", obwohl Gläser darauf standen (vom Auftraggeber gemeldet, 1.65.2).
+await page.evaluate(() => localStorage.clear());
+await page.reload(); await page.waitForTimeout(900);
+const meldung = () => page.evaluate(() => (document.getElementById('satz') || {}).textContent || '');
+await page.evaluate(() => document.querySelector('#strip-list .item[data-value="wasser"]').click());
+await page.waitForTimeout(400);
+await page.evaluate(() => stickViaShortcut()); await page.waitForTimeout(400);
+check('leerer Wasserzettel: passender Hinweis statt „draufschreiben"', (await meldung()) === 'Erst ein Glas eintragen.', await meldung());
+await page.evaluate(() => document.querySelectorAll('#wasser-glaeser button')[1].click()); await page.waitForTimeout(300);
+await page.evaluate(() => stickViaShortcut()); await page.waitForTimeout(900);
+check('mit einem Glas lässt sich der Wasserzettel übertragen', !/draufschreiben|Glas eintragen/.test(await meldung()), await meldung());
+// Und: ein leerer aktiver Zettel neben einem beschriebenen darf nicht blockieren – ins Bild kommen alle
 await page.evaluate(() => {
+  state.wasser = wasserLeer(); zettelSichern();
+  zettelDazu(); state.list = 'dash'; textEl.value = '– Milch'; onTextChanged(); flush(); zettelSichern();
+  state.aktiv = 0; Object.assign(state, state.zettel[0]); applyList(); syncPreview();
+});
+await page.waitForTimeout(400);
+await page.evaluate(() => stickViaShortcut()); await page.waitForTimeout(900);
+check('leerer aktiver Zettel blockiert nicht, wenn ein anderer beschrieben ist',
+  !/draufschreiben|Glas eintragen/.test(await meldung()), await meldung());
+
+// 9) Regression: bei einer Textliste leert der Mülleimer weiterhin den Text
+await page.evaluate(() => {
+  state.aktiv = 1; Object.assign(state, state.zettel[1]); applyList(); syncPreview();
   document.querySelector('#strip-list .item[data-value="dash"]').click();
 });
 await page.waitForTimeout(300);
