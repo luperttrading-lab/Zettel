@@ -61,11 +61,25 @@
     header h1 small { font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 6px; letter-spacing: 0; }
     header span { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
     /* Zettelwahl in der Kopfzeile: kostet keine eigene Zeile, ist aber immer sichtbar */
+    /* Der Reiter ist eine **Miniatur seines Zettels**: Papierfarbe, Tinte, und wenn ein Bildmagnet
+       gewählt ist, dessen Tier oben drauf – dasselbe Bild, das der Auftraggeber auf dem Sperrbildschirm
+       sieht. „Ich muss immer überlegen, welche welche ist" (10.9.2026); eine Zahl allein sagt nichts,
+       eine Farbe allein braucht Zuordnung, das Tier erkennt man ohne Nachdenken. */
     .zettelwahl { display: flex; gap: 6px; align-self: center; }
-    .zettelwahl button { width: 30px; height: 30px; padding: 0; border: 0; border-radius: 9px;
-      background: var(--flaeche); color: var(--muted); font: 600 14px/1 inherit; cursor: pointer; }
-    .zettelwahl button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+    .zettelwahl button { position: relative; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 9px;
+      background: var(--flaeche); color: var(--muted); font: 600 13px/1 inherit; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; overflow: visible; }
+    .zettelwahl button.zettel { background: var(--tabpaper); color: var(--tabink); }
+    /* Der aktive bekommt einen Ring, nicht die Farbumkehr – sonst wäre gerade beim aktiven die
+       Papierfarbe weg, die ihn ja kenntlich macht. */
+    .zettelwahl button.zettel[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--fg); }
+    .zettelwahl button[aria-pressed="true"]:not(.zettel) { background: var(--fg); color: var(--bg); }
     .zettelwahl button.plus { color: var(--fg); font-size: 19px; }
+    /* Das Tier sitzt oben und ragt heraus – wie die Befestigung am echten Zettel. Die Zahl rutscht
+       darunter nach unten, damit beides lesbar bleibt. */
+    .zettelwahl button .tier { position: absolute; top: -7px; left: 50%; transform: translateX(-50%);
+      width: 20px; height: 20px; border-radius: 5px; object-fit: contain; pointer-events: none; }
+    .zettelwahl button.mitTier { align-items: flex-end; padding-bottom: 3px; font-size: 11px; }
     .note .pin {
       position: absolute; right: -6px; bottom: -12px; transform: rotate(1.5deg);
       background: #34c759; color: #fff; font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -748,7 +762,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.26';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.27';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -782,7 +796,7 @@
 
     // Befestigungen (Zeichnung, Farben, Muster, Motive) kommen aus lib/fasteners.js – dieselbe Datei nutzt der Server.
     const { FASTENERS, FASTENER_INSET, FASTENER_RULE, FASTENER_MAX, FCOLORS, DECOR_LABEL, decorsFor, normalizeLook, lookKey, fastenerIcon, fastenerSvg, hasColor,
-            fastenerHome, fastenerPlace, fastenerInset, fastenersSvg } = ZettelFasteners;
+            fastenerHome, fastenerPlace, fastenerInset, fastenersSvg, photoInfo } = ZettelFasteners;
     if (window.ZettelMotifs) ZettelFasteners.setMotifs(ZettelMotifs);   // eigene Magnet-Motive
 
     const $ = id => document.getElementById(id);
@@ -3805,6 +3819,20 @@
         const b = document.createElement('button');
         b.type = 'button'; b.textContent = String(i + 1);
         b.setAttribute('aria-pressed', String(i === (state.aktiv | 0)));
+        // Papierfarbe und Tinte des Zettels – über Variablen, damit der Ring des aktiven darüberliegt
+        const c = COLORS[z.color] || COLORS.yellow;
+        b.classList.add('zettel');
+        b.style.setProperty('--tabpaper', c.paper);
+        b.style.setProperty('--tabink', c.ink);
+        // Das Tier des Bildmagneten, falls eines gewählt ist. mitZettel, weil fastenerLook aus dem
+        // Zustand liest – ohne das trüge jeder Reiter das Bild des gerade aktiven Zettels.
+        const bild = z.fastener === 'photo'
+          ? (photoInfo(mitZettel(z, () => fastenerLook('photo')).decor) || null) : null;
+        if (bild && bild.src) {
+          const img = document.createElement('img');
+          img.className = 'tier'; img.src = bild.src; img.alt = '';
+          b.classList.add('mitTier'); b.appendChild(img);
+        }
         b.title = i === (state.aktiv | 0) ? 'Diesen Zettel entfernen' : 'Zettel ' + (i + 1) + ' bearbeiten';
         b.addEventListener('click', () => {
           if (i !== (state.aktiv | 0)) { zettelWechseln(i); return; }

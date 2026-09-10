@@ -148,6 +148,43 @@ check('Drehen im Fenster trifft nur den aktiven Zettel',
   JSON.stringify(winkel));
 await page.evaluate(() => lageOeffnen(false)); await page.waitForTimeout(200);
 
+
+// 3.27: Die Reiter sind Miniaturen ihrer Zettel – Papierfarbe, Tinte und das Tier des Bildmagneten.
+// Der heikle Teil: `fastenerLook()` liest aus `state`. Ohne `mitZettel` trüge **jeder** Reiter das Bild
+// des gerade aktiven Zettels – dieselbe Falle wie beim Drehwinkel (1.64.1) und beim Wasserzettel (1.65.0).
+await page.evaluate(() => localStorage.clear());
+await page.reload(); await page.waitForTimeout(900);
+const bilder = await page.evaluate(() => decorsFor('photo'));
+await page.evaluate(bs => {
+  state.color = 'yellow'; state.fastener = 'photo'; state.fastenerLook.photo = { decor: bs[0] };
+  textEl.value = 'Eins'; onTextChanged(); flush(); applyColor(); applyFastener(); zettelSichern();
+  zettelDazu(); state.color = 'pink'; state.fastener = 'photo'; state.fastenerLook.photo = { decor: bs[1] };
+  textEl.value = 'Zwei'; onTextChanged(); flush(); applyColor(); applyFastener(); zettelSichern();
+  zettelDazu(); state.color = 'blue'; state.fastener = 'tape';
+  textEl.value = 'Drei'; onTextChanged(); flush(); applyColor(); applyFastener(); zettelSichern();
+  persist(); zettelTabs();
+}, bilder);
+await page.waitForTimeout(400);
+const reiter = () => page.evaluate(() => [...document.querySelectorAll('#zettelwahl button')]
+  .filter(b => !b.classList.contains('plus'))
+  .map(b => ({ txt: b.textContent, bg: getComputedStyle(b).backgroundColor,
+               tier: (b.querySelector('img') || {}).src || null })));
+const r1 = await reiter();
+check('jeder Reiter trägt die Papierfarbe seines Zettels',
+  new Set(r1.map(x => x.bg)).size === 3, JSON.stringify(r1.map(x => x.bg)));
+check('Zettel mit Bildmagnet tragen ihr Tier, der mit Klebestreifen keins',
+  r1[0].tier && r1[1].tier && !r1[2].tier, JSON.stringify(r1.map(x => !!x.tier)));
+check('die beiden Tiere sind verschieden – jeder Reiter zeigt sein eigenes',
+  r1[0].tier !== r1[1].tier, r1[0].tier === r1[1].tier ? 'beide zeigen dasselbe Bild' : 'verschieden');
+// Nach einem Zettelwechsel darf sich kein Reiter das Bild des neuen aktiven Zettels borgen
+await page.evaluate(() => zettelWechseln(0)); await page.waitForTimeout(300);
+const r2 = await reiter();
+check('nach dem Wechsel behalten alle Reiter ihr Bild',
+  JSON.stringify(r2.map(x => x.tier)) === JSON.stringify(r1.map(x => x.tier)), JSON.stringify(r2.map(x => !!x.tier)));
+check('der aktive Reiter ist am Ring zu erkennen, nicht an vertauschten Farben',
+  await page.evaluate(() => { const b = [...document.querySelectorAll('#zettelwahl button')][0];
+    return b.getAttribute('aria-pressed') === 'true' && /rgb\(255, 245, 155\)/.test(getComputedStyle(b).backgroundColor); }));
+
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();
 console.log(fails ? `${fails} FEHLER` : 'ALLE TESTS OK');
