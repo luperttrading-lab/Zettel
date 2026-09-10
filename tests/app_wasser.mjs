@@ -102,6 +102,23 @@ check('ohne Vortagswert steht „gestern –“', (await gesternText()) === 'ges
 await page.evaluate(() => { const w = wasserStand(); w.gestern = 2.4; state.wasser = w; syncPreview(); });
 await page.waitForTimeout(200);
 check('mit Vortagswert steht die Menge', (await gesternText()) === 'gestern 2,4 l', await gesternText());
+// 3.24: Ein Tipp auf den Vortagswert entfernt ihn. Aus der Erprobung stehengebliebene Werte waren sonst
+// nicht loszuwerden – der Mülleimer bewahrt den Vortag ausdrücklich (Auftraggeber, 10.9.2026).
+const tippeGestern = async () => {
+  const p2 = await page.evaluate(() => { const t = wasserTreffer.find(q => q.gestern);
+    if (!t) return null;
+    const r = document.getElementById('wasser-bild').getBoundingClientRect();
+    return { x: r.left + t.x + t.w / 2, y: r.top + t.y + t.h / 2 }; });
+  if (!p2) return false;
+  await page.mouse.click(p2.x, p2.y); await page.waitForTimeout(300);
+  return true;
+};
+check('mit Wert gibt es ein Trefferfeld für „gestern“', await page.evaluate(() => wasserTreffer.some(q => q.gestern)));
+check('ein Tipp darauf entfernt ihn', (await tippeGestern()) && (await page.evaluate(() => wasserStand().gestern)) === null,
+  JSON.stringify(await page.evaluate(() => wasserStand().gestern)));
+check('danach steht dort der Strich', (await gesternText()) === 'gestern –', await gesternText());
+check('ohne Wert gibt es kein Trefferfeld – nichts zu löschen',
+  await page.evaluate(() => !wasserTreffer.some(q => q.gestern)));
 
 // 6) Die Vorschau zeichnet nichts Eigenes: derselbe Aufruf muss Pixel für Pixel dasselbe liefern
 await page.evaluate(() => { state.wasser = { tag: heuteKennung(), v12: ['klein','gross'], v18: ['mittel'], n18: [], gestern: 2.4 }; syncPreview(); });

@@ -748,7 +748,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.23';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.24';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -1095,8 +1095,15 @@
         const x = ctx.measureText(heute + '   ').width;
         ctx.font = `${weight} ${gesternFs}px ${family}`;
         ctx.globalAlpha = 0.5;
-        ctx.fillText('gestern ' + (typeof w.gestern === 'number' ? literText(w.gestern) : '–'), x, fussY);
+        const gt = 'gestern ' + (typeof w.gestern === 'number' ? literText(w.gestern) : '–');
+        ctx.fillText(gt, x, fussY);
         ctx.globalAlpha = 1;
+        // Antippbar, solange dort eine Zahl steht: ein Wert aus der Erprobung ist sonst nicht mehr
+        // loszuwerden – der Mülleimer bewahrt den Vortag ausdrücklich (Auftraggeber, 10.9.2026).
+        if (typeof w.gestern === 'number') {
+          const b = ctx.measureText(gt).width;
+          treffer.push({ gestern: true, x, y: fussY - gesternFs, w: b, h: gesternFs * 1.4 });
+        }
       }
 
       // ── Anzeige des Tagesstands ─────────────────────────────────────────────────────────────────
@@ -3301,6 +3308,14 @@
       const r = wasserEl.getBoundingClientRect();
       const x = e.clientX - r.left, y = e.clientY - r.top;
       const passt = q => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h;
+      // Der Vortagswert steht in der Fußzeile, außerhalb der Zeilenfelder – zuerst gefragt
+      if (wasserTreffer.some(q => q.gestern && passt(q))) {
+        e.preventDefault();
+        const w = wasserStand(); w.gestern = null;
+        state.wasser = w; persist(); updatePinBadge(); syncPreview(); wasserLeisteBauen();
+        showInfo('Vortagswert entfernt – morgen trägt ihn der Tageswechsel neu ein', 3);
+        return;
+      }
       // Ein Glas hat Vorrang vor der Zeile darunter – sonst käme man nie ans Löschen
       const glas = wasserTreffer.find(q => q.n !== undefined && passt(q));
       const zeile = glas || wasserTreffer.find(q => q.zeile !== undefined && passt(q));
