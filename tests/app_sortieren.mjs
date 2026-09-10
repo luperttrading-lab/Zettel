@@ -7,7 +7,8 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 const [,, out = '/tmp'] = process.argv; fs.mkdirSync(out, { recursive: true });
 const b = await chromium.launch({ executablePath: process.env.PW_CHROMIUM || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
-const page = await (await b.newContext({ viewport: { width: 430, height: 900 }, deviceScaleFactor: 2 })).newPage();
+const kontext = await b.newContext({ viewport: { width: 430, height: 900 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+const page = await kontext.newPage();
 const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 let fails = 0;
 const check = (name, cond, extra = '') => { console.log((cond ? 'OK  ' : 'FEHL') + ' ' + name + (extra ? ' – ' + extra : '')); if (!cond) fails++; };
@@ -124,6 +125,34 @@ check('Modus an vor dem Listenwechsel', await anSort());
 await page.evaluate(() => document.querySelector('#strip-list .item[data-value="dot"]').click());
 await page.waitForTimeout(300);
 check('Listenwechsel beendet den Sortiermodus', !(await anSort()));
+
+// 8) **Mit echten Touch-Ereignissen** (3.19). Der Mauszeiger deckt den entscheidenden Fall nicht ab:
+//    auf dem iPhone klassifiziert der Browser das Wischen nach wenigen Pixeln als Seitenscroll, schickt
+//    pointercancel und der Zug ist nach „einem Millimeter“ vorbei. Gemessen war das genau so – sortZug
+//    wurde null und die Seite scrollte 39 px. Fix: touch-action none plus preventDefault im touchmove.
+const cdp = await kontext.newCDPSession(page);
+const tippe = (art, x, y) => cdp.send('Input.dispatchTouchEvent', {
+  type: art, touchPoints: art === 'touchEnd' ? [] : [{ x, y, id: 1 }] });
+await setze('dash', 'Eins\nZwei\nDrei\nVier\nFünf'); await page.waitForTimeout(250);
+const tg = await zeilenKasten(3), tz = await zeilenKasten(1);
+await tippe('touchStart', tg.x, tg.y);
+await page.waitForTimeout(700);
+check('Touch: langes Drücken greift die Zeile', await page.evaluate(() => sortAn && !!sortZug));
+for (let i = 1; i <= 10; i++) await tippe('touchMove', tg.x, tg.y + (tz.y - tg.y) * i / 10);
+await page.waitForTimeout(150);
+const zug = await page.evaluate(() => ({ zug: sortZug && { von: sortZug.von, ziel: sortZug.ziel }, scroll: window.scrollY }));
+check('Touch: der Zug überlebt das Wischen und die Seite scrollt nicht',
+  zug.zug && zug.zug.von === 3 && zug.zug.ziel === 1 && zug.scroll === 0, JSON.stringify(zug));
+await tippe('touchEnd', 0, 0); await page.waitForTimeout(250);
+check('Touch: die Zeile sitzt danach am Zielplatz',
+  (await page.evaluate(() => state.text.replace(/^\S+\s*/gm, ''))) === 'Eins\nVier\nZwei\nDrei\nFünf',
+  JSON.stringify(await page.evaluate(() => state.text)));
+
+// 9) Der Modus ist zu sehen: helle Kästen hinter den Zeilen, nicht nur das Wackeln
+const sicht = await page.evaluate(() => { const d = document.querySelectorAll('#text .ln')[0];
+  return { grund: getComputedStyle(d).backgroundColor, ta: getComputedStyle(document.getElementById('text')).touchAction }; });
+check('Zeilen sind im Sortiermodus hinterlegt und die Geste gehört uns',
+  /rgba?\(0, 0, 0, 0\.0[5-9]/.test(sicht.grund) && sicht.ta === 'none', JSON.stringify(sicht));
 
 await page.screenshot({ path: out + '/sortieren.png' });
 check('keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));

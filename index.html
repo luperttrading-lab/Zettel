@@ -346,7 +346,19 @@
     /* Sortieren: die Zeilen wackeln wie Icons auf dem Homescreen und lassen sich ziehen. Der Editor ist
        dabei nicht editierbar – sonst fährt iOS beim langen Drücken Lupe und Textauswahl aus. */
     .note .editor.sortieren { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
-      caret-color: transparent; cursor: grab; }
+      caret-color: transparent; cursor: grab;
+      /* Ohne das übernimmt der Browser die Wischgeste als Seitenscroll und bricht den Zug ab (gemessen:
+         nach ~40 px scrollte die Seite, der Zug endete). Gilt ab der **nächsten** Geste – für die
+         laufende sorgt der touchmove-Handler mit preventDefault. */
+      touch-action: none; }
+    /* Sichtbar, dass der Modus an ist: jede Zeile bekommt einen hellen Kasten. Das bloße Wackeln reichte
+       dem Auftraggeber nicht („müsste man irgendwie sehen, dass er aktiviert ist", 10.9.2026). */
+    .note .editor.sortieren .ln { background: rgba(0, 0, 0, .07); border-radius: 6px;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, .05); }
+    /* Die gegriffene Zeile liegt **deckend** obenauf (Papierfarbe, eigener z-index): halbtransparent
+       schien die Zeile darunter durch, und beim Ziehen nach unten lag sie sogar dahinter. */
+    .note .editor.sortieren .ln.greift { background: var(--paper); z-index: 5;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, .3), 0 0 0 1px rgba(0, 0, 0, .12); }
     /* Drehpunkt am **linken** Rand, nicht in der Mitte: dreht die Zeile um ihre Mitte, hebt und senkt sich
        ihr linker Rand – bei gegenläufigen Nachbarzeilen wirkte der Zeilenabstand dort ungleich
        (Auftraggeber am Bild, 10.9.2026). Am linken Rand stehen Markierung und Zeilenanfang, dort führt
@@ -355,7 +367,7 @@
     .note .editor.sortieren .ln:nth-child(2n) { animation-delay: -.21s; }
     /* Während des Ziehens keine Animation: Wackeln und Verschieben nutzen beide `transform`. */
     .note .editor.sortieren.zieht .ln { animation: none; transition: transform .16s ease; }
-    .note .editor.sortieren.zieht .ln.greift { transition: none; opacity: .9; }
+    .note .editor.sortieren.zieht .ln.greift { transition: none; }
     @keyframes wackeln { from { transform: rotate(-.45deg); } to { transform: rotate(.45deg); } }
     @media (prefers-reduced-motion: reduce) { .note .editor.sortieren .ln { animation: none; } }
     /* Der Wasserzettel liegt genau auf der Textfläche – Innenabstand und Größe setzt syncPreview */
@@ -711,7 +723,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.18';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.19';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -2492,6 +2504,11 @@
     };
     textEl.el.addEventListener('pointerup', sortEnde);
     textEl.el.addEventListener('pointercancel', sortEnde);
+    // Die **laufende** Geste dem Browser wegnehmen: touch-action wirkt erst ab der nächsten. Ohne das
+    // klassifizierte iOS das Wischen nach wenigen Pixeln als Scroll, schickte pointercancel und der Zug
+    // war nach „einem Millimeter“ vorbei (vom Auftraggeber gemeldet, mit echten Touch-Events gemessen:
+    // sortZug wurde null, die Seite scrollte 39 px). passive:false, sonst ist preventDefault wirkungslos.
+    textEl.el.addEventListener('touchmove', e => { if (sortZug) e.preventDefault(); }, { passive: false });
     sortDoneEl.addEventListener('click', () => sortModus(false));
     // Ein Tipp irgendwo außerhalb beendet den Modus – wie das Haken-Fenster
     document.addEventListener('pointerdown', e => {
