@@ -43,6 +43,47 @@ await page.click('#titleon'); await page.waitForTimeout(100);
 check('wieder unsichtbar', !(await sichtbar()));
 const sw = await page.evaluate(() => document.documentElement.scrollWidth);
 check('scrollWidth ≤ 448', sw <= 448, String(sw));
+
+// 3.22: Return am Zeilenende. Der Haken-Wegweiser ist ein inline-block am Zeilenende; auf einer leeren
+// Zeile steht dort nur ein <br>, der Wegweiser landete **dahinter** und damit eine Zeile zu tief – die
+// leere Zeile wurde doppelt so hoch (vom Auftraggeber am Bild gemeldet). Auf leeren Zeilen weg damit.
+await page.evaluate(() => localStorage.clear());
+await page.reload(); await page.waitForTimeout(900);
+await page.evaluate(() => {
+  document.querySelector('#strip-list .item[data-value="dash"]').click();
+  textEl.value = relist('Erste\nZweite', 'dash'); onTextChanged(); flush(); syncPreview();
+  textEl.focus(); textEl.setCaret(textEl.value.indexOf('\n'));
+});
+await page.waitForTimeout(250);
+await page.keyboard.press('Enter'); await page.waitForTimeout(350);
+const nachReturn = await page.evaluate(() => [...document.querySelectorAll('#text .ln')].map(d => ({
+  leer: d.textContent === '', after: getComputedStyle(d, '::after').content,
+  h: Math.round(d.getBoundingClientRect().height) })));
+check('nach Return: die leere Zeile trägt keinen Haken-Wegweiser',
+  nachReturn[1].leer && nachReturn[1].after === 'none', JSON.stringify(nachReturn));
+check('nach Return: die leere Zeile ist so hoch wie die anderen',
+  nachReturn[1].h === nachReturn[0].h, JSON.stringify(nachReturn.map(z => z.h)));
+
+// Der Bereich auf der Markierung hakt nur bei den Kästchen ab – bei Strichen passiert dort nichts
+const tippeMarke = async () => {
+  const m = await page.evaluate(() => { const d = document.querySelectorAll('#text .ln')[0], r = d.getBoundingClientRect();
+    return { x: r.left + Math.max(2, (parseFloat(getComputedStyle(d).paddingLeft) || 0) / 2), y: r.top + r.height / 2 }; });
+  await page.mouse.click(m.x, m.y); await page.waitForTimeout(250);
+  return page.evaluate(() => state.text.split('\n')[0]);
+};
+await page.evaluate(() => { textEl.value = relist('Erste\nZweite', 'dash'); onTextChanged(); flush(); syncPreview(); });
+await page.waitForTimeout(250);
+const strichVorher = await page.evaluate(() => state.text.split('\n')[0]);
+check('bei Strichen hakt ein Tipp auf die Markierung nicht ab', (await tippeMarke()) === strichVorher,
+  strichVorher + ' → ' + (await page.evaluate(() => state.text.split('\n')[0])));
+await page.evaluate(() => { document.querySelector('#strip-list .item[data-value="check"]').click();
+  textEl.value = relist('Erste\nZweite', 'check'); onTextChanged(); flush(); syncPreview(); });
+await page.waitForTimeout(300);
+const kastenVorher = await page.evaluate(() => state.text.split('\n')[0]);
+const kastenNachher = await tippeMarke();
+check('bei Kästchen hakt ein Tipp auf das Kästchen weiterhin ab',
+  kastenNachher !== kastenVorher && kastenNachher.startsWith('☑'), kastenVorher + ' → ' + kastenNachher);
+
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();
 console.log(fails ? `${fails} FEHLER` : 'ALLE TESTS OK');

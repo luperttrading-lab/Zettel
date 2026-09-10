@@ -146,6 +146,10 @@
     .note .editor .ln[data-mk][data-done]:not([data-mk="☐"]):not([data-mk="☑"])::after {
       background-image: var(--haken-bild);
     }
+    /* Eine leere Zeile enthält im contenteditable nur ein <br>. Der Wegweiser ist ein inline-block am
+       Zeilenende – er landete damit **hinter** dem Umbruch und stand eine Zeile zu tief (nach Return am
+       Zeilenende gemeldet, 10.9.2026). Auf einer leeren Zeile gibt es nichts abzuhaken: weg damit. */
+    .note .editor .ln:has(> br:only-child)::after { content: none !important; }
     .note .editor.empty .ln:first-child::after { content: "Was soll auf den Zettel?"; color: rgba(42,42,46,.35); }
     /* Überschrift: erste Zeile unterstrichen, mit etwas Luft darunter (Werte auch in fitNote und render.js).
        Kein fett: die Handschriften haben nur einen Schnitt, der Browser würde künstlich fetten, satori nicht. */
@@ -735,7 +739,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.21';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.22';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -2381,7 +2385,10 @@
       if (!d || !d.hasAttribute('data-mk')) return -1;
       const kasten = d.getBoundingClientRect();
       const einzug = parseFloat(getComputedStyle(d).paddingLeft) || 0;
-      const links = einzug > 0 && e.clientX - kasten.left <= einzug;
+      // Die Markierung selbst ist nur bei den **Kästchen** ein Schalter: dort ist das Ziel sichtbar und
+      // das Zeichen wechselt ☐ ↔ ☑. Bei Strichen, Punkten und Zahlen passiert dort nichts – ein Tipp auf
+      // den Strich hakte sonst versehentlich ab (Auftraggeber, 10.9.2026). Der Haken sitzt dort rechts.
+      const links = state.list === 'check' && einzug > 0 && e.clientX - kasten.left <= einzug;
       let rechts = false;
       try { const r = document.createRange(); r.selectNodeContents(d);
         rechts = e.clientX >= r.getBoundingClientRect().right + 6; } catch (_) {}
