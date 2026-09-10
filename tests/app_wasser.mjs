@@ -356,6 +356,32 @@ const regler = await page.evaluate(async () => {
 check('der Schriftregler ändert am Wasserzettel nichts – Bild und Maße identisch bei 60/100/140 %',
   regler.d60 === 0 && regler.d140 === 0 && regler.masse[60] === regler.masse[140], JSON.stringify(regler));
 
+// 13) 3.16: Der **Zettelwechsel** muss die Wasserleiste mitnehmen. zettelAnwenden setzte die Listenleiste
+//     direkt (stripList.set) statt über applyList – beim Wechsel vom Wasserzettel auf einen Textzettel
+//     blieben Zeitfenster, Gefäße und Ziel stehen, und der Schriftregler fehlte (Auftraggeber, mit Bild).
+await page.evaluate(() => localStorage.clear());
+await page.reload(); await page.waitForTimeout(900);
+await page.evaluate(() => {
+  state.list = 'dash'; textEl.value = '– Milch'; onTextChanged(); flush(); zettelSichern();
+  zettelDazu(); state.list = 'wasser'; state.wasser = { ...wasserLeer(), v12: ['gross'] }; applyList(); zettelSichern(); persist();
+});
+await page.waitForTimeout(300);
+const bedienung = () => page.evaluate(() => ({
+  aktiv: state.aktiv | 0, liste: state.list,
+  wasser: !document.getElementById('wasserleiste').hidden,
+  regler: getComputedStyle(document.getElementById('fontrow')).display !== 'none',
+  titel: getComputedStyle(document.getElementById('titlerow')).display !== 'none',
+}));
+const aufWasser = await bedienung();
+check('Wasserzettel aktiv: Leiste da, Regler weg', aufWasser.liste === 'wasser' && aufWasser.wasser && !aufWasser.regler, JSON.stringify(aufWasser));
+await page.evaluate(() => zettelWechseln(0)); await page.waitForTimeout(300);
+const aufText = await bedienung();
+check('Wechsel auf den Textzettel: Wasserleiste weg, Regler und Überschrift wieder da',
+  aufText.aktiv === 0 && aufText.liste === 'dash' && !aufText.wasser && aufText.regler && aufText.titel, JSON.stringify(aufText));
+await page.evaluate(() => zettelWechseln(1)); await page.waitForTimeout(300);
+const zurueck = await bedienung();
+check('Wechsel zurück: Wasserleiste wieder da, Regler weg', zurueck.wasser && !zurueck.regler && !zurueck.titel, JSON.stringify(zurueck));
+
 await page.screenshot({ path: out + '/wasser.png' });
 check('keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));
 console.log(fails ? fails + ' Prüfung(en) fehlgeschlagen' : 'alle Prüfungen bestanden');

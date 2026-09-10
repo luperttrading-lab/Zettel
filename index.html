@@ -692,7 +692,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.15';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.16';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -3474,7 +3474,12 @@
       $('text').classList.toggle('titled', noteTitleOn);
       $('text').style.setProperty('--titlef', noteTitleF);
       scaleEl.value = state.fontScale; scaleOut.value = state.fontScale + ' %';
-      stripFastener.set(state.fastener); stripFont.set(state.font); stripList.set(state.list);
+      stripFastener.set(state.fastener); stripFont.set(state.font);
+      // applyList, nicht stripList.set: nur applyList baut auch die Wasserleiste um (und blendet seit 3.13
+      // Schriftregler und Überschrift aus). Mit stripList.set blieb beim Wechsel von einem Wasserzettel auf
+      // einen Textzettel die ganze Wasserbedienung stehen – Zeitfenster, Gefäße, Ziel – und der
+      // Schriftregler fehlte (Auftraggeber, 10.9.2026, mit Bild).
+      applyList();
       applyColor(); applyFastener(); hakenBildSetzen();
       syncPreview(); updatePinBadge(); zettelTabs();
     }
