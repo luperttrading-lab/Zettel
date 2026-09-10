@@ -78,14 +78,27 @@ const s3 = await stand();
 check('Mülleimer leert den Wasserzettel', s3.tag === 0 && !s3.v12.length && !s3.v18.length && !s3.n18.length, JSON.stringify(s3));
 
 // 5) Tageswechsel: neuer Tag beginnt bei null, der Vortag bleibt vermerkt
+// Der gespeicherte Stand muss von **gestern** sein, sonst gibt es keinen Vortagswert (3.25).
 await page.evaluate(() => {
-  state.wasser = { tag: '2020-01-01', v12: ['gross', 'gross'], v18: ['mittel'], n18: [], gestern: null };
+  const d = new Date(); d.setDate(d.getDate() - 1);
+  state.wasser = { tag: d.toLocaleDateString('sv'), v12: ['gross', 'gross'], v18: ['mittel'], n18: [], gestern: null };
   zettelSichern(); persist();
 });
 await page.reload(); await page.waitForTimeout(900);
 const s4 = await stand();
 check('neuer Tag beginnt bei null', s4.tag === 0, JSON.stringify(s4));
 check('die Menge des Vortags bleibt stehen', Math.abs(s4.gestern - 1.3) < 1e-9, 'gestern ' + s4.gestern + ' statt 1,3');
+check('und trägt ihre Herkunft', (await page.evaluate(() => wasserStand().gesternTag)) ===
+  (await page.evaluate(() => vortagKennung())), JSON.stringify(await page.evaluate(() => wasserStand().gesternTag)));
+// Ein Sprung über mehrere Tage hinterlässt keinen Vortagswert
+await page.evaluate(() => {
+  state.wasser = { tag: '2020-01-01', v12: ['gross', 'gross'], v18: [], n18: [], gestern: null };
+  zettelSichern(); persist();
+});
+await page.reload(); await page.waitForTimeout(900);
+check('nach einem Sprung über mehrere Tage kein Vortagswert',
+  (await page.evaluate(() => wasserStand().gestern)) === null,
+  JSON.stringify(await page.evaluate(() => wasserStand().gestern)));
 // 3.18: Ohne Wert steht dort ein Strich – sonst sah man nicht, ob „gestern“ fehlt oder null Liter waren.
 const gesternText = () => page.evaluate(() => {
   const c = document.createElement('canvas'), g = c.getContext('2d');
@@ -99,26 +112,21 @@ const gesternText = () => page.evaluate(() => {
 await page.evaluate(() => { const w = wasserStand(); w.gestern = null; state.wasser = w; syncPreview(); });
 await page.waitForTimeout(200);
 check('ohne Vortagswert steht „gestern –“', (await gesternText()) === 'gestern –', await gesternText());
-await page.evaluate(() => { const w = wasserStand(); w.gestern = 2.4; state.wasser = w; syncPreview(); });
+// Mit Herkunft von gestern (seit 3.25 nötig – eine Zahl allein ist kein Vortagswert)
+await page.evaluate(() => { const w = wasserStand(); w.gestern = 2.4; w.gesternTag = vortagKennung(); state.wasser = w; syncPreview(); });
 await page.waitForTimeout(200);
 check('mit Vortagswert steht die Menge', (await gesternText()) === 'gestern 2,4 l', await gesternText());
-// 3.24: Ein Tipp auf den Vortagswert entfernt ihn. Aus der Erprobung stehengebliebene Werte waren sonst
-// nicht loszuwerden – der Mülleimer bewahrt den Vortag ausdrücklich (Auftraggeber, 10.9.2026).
-const tippeGestern = async () => {
-  const p2 = await page.evaluate(() => { const t = wasserTreffer.find(q => q.gestern);
-    if (!t) return null;
-    const r = document.getElementById('wasser-bild').getBoundingClientRect();
-    return { x: r.left + t.x + t.w / 2, y: r.top + t.y + t.h / 2 }; });
-  if (!p2) return false;
-  await page.mouse.click(p2.x, p2.y); await page.waitForTimeout(300);
-  return true;
-};
-check('mit Wert gibt es ein Trefferfeld für „gestern“', await page.evaluate(() => wasserTreffer.some(q => q.gestern)));
-check('ein Tipp darauf entfernt ihn', (await tippeGestern()) && (await page.evaluate(() => wasserStand().gestern)) === null,
-  JSON.stringify(await page.evaluate(() => wasserStand().gestern)));
-check('danach steht dort der Strich', (await gesternText()) === 'gestern –', await gesternText());
-check('ohne Wert gibt es kein Trefferfeld – nichts zu löschen',
-  await page.evaluate(() => !wasserTreffer.some(q => q.gestern)));
+// 3.25: Ein Wert ohne Herkunft ist kein Vortagswert. Ältere Stände kennen `gesternTag` nicht – dort
+// stand die Menge irgendeines früheren Tages als „gestern“ (beim Auftraggeber 5,2 l aus der Erprobung).
+await page.evaluate(() => { const w = wasserStand(); w.gestern = 5.2; w.gesternTag = null; state.wasser = w; syncPreview(); });
+await page.waitForTimeout(200);
+check('Wert ohne Herkunft zeigt den Strich', (await gesternText()) === 'gestern –', await gesternText());
+await page.evaluate(() => { const w = wasserStand(); w.gestern = 5.2; w.gesternTag = vortagKennung(); state.wasser = w; syncPreview(); });
+await page.waitForTimeout(200);
+check('Wert von gestern wird angezeigt', (await gesternText()) === 'gestern 5,2 l', await gesternText());
+await page.evaluate(() => { const w = wasserStand(); w.gesternTag = '2020-01-01'; state.wasser = w; syncPreview(); });
+await page.waitForTimeout(200);
+check('Wert von vorletzter Woche zeigt den Strich', (await gesternText()) === 'gestern –', await gesternText());
 
 // 6) Die Vorschau zeichnet nichts Eigenes: derselbe Aufruf muss Pixel für Pixel dasselbe liefern
 await page.evaluate(() => { state.wasser = { tag: heuteKennung(), v12: ['klein','gross'], v18: ['mittel'], n18: [], gestern: 2.4 }; syncPreview(); });

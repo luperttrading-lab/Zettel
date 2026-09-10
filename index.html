@@ -748,7 +748,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.24';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.25';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -939,6 +939,7 @@
     const saeuleFasst = ziel => Math.max(ziel + ZIEL_SCHRITT, Math.round(ziel * (4 / 3) * 2) / 2);
     const SKALA_ALPHA = 0.55;                  // **eine** Deckkraft für alle Zahlen und Striche der Skala
     const heuteKennung = () => new Date().toLocaleDateString('sv');   // ergibt JJJJ-MM-TT in Ortszeit
+    const vortagKennung = () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toLocaleDateString('sv'); };
     // Zeitfenster, in dem wir gerade sind – die Vorauswahl beim Eintragen
     function wasserFensterJetzt() {
       const h = new Date().getHours();
@@ -948,7 +949,11 @@
     // Zustand eines Wasserzettels: je Zeitfenster die Liste der getrunkenen Glasgrößen, dazu der Tag,
     // für den das gilt, und die Summe des Vortags. Kein Vorrat leerer Gläser – sie erscheinen erst,
     // wenn etwas eingetragen wird (so ausdrücklich gewünscht).
-    const wasserLeer = () => ({ tag: heuteKennung(), v12: [], v18: [], n18: [], gestern: null, soll: ZIEL_STD });
+    // `gesternTag` sagt, **von welchem Tag** der Wert unter `gestern` stammt. Ohne diese Angabe hieß
+    // „gestern“ nur „irgendein früherer Tag“: wer die App ein paar Tage nicht öffnete, bekam die Menge
+    // von damals als Vortagswert angezeigt – beim Auftraggeber standen so 5,2 l aus der Erprobung
+    // (10.9.2026). Alte Stände haben das Feld nicht und zeigen deshalb einen Strich.
+    const wasserLeer = () => ({ tag: heuteKennung(), v12: [], v18: [], n18: [], gestern: null, gesternTag: null, soll: ZIEL_STD });
     function wasserStand(q) {
       const w = (q || state).wasser;
       if (!w || typeof w !== 'object') return wasserLeer();
@@ -956,6 +961,7 @@
       aus.tag = typeof w.tag === 'string' ? w.tag : aus.tag;
       aus.gestern = typeof w.gestern === 'number' && isFinite(w.gestern) ? w.gestern : null;
       aus.soll = zielVon(w);
+      aus.gesternTag = typeof w.gesternTag === 'string' ? w.gesternTag : null;
       for (const z of WASSER_ZEITEN) aus[z.key] = (Array.isArray(w[z.key]) ? w[z.key] : []).filter(k => GLAeSER[k]);
       return aus;
     }
@@ -1095,15 +1101,11 @@
         const x = ctx.measureText(heute + '   ').width;
         ctx.font = `${weight} ${gesternFs}px ${family}`;
         ctx.globalAlpha = 0.5;
-        const gt = 'gestern ' + (typeof w.gestern === 'number' ? literText(w.gestern) : '–');
-        ctx.fillText(gt, x, fussY);
+        // Eine Zahl nur, wenn sie **von gestern** ist – sonst der Strich. Der Tipp zum Löschen aus 3.24
+        // ist damit hinfällig: es gibt keinen falschen Wert mehr, den man wegräumen müsste.
+        const echt = typeof w.gestern === 'number' && w.gesternTag === vortagKennung();
+        ctx.fillText('gestern ' + (echt ? literText(w.gestern) : '–'), x, fussY);
         ctx.globalAlpha = 1;
-        // Antippbar, solange dort eine Zahl steht: ein Wert aus der Erprobung ist sonst nicht mehr
-        // loszuwerden – der Mülleimer bewahrt den Vortag ausdrücklich (Auftraggeber, 10.9.2026).
-        if (typeof w.gestern === 'number') {
-          const b = ctx.measureText(gt).width;
-          treffer.push({ gestern: true, x, y: fussY - gesternFs, w: b, h: gesternFs * 1.4 });
-        }
       }
 
       // ── Anzeige des Tagesstands ─────────────────────────────────────────────────────────────────
@@ -1581,8 +1583,13 @@
       if (!q || q.list !== 'wasser' || !q.wasser) return;
       const w = wasserStand(q), heute = heuteKennung();
       if (w.tag === heute) { q.wasser = w; return; }
-      const gestern = wasserTag(w);
-      q.wasser = { ...wasserLeer(), tag: heute, gestern: gestern > 0 ? gestern : w.gestern, soll: w.soll };
+      // Nur wenn der gespeicherte Stand wirklich von **gestern** ist, wird er zum Vortagswert. Wer die
+      // App zwei Tage nicht öffnet, hat für gestern keinen Wert – dann steht dort ein Strich, nicht die
+      // Menge von vorletzter Woche. Auch 0 l ist ein echter Wert und wird übernommen.
+      const warVortag = w.tag === vortagKennung();
+      q.wasser = { ...wasserLeer(), tag: heute, soll: w.soll,
+                   gestern: warVortag ? wasserTag(w) : null,
+                   gesternTag: warVortag ? w.tag : null };
     }
     // Ältere Stände kennen nur einen Zettel – dann ist er der erste im Feld.
     if (!Array.isArray(state.zettel) || !state.zettel.length) state.zettel = [zettelFelder()];
@@ -2953,7 +2960,7 @@
       if (istWasser()) {
         const w = wasserStand();
         if (wasserTag(w) > 0 && !confirm('Alle Gläser von heute löschen?')) return;
-        state.wasser = { ...wasserLeer(), gestern: w.gestern, soll: w.soll };
+        state.wasser = { ...wasserLeer(), gestern: w.gestern, gesternTag: w.gesternTag, soll: w.soll };
         persist(); syncPreview(); updatePinBadge(); wasserLeisteBauen();
         return;
       }
@@ -3308,14 +3315,6 @@
       const r = wasserEl.getBoundingClientRect();
       const x = e.clientX - r.left, y = e.clientY - r.top;
       const passt = q => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h;
-      // Der Vortagswert steht in der Fußzeile, außerhalb der Zeilenfelder – zuerst gefragt
-      if (wasserTreffer.some(q => q.gestern && passt(q))) {
-        e.preventDefault();
-        const w = wasserStand(); w.gestern = null;
-        state.wasser = w; persist(); updatePinBadge(); syncPreview(); wasserLeisteBauen();
-        showInfo('Vortagswert entfernt – morgen trägt ihn der Tageswechsel neu ein', 3);
-        return;
-      }
       // Ein Glas hat Vorrang vor der Zeile darunter – sonst käme man nie ans Löschen
       const glas = wasserTreffer.find(q => q.n !== undefined && passt(q));
       const zeile = glas || wasserTreffer.find(q => q.zeile !== undefined && passt(q));
