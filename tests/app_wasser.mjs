@@ -332,6 +332,30 @@ const fasst = await page.evaluate(() => [1.5, 2, 3, 5].map(z => saeuleFasst(z)))
 check('die Säule fasst immer mehr als das Ziel', JSON.stringify(fasst) === JSON.stringify([2, 2.5, 4, 6.5]),
   JSON.stringify(fasst));
 
+// 12) Der Schriftregler hat auf den Wasserzettel **keinen** Einfluss – weder auf die Schrift (sie kommt
+//     aus der Fläche) noch auf die Zettelhöhe (die ist dort immer noteHMax). Auftraggeber, 10.9.2026:
+//     „kontrollieren, ob man auf dem Wasserzettel die Schriftgröße verändern kann – ich glaube, das geht
+//     nicht.“ Geprüft am Bild: drei Regler-Stellungen, Pixel für Pixel gleich.
+await page.evaluate(() => localStorage.clear());
+await page.reload(); await page.waitForTimeout(900);
+const regler = await page.evaluate(async () => {
+  await ensureFont(); if (document.fonts) await document.fonts.ready;
+  document.querySelector('#strip-list .item[data-value="wasser"]').click();
+  state.noteScale = 0.85; state.noteX = 0.5; state.noteY = 0.6;
+  state.wasser = { tag: heuteKennung(), v12: ['klein', 'klein'], v18: ['mittel', 'fl10'], n18: ['gross'], gestern: 2.3, soll: 3 };
+  const t = targetCanvas(); const px = {}, masse = {};
+  for (const fsk of [60, 100, 140]) {
+    state.fontScale = fsk; syncPreview(); zettelSichern();
+    const f = fitNote(t.w, t.h, t.layout, noteText() || '…');
+    masse[fsk] = f.noteW + 'x' + f.noteH;
+    px[fsk] = (await renderWallpaper(t.w, t.h, t.layout, {})).getContext('2d').getImageData(0, 0, t.w, t.h).data;
+  }
+  const diff = (a, b2) => { let n = 0; for (let i = 0; i < a.length; i += 4) if (a[i] !== b2[i] || a[i + 1] !== b2[i + 1] || a[i + 2] !== b2[i + 2]) n++; return n; };
+  return { d60: diff(px[60], px[100]), d140: diff(px[140], px[100]), masse };
+});
+check('der Schriftregler ändert am Wasserzettel nichts – Bild und Maße identisch bei 60/100/140 %',
+  regler.d60 === 0 && regler.d140 === 0 && regler.masse[60] === regler.masse[140], JSON.stringify(regler));
+
 await page.screenshot({ path: out + '/wasser.png' });
 check('keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));
 console.log(fails ? fails + ' Prüfung(en) fehlgeschlagen' : 'alle Prüfungen bestanden');
