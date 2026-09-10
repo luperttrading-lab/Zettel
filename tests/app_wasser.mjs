@@ -38,6 +38,16 @@ const start = await page.evaluate(() => ({
 check('Wasser gewählt: fünf Gefäße und drei Zeitfenster erscheinen', start.leiste && start.knoepfe === 5 && start.zeiten === 3, JSON.stringify(start));
 check('Wasser gewählt: gezeichneter Zettel statt Textfeld', start.canvas && start.editorVersteckt, JSON.stringify(start));
 check('Wasser setzt keine Listenmarkierung in den Text', start.text === '', JSON.stringify(start.text));
+// 3.13: Was beim Wasserzettel nichts bewirkt, ist dort weg – Schriftregler und Überschrift-Schalter.
+const sicht = () => page.evaluate(() => ({
+  regler: getComputedStyle(document.getElementById('fontrow')).display !== 'none',
+  titel: getComputedStyle(document.getElementById('titlerow')).display !== 'none',
+  farben: getComputedStyle(document.getElementById('colors')).display !== 'none',
+  schrift: getComputedStyle(document.getElementById('strip-font')).display !== 'none',
+}));
+const beiWasser = await sicht();
+check('bei Wasser: Schriftregler und Überschrift ausgeblendet, Farbe und Schriftart bleiben',
+  !beiWasser.regler && !beiWasser.titel && beiWasser.farben && beiWasser.schrift, JSON.stringify(beiWasser));
 
 // 2) Eintragen: jedes Glas landet im gewählten Zeitfenster, die Summen stimmen
 await fenster(0); await glas(0); await glas(2);          // 0,2 + 0,5
@@ -163,6 +173,8 @@ await page.evaluate(() => document.getElementById('clear').click()); await page.
 check('bei einer Textliste leert der Mülleimer den Text', (await page.evaluate(() => state.text)) === '',
   JSON.stringify(await page.evaluate(() => state.text)));
 check('Glasknöpfe verschwinden wieder', await page.evaluate(() => document.getElementById('wasserleiste').hidden));
+const beiText = await sicht();
+check('bei einer Textliste sind Schriftregler und Überschrift wieder da', beiText.regler && beiText.titel, JSON.stringify(beiText));
 
 // 10) 3.4: Bedienung der Zeilen und die Lage der Glasreihe im Bild.
 //     Die Reihe wird **nicht** als 32 Einheiten hoher Kasten gestellt, sondern als das, was wirklich

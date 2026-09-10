@@ -574,14 +574,16 @@
     </div>
   </div>
 
-  <label class="scale" for="fontscale">
+  <!-- Schriftregler und Überschrift bewirken beim Wasserzettel nichts (Schrift aus der Fläche, kein Text)
+       und sind dort ausgeblendet – wasserLeisteBauen schaltet sie mit der Listenart. -->
+  <label class="scale" id="fontrow" for="fontscale">
     <span class="a small">A</span>
     <input id="fontscale" type="range" min="60" max="140" step="5" value="100" aria-label="Schriftgröße">
     <span class="a big">A</span>
     <output id="fontscale-out">100 %</output>
   </label>
 
-  <div class="titlerow">
+  <div class="titlerow" id="titlerow">
     <label class="toggle" for="titleon"><input id="titleon" type="checkbox"> Erste Zeile als Überschrift</label>
     <div class="tsizes" id="tsizes" role="radiogroup" aria-label="Größe der Überschrift" hidden>
       <button type="button" data-s="1" aria-label="wie der Text">A</button>
@@ -696,7 +698,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.12';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.13';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -2218,6 +2220,12 @@
     function wasserLeisteBauen() {
       const an = istWasser();
       wasserLeisteEl.hidden = !an;
+      // Nur zeigen, was hier etwas bewirkt: der Schriftregler greift beim Wasserzettel nicht (die Schrift
+      // kommt aus der Fläche, siehe zeichneWasser), und ohne Text gibt es keine erste Zeile als Überschrift.
+      // „Beim Wasser brauchen wir vielleicht auch nicht alles“ (Auftraggeber, 10.9.2026). Farbe, Schriftart,
+      // Befestigung und Papier bleiben – die wirken auch dort.
+      $('fontrow').hidden = an;
+      $('titlerow').hidden = an;
       if (!an) return;
       const w = wasserStand();
       wasserZeitenEl.innerHTML = '';
