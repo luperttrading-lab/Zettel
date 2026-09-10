@@ -696,7 +696,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.11';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.12';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -932,9 +932,18 @@
       const fussH = bh * (balken ? 0.24 : 0.15);     // Tagesmenge unten, daneben klein der Vortag
       const zeilH = (bh - fussH) / 3;                // drei Zeitfenster
       const saeuleB = balken ? 0 : bw * (state.wasserZiel === 'krug' ? 0.14 : 0.105);
-      const spalte = balken ? bw : bw - saeuleB - bw * 0.055;   // Platz für Beschriftung und Gläser
-      const klein = Math.max(zeilH * 0.22, 8);       // Schrift der Zeilenbeschriftung
       const gross = Math.max(fussH * 0.62, 10);      // Schrift der Tagesmenge
+      // **Eine** Schriftgröße für alles: Zeilenbeschriftung und Skalenzahlen so groß wie „Heute …“ –
+      // auf einem klein gestellten Zettel war die Beschriftung mit 0,22 der Zeilenhöhe nicht mehr zu
+      // lesen (Auftraggeber, 10.9.2026, am Sperrbildschirm). Kostet den Gläsern Höhe, gemessen unten.
+      const klein = gross;                           // Schrift der Zeilenbeschriftung
+      const skFs = gross;                            // Skalenzahlen an der Säule
+      const gesternFs = gross * 0.85;                // „gestern …“: kleiner als heute, aber lesbar
+      // Die Skalenzahlen stehen links neben der Säule – der Platz dafür richtet sich nach der breitesten
+      // Zahl (das Ziel), nicht nach einem festen Anteil; mit großer Schrift ragte „6,8“ in die Gläser.
+      ctx.font = `${weight} ${skFs}px ${family}`;
+      const zahlB = balken ? 0 : ctx.measureText(zahlText(ziel)).width + saeuleB * 0.34;
+      const spalte = balken ? bw : bw - saeuleB - zahlB - bw * 0.03;   // Platz für Beschriftung und Gläser
       ctx.save();
       ctx.fillStyle = ink; ctx.strokeStyle = ink;
       ctx.textBaseline = 'alphabetic';
@@ -961,9 +970,11 @@
       // Einheiten hoch, gezeichnet wurden höchstens 30,4) und **nicht** gegen den heutigen Inhalt.
       const skalaFuer = (breite, hoehe) => Math.min(hoehe / GLAS_INK, breite / bedarf);
       const sEin = skalaFuer(spalte - kopfB, zeilH * 0.86);        // Kopf und Gläser in einer Zeile
-      // 1,6 statt 1,4 Zeilenhöhen Abzug: mit 1,4 blieben zwischen der untersten Glasreihe und „Heute …“
-      // nur 2,6 px – gemessen, kein Überlauf, aber sichtbar gedrängt (Auftraggeber: „Zeilenumbrüche prüfen“).
-      const sZwei = skalaFuer(spalte, Math.min(zeilH - klein * 1.6, zeilH * 0.72));   // Gläser unter dem Kopf
+      // Abzug für die Kopfzeile: 1,45 Schrifthöhen. Es waren 1,6, als die Schrift 0,22 der Zeilenhöhe
+      // maß (mit 1,4 blieben damals nur 2,6 px zur nächsten Zeile). Seit die Kopfzeile so groß ist wie
+      // „Heute …“, ist 1,45 davon in Pixeln **mehr** Luft als 1,6 der alten Schrift – und jedes Zehntel
+      // weniger Abzug gibt den Gläsern Höhe, die sie jetzt dringend brauchen (3.12).
+      const sZwei = skalaFuer(spalte, Math.min(zeilH - klein * 1.45, zeilH * 0.72));   // Gläser unter dem Kopf
       const eineZeile = sEin >= sZwei;                             // es gewinnt, was die Gläser größer macht
       const skala = eineZeile ? sEin : sZwei;
 
@@ -1028,7 +1039,7 @@
       if (typeof w.gestern === 'number') {
         // Nebeneinander statt untereinander – zwei Zeilen kosteten Höhe, die die Gläser besser brauchen
         const x = ctx.measureText(heute + '   ').width;
-        ctx.font = `${weight} ${klein}px ${family}`;
+        ctx.font = `${weight} ${gesternFs}px ${family}`;
         ctx.globalAlpha = 0.5;
         ctx.fillText('gestern ' + literText(w.gestern), x, fussY);
         ctx.globalAlpha = 1;
@@ -1038,7 +1049,6 @@
       // Vier Formen zur Auswahl (state.wasserZiel). Die Säule allein überzeugte den Auftraggeber nicht,
       // deshalb steht die Wahl im Zustand statt fest im Code.
       const anteil = Math.min(1, tag / ziel);
-      const skFs = Math.max(klein * 0.95, 8);   // 0,95 statt 0,8: „die Zahlen etwas größer“ (Auftraggeber, 10.9.2026)
       const rund = (x, y, ww, hh, rr) => { const p = new Path2D(); p.moveTo(x + rr, y); p.arcTo(x + ww, y, x + ww, y + hh, rr); p.arcTo(x + ww, y + hh, x, y + hh, rr); p.arcTo(x, y + hh, x, y, rr); p.arcTo(x, y, x + ww, y, rr); p.closePath(); return p; };
       const art = ZIEL_ARTEN[state.wasserZiel] ? state.wasserZiel : 'saeule';
 
