@@ -66,7 +66,8 @@ const rD = await page.evaluate(async () => {
 check('D: Fallback meldet Fehler', rD.startsWith('Zu viel Text'), rD);
 await page.evaluate(() => { textEl.value = 'Milch kaufen'; onTextChanged(); flush(); }); await page.waitForTimeout(200);
 // E) Hinweis „Kein Hintergrundfoto“ verschwindet, sobald ein Foto gewählt ist
-await page.click('#bgclear').catch(() => {}); await page.waitForTimeout(100);
+await page.evaluate(() => document.getElementById('bgclear').click());   // seit 3.15 im Lage-Fenster, dort unsichtbar bis es offen ist
+await page.waitForTimeout(100);
 await page.click('#hide'); await page.waitForTimeout(500);
 check('E: Hinweis ohne Foto', (await zeile()).startsWith('Kein Hintergrundfoto'), await zeile());
 await page.evaluate(async () => { const c = document.createElement('canvas'); c.width = 3000; c.height = 4000; const g = c.getContext('2d'); g.fillStyle = '#204080'; g.fillRect(0, 0, 3000, 4000); const blob = await new Promise(r => c.toBlob(r, 'image/png')); await bgSetzen(new File([blob], 'f.png', { type: 'image/png' })); await bgReady; });

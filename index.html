@@ -509,12 +509,6 @@
     .tsizes button:nth-child(3) { font-size: 23px; }
     .tsizes button[aria-checked="true"] { background: #fff; color: #17171a; }
     /* Eigenes Hintergrundfoto: Reihe mit zwei kleinen Knöpfen */
-    .bgrow { display: flex; align-items: center; gap: 8px; margin: 0 auto; padding: 0;
-      width: min(86vw, 380px); box-sizing: border-box; }
-    /* Angedeuteter Kasten wie bei „Kurzbefehl einrichten“ – ohne ihn las sich der Knopf als bloßer Text */
-    .bgrow .btn { flex: 1 1 auto; padding: 9px 12px; font-size: 14px;
-      background: var(--flaeche); border-radius: 14px; }
-    .bgrow .btn.off { flex: 0 0 auto; width: auto; min-width: 44px; }   /* .btn hat width:100% – hier ausdrücklich aufheben, sonst läuft die Reihe über */
     /* Vorschau: das gewählte Foto liegt hinter dem Zettel, leicht abgedunkelt wie auf dem Sperrbildschirm */
     .top.foto { background-size: cover; background-position: center; }
     .top.foto header h1, .top.foto header small, .top.foto #saved { text-shadow: 0 1px 3px rgba(0,0,0,.8); }
@@ -592,12 +586,6 @@
     </div>
   </div>
 
-  <div class="bgrow">
-    <button class="btn ghost" type="button" id="bgpick" title="Gespeichert wird ein auf Displaygröße zugeschnittener JPEG-Abzug, nicht das Original">Eigenes Hintergrundfoto</button>
-    <button class="btn ghost off" type="button" id="bgclear" hidden aria-label="Hintergrundfoto entfernen">✕</button>
-    <input id="bgfile" type="file" accept="image/*" hidden>
-  </div>
-
   <!-- Untere Leiste: Zustand, ein Hauptknopf (bzw. die Ansage für Schritt 2), drei Symbolknöpfe.
        Höhe und Anordnung bleiben in jedem Zustand gleich – es springt nichts. -->
   <div class="actions">
@@ -664,6 +652,11 @@
       </div>
       <p class="hinweis" id="lage-hinweis">Zettel mit dem Finger schieben.</p>
       <div class="knoepfe">
+        <!-- Hintergrundfoto seit 3.15 hier statt auf der Startseite: man wechselt es „selten bis nie“
+             (Auftraggeber), und hier sieht man das ganze Bild, in dem es liegt. Neben dem Eichbild –
+             beides sind Fotos, deshalb tragen beide Knöpfe ihren Zweck im Namen. -->
+        <button class="btn" type="button" id="bgpick" title="Gespeichert wird ein auf Displaygröße zugeschnittener JPEG-Abzug, nicht das Original">Hintergrundfoto wählen</button>
+        <button class="btn" type="button" id="bgclear" hidden>Hintergrundfoto entfernen</button>
         <button class="btn" type="button" id="eichpick">Eichbild wählen</button>
         <button class="btn" type="button" id="eichclear" hidden>Eichbild entfernen</button>
         <button class="btn" type="button" id="lage-reset">Zurücksetzen</button>
@@ -672,6 +665,7 @@
         <button class="btn primary" type="button" id="lage-kleben">Fertig + auf Sperrbildschirm</button>
       </div>
       <input id="eichfile" type="file" accept="image/*" hidden>
+      <input id="bgfile" type="file" accept="image/*" hidden>
     </div>
   </div>
 
@@ -698,7 +692,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.14';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.15';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -2408,7 +2402,7 @@
       topEl.classList.toggle('foto', !!url);
       topEl.style.backgroundImage = url ? `linear-gradient(rgba(0,0,0,.3), rgba(0,0,0,.3)), url(${url})` : '';
       bgClear.hidden = !url;
-      bgPick.textContent = url ? 'Anderes Hintergrundfoto' : 'Eigenes Hintergrundfoto';
+      bgPick.textContent = url ? 'Anderes Hintergrundfoto' : 'Hintergrundfoto wählen';
     }
 
     let bgGen = 0;   // Laufnummer: Rückrufe eines überholten Image-Objekts (✕ oder neues Foto währenddessen) werden ignoriert
