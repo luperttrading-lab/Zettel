@@ -698,7 +698,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.13';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.14';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -940,7 +940,7 @@
       // lesen (Auftraggeber, 10.9.2026, am Sperrbildschirm). Kostet den Gläsern Höhe, gemessen unten.
       const klein = gross;                           // Schrift der Zeilenbeschriftung
       const skFs = gross;                            // Skalenzahlen an der Säule
-      const gesternFs = gross * 0.85;                // „gestern …“: kleiner als heute, aber lesbar
+      const gesternFs = gross;                       // „gestern …“: gleich groß, nur halb transparent (3.14)
       // Die Skalenzahlen stehen links neben der Säule – der Platz dafür richtet sich nach der breitesten
       // Zahl (das Ziel), nicht nach einem festen Anteil; mit großer Schrift ragte „6,8“ in die Gläser.
       ctx.font = `${weight} ${skFs}px ${family}`;
@@ -1091,13 +1091,11 @@
         // erreicht hat – also genau dann unsichtbar, wenn man sie sehen will (am Bild bei 4,2 l gesehen).
         // Die **Zahlen** stehen links außerhalb der Säule und bleiben alle im selben Farbton.
         const pegelY = sy + sh - sh * voll;
-        // Marken: jeder ganze Liter unter dem Ziel, dazu das Ziel selbst (das auch krumm sein darf, etwa
-        // 2,5 l). Die Schrittweite wächst, sobald zwei Marken näher als 1,6 Schrifthöhen zusammenrücken –
-        // bei 8 l Ziel stünden sonst acht Zahlen übereinander.
-        let schritt = 1;
-        // 2,2 Schrifthöhen, nicht 1,6: bei 6,8 l Ziel standen sieben Zahlen übereinander, lesbar, aber
-        // die Säule wirkte wie ein Lineal statt wie eine Anzeige (Auftraggeber: „macht keinen Sinn“).
-        while (sh * (schritt / fasst) < skFs * 2.2 && schritt < fasst) schritt += schritt < 2 ? 1 : 2;
+        // Marken: **jeder** ganze Liter unter dem Ziel, dazu das Ziel selbst (das auch krumm sein darf,
+        // etwa 2,5 l). Bis 3.13 wuchs die Schrittweite, sobald es eng wurde – der Auftraggeber will alle
+        // Zahlen sehen, „nicht nur die letzte“ (10.9.2026). Nachgerechnet: bei 8 l Ziel (Säule fasst 10,5)
+        // liegen die Zahlen 0,074 der Zettelhöhe auseinander, die Versalhöhe ist 0,065 – eng, aber getrennt.
+        const schritt = 1;
         const marken = [];
         // Eine Zwischenmarke dicht unter dem Ziel entfällt: bei 6,8 l Ziel saß die „6“ auf der „6,8 l“.
         for (let l = schritt; l < ziel - schritt * 0.55; l += schritt) marken.push(l);
