@@ -89,6 +89,45 @@ check('halbfertiger Kopf: gleiche Regel in App und Server', quellen.every(q => q
   JSON.stringify(quellen));
 
 await page.screenshot({ path: out + '/termine.png' });
+
+// 3.26: Beim Tippen springt der Einzug. Die Markierung eines Termins steckt im Attribut `data-mk`, nicht
+// im Text; der Einzug kommt aus applyIndents. Passt beides nicht zusammen, rückt die ganze Zeile ein,
+// statt nur den Text hinter dem herausgezogenen Kopf (vom Auftraggeber am Bild gemeldet). Zwei Fälle:
+// nach Return erbt die neue Zeile kein data-mk, und aus „Sa. 19:00 Gabi" wird erst mit dem Leerzeichen
+// hinter der Uhrzeit ein Termin.
+await page.evaluate(() => localStorage.clear());
+await page.reload(); await page.waitForTimeout(900);
+await page.evaluate(() => {
+  document.querySelector('#strip-list .item[data-value="termin"]').click();
+  textEl.value = 'Fr. 7:45 Auto Werkstatt\nMo. 13:30 Molly Tierarzt'; onTextChanged(); flush(); syncPreview();
+  textEl.focus(); textEl.setCaret(textEl.value.length);
+});
+await page.waitForTimeout(300);
+const zeilenLage = () => page.evaluate(() => [...document.querySelectorAll('#text .ln')].map(d => ({
+  txt: d.textContent, mk: d.getAttribute('data-mk'), pad: Math.round(parseFloat(getComputedStyle(d).paddingLeft) || 0) })));
+await page.keyboard.press('Enter'); await page.waitForTimeout(250);
+await page.keyboard.type('Sa. 19:00 Gabi Isy', { delay: 20 }); await page.waitForTimeout(400);
+const getippt = await zeilenLage();
+check('die getippte Terminzeile trägt ihren Kopf im Attribut',
+  getippt[2].mk === 'Sa. 19:00' && getippt[2].txt === 'Gabi Isy', JSON.stringify(getippt[2]));
+check('alle Termine haben denselben Einzug – die Uhrzeiten fluchten',
+  new Set(getippt.map(z => z.pad)).size === 1, JSON.stringify(getippt.map(z => z.pad)));
+check('der Text bleibt vollständig',
+  (await page.evaluate(() => state.text)).endsWith('Sa. 19:00 Gabi Isy'),
+  JSON.stringify(await page.evaluate(() => state.text)));
+// Auch beim schrittweisen Tippen: solange die Zeile kein Termin ist, darf sie keinen Einzug haben
+await page.evaluate(() => { textEl.value = 'Fr. 7:45 Auto Werkstatt'; onTextChanged(); flush(); syncPreview();
+  textEl.focus(); textEl.setCaret(textEl.value.length); });
+await page.waitForTimeout(250);
+await page.keyboard.press('Enter'); await page.waitForTimeout(200);
+await page.keyboard.type('Sa. 19:00', { delay: 20 }); await page.waitForTimeout(300);
+const halb = await zeilenLage();
+check('halbfertige Zeile: kein Kopf, kein Einzug', halb[1].mk === null && halb[1].pad === 0, JSON.stringify(halb[1]));
+await page.keyboard.type(' Gabi', { delay: 20 }); await page.waitForTimeout(300);
+const fertig = await zeilenLage();
+check('mit dem Leerzeichen wird daraus ein Termin mit Kopf und Einzug',
+  fertig[1].mk === 'Sa. 19:00' && fertig[1].pad === fertig[0].pad, JSON.stringify(fertig[1]));
+
 check('keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));
 console.log(fails ? fails + ' Prüfung(en) fehlgeschlagen' : 'alle Prüfungen bestanden');
 await b.close();

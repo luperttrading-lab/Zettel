@@ -748,7 +748,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.25';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.26';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -1339,7 +1339,19 @@
           if (c.nodeType !== 1 || c.nodeName !== 'DIV' || !c.classList.contains('ln')) return false;
           for (const g of c.childNodes) if (!(g.nodeType === 3 || g.nodeName === 'BR')) return false;
         }
-        return this.el.childNodes.length > 0;
+        if (!this.el.childNodes.length) return false;
+        // **Die Markierung steckt im Attribut, nicht im Text.** Passt sie nicht mehr zum Inhalt, ist die
+        // Zeile nicht mehr kanonisch und muss neu gezeichnet werden – sonst rückt applyIndents sie ein,
+        // ohne dass der Kopf herausgezogen wäre, und die ganze Zeile rutscht nach rechts. Zwei Fälle:
+        // nach Return erbt die neue Zeile kein `data-mk`, und aus „Sa. 19:00 Gabi" wird erst mit dem
+        // Leerzeichen hinter der Uhrzeit ein Termin (beides am Bild gemeldet, 10.9.2026).
+        const zeilen = Editor.linesOf(this.el), kinder = this.el.children;
+        if (zeilen.length !== kinder.length) return false;
+        for (let i = 0; i < zeilen.length; i++) {
+          const m = marke(zeilen[i]);
+          if ((m ? m[0].trim() : '') !== (kinder[i].getAttribute('data-mk') || '')) return false;
+        }
+        return true;
       }
       render(text) {
         this._value = text;
