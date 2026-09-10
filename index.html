@@ -762,7 +762,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.27';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.29';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -1765,12 +1765,16 @@
     // warten = der Kurzbefehl muss noch von Hand gestartet werden (bei autoRun ruft die App ihn selbst auf)
     function markPinned(snap = pinSnapshot()) { state.pinned = { ...snap, warten: !snap.requested, at: Date.now() }; persist(); }
 
+    // Merker für die Reiter (siehe zettelTabs). **Hier oben**, nicht bei der Funktion: applyColor ruft
+    // zettelTabs schon beim Start auf, und eine let-Deklaration weiter unten liegt dann noch in der
+    // zeitlichen Totzone – der Fehler brach die ganze Anlaufphase ab (vierter Fall dieser Falle).
+    let tabsKennung = null;
     function applyColor() {
       const c = COLORS[state.color];
       noteEl.style.setProperty('--paper', c.paper);
       noteEl.style.setProperty('--ink', inkColor());
       for (const b of colorsEl.children) if (b.dataset.color) b.setAttribute('aria-pressed', String(b.dataset.color === state.color));
-      updatePinBadge();
+      updatePinBadge(); zettelTabs();   // Papierfarbe des Reiters folgt sofort
     }
 
     // ---------- UI: Auswahl-Schieber ----------
@@ -2193,7 +2197,8 @@
       richteIconsAus($('strip-fastener'));
       aktualisiereArten();
       if (!fcolorsEl.hidden && cardMode === 'fastener') buildPalette();
-      syncPreview(); updatePinBadge();
+      // Der Reiter zeigt das Tier des aktiven Zettels – ohne diesen Aufruf blieb er auf dem alten stehen
+      syncPreview(); updatePinBadge(); zettelTabs();
     }
     // Schrift ausdrücklich laden und danach neu rechnen – sonst misst die Automatik mit der Ersatzschrift
     // und wählt für breite Schriften (Marker) eine zu große Größe.
@@ -3811,11 +3816,31 @@
       Object.assign(state, zettelFelder(state.zettel[state.aktiv]));
       zettelAnwenden(); persist();
     }
+    // Welches Tier liegt oben auf diesem Zettel? **Aus dem Befestigungsstück**, denn genau daraus
+    // zeichnet fastenersShapes den Zettel (`{...grundLook, ...b.decor}` – das Stück sticht die Vorlage).
+    // `fastenerLook` ist nur die zuletzt gewählte Vorlage; wich sie vom Stück ab, zeigte der Reiter ein
+    // anderes Tier als der Zettel (Auftraggeber, 10.9.2026: „beim gelben Zettel ist jetzt Lola, am
+    // echten Zettel der Fuchs“). Beide Felder liegen direkt an `z` – kein Umweg über den Zustand,
+    // also auch keine mitZettel-Falle.
+    function tabTier(z) {
+      const stueck = (Array.isArray(z.fasteners) ? z.fasteners : []).find(b => b && b.art === 'photo');
+      if (!stueck && z.fastener !== 'photo') return null;
+      const quelle = stueck && stueck.decor ? stueck : ((z.fastenerLook || {}).photo || null);
+      return normalizeLook('photo', quelle).decor;
+    }
     function zettelTabs() {
       const el = $('zettelwahl');
+      if (!Array.isArray(state.zettel) || !state.zettel.length) return;
+      // Den **aktiven** Zettel aus dem laufenden Zustand nehmen: `state.zettel[aktiv]` ist erst nach
+      // zettelSichern() aktuell. Ohne das blieb der Reiter beim Motivwechsel auf dem alten Tier stehen,
+      // bis man den Zettel wechselte – dieselbe Meldung wie oben.
+      const liste = alleZettel();
+      const kennung = JSON.stringify([state.aktiv | 0, liste.map(z => [z.color, tabTier(z)])]);
+      if (kennung === tabsKennung && el.childElementCount) return;   // nichts geändert – DOM stehen lassen
+      tabsKennung = kennung;
       el.replaceChildren();
-      if (state.zettel.length < 2 && state.zettel.length >= ZETTEL_MAX) return;
-      state.zettel.forEach((z, i) => {
+      if (liste.length < 2 && liste.length >= ZETTEL_MAX) return;
+      liste.forEach((z, i) => {
         const b = document.createElement('button');
         b.type = 'button'; b.textContent = String(i + 1);
         b.setAttribute('aria-pressed', String(i === (state.aktiv | 0)));
@@ -3824,10 +3849,7 @@
         b.classList.add('zettel');
         b.style.setProperty('--tabpaper', c.paper);
         b.style.setProperty('--tabink', c.ink);
-        // Das Tier des Bildmagneten, falls eines gewählt ist. mitZettel, weil fastenerLook aus dem
-        // Zustand liest – ohne das trüge jeder Reiter das Bild des gerade aktiven Zettels.
-        const bild = z.fastener === 'photo'
-          ? (photoInfo(mitZettel(z, () => fastenerLook('photo')).decor) || null) : null;
+        const tier = tabTier(z), bild = tier ? photoInfo(tier) : null;
         if (bild && bild.src) {
           const img = document.createElement('img');
           img.className = 'tier'; img.src = bild.src; img.alt = '';
@@ -3840,7 +3862,7 @@
         });
         el.appendChild(b);
       });
-      if (state.zettel.length < ZETTEL_MAX) {
+      if (liste.length < ZETTEL_MAX) {
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'plus'; b.textContent = '+';
         b.title = 'Zweiten Zettel anlegen';

@@ -103,34 +103,44 @@ await page.waitForTimeout(300);
 const nachher = await page.evaluate(() => document.activeElement.id || document.activeElement.tagName);
 check('Gliederungswechsel öffnet nicht die Tastatur', nachher !== 'text' && nachher === vorher, vorher + ' → ' + nachher);
 
-// Erledigt: Tipp auf die Listenmarkierung setzt den Haken, der Wechsel der Listenart behält ihn (1.53.0).
+// Erledigt: Tipp auf das Kästchen setzt den Haken, der Wechsel der Listenart behält ihn (1.53.0).
+// **Nur bei Kästchen** – seit 3.22 ist die Trefferzone bei Strichen, Punkten und Zahlen abgeschaltet
+// (Auftraggeber: „dieser Bereich sollte nur bei den Kästchen funktionieren, bei den anderen sollte dort
+// nichts passieren“). Dort ist ein Tipp jetzt ein gewöhnlicher Tipp in den Text.
 await page.evaluate(() => { textEl.value = 'Kopf\nRasen wässern\nNadine anrufen'; onTextChanged();
-  state.title = true; state.list = 'dot'; persist(); });
+  state.title = true; state.list = 'check'; persist(); });
 await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(500);
 const treffer = await page.evaluate(() => { const d = textEl.el.children[1]; const r = d.getBoundingClientRect();
   return { x: r.left + 4, y: r.top + r.height / 2 }; });
 await page.mouse.click(treffer.x, treffer.y); await page.waitForTimeout(250);
-check('Tipp auf die Markierung setzt den Haken',
-  (await page.evaluate(() => textEl.value)) === 'Kopf\n• Rasen wässern ✓\n• Nadine anrufen',
-  JSON.stringify(await page.evaluate(() => textEl.value)));
-check('erledigte Zeile wird durchgestrichen',
-  await page.evaluate(() => textEl.el.children[1].classList.contains('durch')));
-check('Tastatur bleibt zu', (await page.evaluate(() => document.activeElement.id || document.activeElement.tagName)) !== 'text');
-await page.evaluate(() => { state.list = 'check'; persist(); });
-await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(500);
-check('Wechsel auf Kästchen macht aus dem Haken ein ☑',
+check('Tipp auf das Kästchen setzt den Haken',
   (await page.evaluate(() => textEl.value)) === 'Kopf\n☑ Rasen wässern\n☐ Nadine anrufen',
   JSON.stringify(await page.evaluate(() => textEl.value)));
 check('im Kasten kein zusätzlicher Strich',
   !(await page.evaluate(() => textEl.el.children[1].classList.contains('durch'))));
+check('Tastatur bleibt zu', (await page.evaluate(() => document.activeElement.id || document.activeElement.tagName)) !== 'text');
+await page.evaluate(() => { state.list = 'dot'; persist(); });
+await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(500);
+check('Wechsel auf Punkte macht aus dem ☑ einen Haken hinter der Zeile',
+  (await page.evaluate(() => textEl.value)) === 'Kopf\n• Rasen wässern ✓\n• Nadine anrufen',
+  JSON.stringify(await page.evaluate(() => textEl.value)));
+check('erledigte Zeile wird dort durchgestrichen',
+  await page.evaluate(() => textEl.el.children[1].classList.contains('durch')));
+// 3.22: derselbe Tipp an derselben Stelle – bei Punkten darf er nichts abhaken
+await page.mouse.click(treffer.x, treffer.y); await page.waitForTimeout(250);
+check('bei Punkten hakt der Tipp auf die Markierung nichts ab',
+  (await page.evaluate(() => textEl.value)) === 'Kopf\n• Rasen wässern ✓\n• Nadine anrufen',
+  JSON.stringify(await page.evaluate(() => textEl.value)));
+await page.evaluate(() => { state.list = 'check'; persist(); });
+await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(500);
 await page.mouse.click(treffer.x, treffer.y); await page.waitForTimeout(250);
 check('nochmal tippen nimmt den Haken zurück',
   (await page.evaluate(() => textEl.value)) === 'Kopf\n☐ Rasen wässern\n☐ Nadine anrufen',
   JSON.stringify(await page.evaluate(() => textEl.value)));
 
-// Langes Drücken auf die Markierung öffnet die Auswahl für Form und Farbe des Hakens (1.54.0).
-await page.evaluate(() => { textEl.value = 'Kopf\n• Rasen wässern ✓\n• Nadine anrufen'; onTextChanged();
-  state.title = true; state.list = 'dot'; persist(); });
+// Langes Drücken auf das Kästchen öffnet die Auswahl für Form und Farbe des Hakens (1.54.0).
+await page.evaluate(() => { textEl.value = 'Kopf\n☑ Rasen wässern\n☐ Nadine anrufen'; onTextChanged();
+  state.title = true; state.list = 'check'; persist(); });
 await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(500);
 const mk = await page.evaluate(() => { const d = textEl.el.children[1], r = d.getBoundingClientRect();
   return { x: r.left + 4, y: r.top + r.height / 2 }; });
@@ -138,7 +148,7 @@ await page.mouse.move(mk.x, mk.y); await page.mouse.down(); await page.waitForTi
 await page.waitForTimeout(250);
 check('langes Drücken öffnet die Hakenauswahl', await page.evaluate(() => !document.getElementById('hcolors').hidden));
 check('langes Drücken schaltet nicht um',
-  (await page.evaluate(() => textEl.value)) === 'Kopf\n• Rasen wässern ✓\n• Nadine anrufen',
+  (await page.evaluate(() => textEl.value)) === 'Kopf\n☑ Rasen wässern\n☐ Nadine anrufen',
   JSON.stringify(await page.evaluate(() => textEl.value)));
 await page.evaluate(() => { document.querySelectorAll('#hcolors .row')[0].querySelectorAll('.chip')[3].click();
   document.querySelectorAll('#hcolors .row')[1].querySelectorAll('.chip')[1].click(); });

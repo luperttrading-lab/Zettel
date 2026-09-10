@@ -185,6 +185,46 @@ check('der aktive Reiter ist am Ring zu erkennen, nicht an vertauschten Farben',
   await page.evaluate(() => { const b = [...document.querySelectorAll('#zettelwahl button')][0];
     return b.getAttribute('aria-pressed') === 'true' && /rgb\(255, 245, 155\)/.test(getComputedStyle(b).backgroundColor); }));
 
+// 3.28/3.29: **Das Bild kommt aus dem Befestigungsstück**, nicht aus `fastenerLook`. Genau daraus zeichnet
+// fastenersShapes den Zettel (`{...grundLook, ...b.decor}`); `fastenerLook` ist nur die zuletzt gewählte
+// Vorlage. Wichen beide voneinander ab, zeigte der Reiter ein anderes Tier als der Zettel (Auftraggeber:
+// „beim gelben Zettel ist jetzt Lola, am echten Zettel der Fuchs“).
+await page.evaluate(bs => {
+  // Aktiver Zettel (0): Stück und Vorlage bewusst auseinanderlaufen lassen
+  state.fastener = 'photo';
+  state.fasteners = [{ art: 'photo', decor: bs[1] }];
+  state.fastenerLook = { ...state.fastenerLook, photo: { decor: bs[0] } };
+  // Ruhender Zettel (1): dasselbe andersherum – auch er muss seinem eigenen Stück folgen
+  state.zettel[1].fasteners = [{ art: 'photo', decor: bs[0] }];
+  state.zettel[1].fastenerLook = { ...(state.zettel[1].fastenerLook || {}), photo: { decor: bs[1] } };
+  applyFastener(); persist(); zettelTabs();
+}, bilder);
+await page.waitForTimeout(400);
+const rStueck = await reiter();
+const srcVon = k => page.evaluate(kk => (photoInfo(kk) || {}).src || '', k);
+const [srcA, srcB] = [await srcVon(bilder[0]), await srcVon(bilder[1])];
+check('der aktive Reiter zeigt das Bild des Befestigungsstücks, nicht der Vorlage',
+  rStueck[0].tier === srcB, rStueck[0].tier === srcA ? 'zeigt die Vorlage statt des Stücks' : 'ok');
+check('auch der ruhende Reiter folgt seinem Stück',
+  rStueck[1].tier === srcA, rStueck[1].tier === srcB ? 'zeigt die Vorlage statt des Stücks' : 'ok');
+// Und das Bild im Reiter muss zu dem passen, was die App tatsächlich auf den Zettel zeichnet
+check('Reiter und gezeichneter Zettel zeigen dasselbe Tier',
+  await page.evaluate(() => {
+    const gezeichnet = document.querySelector('#fastener-preview image');
+    const imReiter = [...document.querySelectorAll('#zettelwahl button')][0].querySelector('img');
+    return !!gezeichnet && !!imReiter && new URL(imReiter.src, location.href).href
+      === new URL(gezeichnet.getAttribute('href'), location.href).href;
+  }));
+// 3.29: Ein Motivwechsel am aktiven Zettel muss sofort im Reiter stehen – vorher blieb dort das alte
+// Tier, bis man den Zettel wechselte (state.zettel[aktiv] ist erst nach zettelSichern() aktuell).
+await page.evaluate(bs => setFastenerLook({ decor: bs[0] }), bilder);
+await page.waitForTimeout(400);
+const rNeu = await reiter();
+check('ein Motivwechsel steht sofort im Reiter, ohne Zettelwechsel',
+  rNeu[0].tier === srcA, rNeu[0].tier === srcB ? 'Reiter blieb auf dem alten Tier' : 'ok');
+check('der ruhende Reiter bleibt dabei bei seinem eigenen Tier',
+  rNeu[1].tier === srcA && rNeu[2].tier === null, JSON.stringify(rNeu.map(x => !!x.tier)));
+
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();
 console.log(fails ? `${fails} FEHLER` : 'ALLE TESTS OK');
