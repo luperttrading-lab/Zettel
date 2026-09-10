@@ -160,6 +160,57 @@ check('Wechsel im Fenster zieht die Überschrift mit', (await titel()) !== vorhe
 await page.evaluate(() => lageOeffnen(false)); await page.waitForTimeout(200);
 
 await page.screenshot({ path: out + '/lage_fenster.png' });
+
+// 3.21: Zettel 2 + 3 – nebeneinander, untereinander, tauschen; und „Widerrufen“ auf den Stand beim Öffnen.
+await page.evaluate(() => localStorage.clear());
+await page.reload(); await page.waitForTimeout(900);
+await page.evaluate(() => {
+  textEl.value = 'Eins'; onTextChanged(); flush(); zettelSichern();
+  zettelDazu(); textEl.value = 'Zwei'; onTextChanged(); flush(); zettelSichern();
+  zettelDazu(); textEl.value = 'Drei'; onTextChanged(); flush(); zettelSichern(); persist();
+});
+await page.waitForTimeout(300);
+await page.click('#lagebtn'); await page.waitForTimeout(500);
+const lagen = () => page.evaluate(() => alleZettel().map(z => ({ x: +z.noteX.toFixed(3), y: +z.noteY.toFixed(3), s: +z.noteScale.toFixed(2) })));
+check('die Reihe für Zettel 2 + 3 ist bei drei Zetteln da',
+  await page.evaluate(() => !document.getElementById('lage-paar').hidden));
+// Stand beim Öffnen festhalten – genau darauf muss „Widerrufen“ zurückführen. (Beim dritten Zettel
+// ordnet zettelDazu schon selbst nebeneinander an, der Ausgangsstand ist also nicht die Standardlage.)
+const beimOeffnen = await lagen();
+await page.click('#lage-neben'); await page.waitForTimeout(300);
+const neben = await lagen();
+check('nebeneinander: gleiche Höhe, links und rechts',
+  Math.abs(neben[1].y - neben[2].y) < 0.001 && neben[1].x < 0.4 && neben[2].x > 0.6, JSON.stringify(neben));
+await page.click('#lage-unter'); await page.waitForTimeout(300);
+const unter = await lagen();
+check('untereinander: beide mittig, verschiedene Höhe',
+  Math.abs(unter[1].x - 0.5) < 0.001 && Math.abs(unter[2].x - 0.5) < 0.001 && unter[2].y > unter[1].y,
+  JSON.stringify(unter));
+await page.click('#lage-neben'); await page.waitForTimeout(300);
+const vorTausch = await lagen();
+await page.click('#lage-tausch'); await page.waitForTimeout(300);
+const nachTausch = await lagen();
+check('tauschen vertauscht die Lage von 2 und 3, Zettel 1 bleibt',
+  nachTausch[1].x === vorTausch[2].x && nachTausch[2].x === vorTausch[1].x
+  && nachTausch[0].x === vorTausch[0].x, JSON.stringify({ vorTausch, nachTausch }));
+check('die Texte bleiben bei ihrem Zettel – getauscht wird die Lage, nicht der Inhalt',
+  JSON.stringify(await page.evaluate(() => alleZettel().map(z => z.text))) === '["Eins","Zwei","Drei"]',
+  JSON.stringify(await page.evaluate(() => alleZettel().map(z => z.text))));
+// Widerrufen: zurück auf den Stand beim Öffnen des Fensters
+await page.click('#lage-zurueck'); await page.waitForTimeout(300);
+const zurueck = await lagen();
+check('Widerrufen stellt den Stand beim Öffnen wieder her',
+  JSON.stringify(zurueck) === JSON.stringify(beimOeffnen),
+  JSON.stringify(zurueck) + ' statt ' + JSON.stringify(beimOeffnen));
+check('danach ist „Widerrufen“ wieder gesperrt', await page.evaluate(() => document.getElementById('lage-zurueck').disabled));
+// Ein frisch geöffnetes Fenster hat nichts zu widerrufen
+await page.click('#lage-fertig'); await page.waitForTimeout(250);
+await page.click('#lagebtn'); await page.waitForTimeout(400);
+check('frisch geöffnet ist „Widerrufen“ gesperrt', await page.evaluate(() => document.getElementById('lage-zurueck').disabled));
+// Tauschen statt „nebeneinander“: das ändert immer etwas, auch wenn schon nebeneinander gelegt war
+await page.click('#lage-tausch'); await page.waitForTimeout(300);
+check('nach einer Änderung ist „Widerrufen“ frei', await page.evaluate(() => !document.getElementById('lage-zurueck').disabled));
+await page.click('#lage-fertig'); await page.waitForTimeout(250);
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();
 console.log(fails ? `${fails} FEHLER` : 'ALLE TESTS OK');
