@@ -723,7 +723,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.19';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.20';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -2481,12 +2481,22 @@
       // am Rand, läge der Finger sonst um den halben Zeilenabstand daneben. Vergleich mit ≤/≥, damit der
       // Grenzfall „genau auf der Mitte“ schon zählt – mit < blieb die Zeile eine Position zurück.
       const mitte = z.boxen[z.von].mitte + dy;
-      let ziel = z.von;
-      for (let i = 0; i < z.boxen.length; i++) {
-        if (i === z.von || (state.title && i === 0)) continue;
-        if (i < z.von && mitte <= z.boxen[i].mitte) ziel = Math.min(ziel, i);
-        if (i > z.von && mitte >= z.boxen[i].mitte) ziel = Math.max(ziel, i);
-      }
+      // **Totzone (Hysterese).** Vorher wurde der Zielplatz bei jeder Bewegung neu von Grund auf
+      // bestimmt: an der Umschaltgrenze sprang die ausgewichene Zeile schon bei einem Millimeter
+      // Rückbewegung zurück (Auftraggeber, 10.9.2026). Jetzt wird vom **aktuellen** Platz aus
+      // gewandert, und die Grenze muss um H überschritten werden – hin wie zurück. Damit liegen
+      // Hin- und Rückschwelle 2·H auseinander, dazwischen bleibt alles stehen.
+      const M = i => z.boxen[i].mitte, H = z.boxen[z.von].h * 0.3;
+      const erste = state.title ? 1 : 0, letzte = z.boxen.length - 1;
+      let ziel = z.ziel;
+      // Beim Schritt nach unten wird die Zeile übersprungen, die dabei ihren Platz tauscht: oberhalb des
+      // Ursprungs ist das die am Zielplatz selbst, unterhalb die darunter (nach oben umgekehrt) – so
+      // fallen Hin- und Rückgrenze auf dieselbe Zeile. Der Puffer gilt **nur für den Rückweg**, also
+      // wenn sich der Platz wieder dem Ursprung nähert: hinziehen bleibt so leicht wie vorher, und
+      // erst H zurück lässt die ausgewichene Zeile zurückspringen. Mit Puffer in beide Richtungen kam
+      // man den Zielplatz gar nicht mehr (gemessen: Zug über zwei Zeilen erreichte nur eine).
+      while (ziel < letzte && mitte >= M(ziel < z.von ? ziel : ziel + 1) + (ziel < z.von ? H : 0)) ziel++;
+      while (ziel > erste && mitte <= M(ziel <= z.von ? ziel - 1 : ziel) - (ziel > z.von ? H : 0)) ziel--;
       if (ziel !== z.ziel) { z.ziel = ziel; sortVorschau(z); }
     });
     const sortEnde = e => {

@@ -154,6 +154,28 @@ const sicht = await page.evaluate(() => { const d = document.querySelectorAll('#
 check('Zeilen sind im Sortiermodus hinterlegt und die Geste gehört uns',
   /rgba?\(0, 0, 0, 0\.0[5-9]/.test(sicht.grund) && sicht.ta === 'none', JSON.stringify(sicht));
 
+// 10) 3.20: Totzone an der Umschaltgrenze. Ohne sie sprang die ausgewichene Zeile schon bei einem
+//     Millimeter Rückbewegung zurück – man konnte die gezogene Zeile nicht in der Lücke ausrichten.
+await page.evaluate(() => document.getElementById('sortdone').click()); await page.waitForTimeout(150);
+await setze('dash', 'Eins\nZwei\nDrei\nVier\nFünf'); await page.waitForTimeout(250);
+const hg = await zeilenKasten(1), hz = await zeilenKasten(3);
+await tippe('touchStart', hg.x, hg.y); await page.waitForTimeout(700);
+// bis knapp über die Umschaltgrenze ziehen …
+for (let i = 1; i <= 8; i++) await tippe('touchMove', hg.x, hg.y + (hz.y - hg.y) * i / 8);
+await page.waitForTimeout(120);
+const nachHin = await page.evaluate(() => sortZug.ziel);
+check('nach unten gezogen: die Zeile hat den Platz gewechselt', nachHin === 3, String(nachHin));
+// … dann 4 px zurück: das ist innerhalb der Totzone, nichts darf springen
+await tippe('touchMove', hg.x, hz.y - 4); await page.waitForTimeout(120);
+check('kleine Rückbewegung lässt den Platz stehen', (await page.evaluate(() => sortZug.ziel)) === nachHin,
+  String(await page.evaluate(() => sortZug.ziel)));
+// … erst eine ganze Zeile zurück wechselt wieder
+const hoehe = hg.h;
+await tippe('touchMove', hg.x, hz.y - hoehe * 1.2); await page.waitForTimeout(120);
+check('deutliche Rückbewegung wechselt den Platz zurück', (await page.evaluate(() => sortZug.ziel)) < nachHin,
+  String(await page.evaluate(() => sortZug.ziel)));
+await tippe('touchEnd', 0, 0); await page.waitForTimeout(250);
+
 await page.screenshot({ path: out + '/sortieren.png' });
 check('keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));
 console.log(fails ? fails + ' Prüfung(en) fehlgeschlagen' : 'alle Prüfungen bestanden');
