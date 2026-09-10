@@ -467,6 +467,11 @@
        gesetzt lief „tauschen“ rechts aus der Karte (am Bild gesehen). */
     .lage .regler.paar { flex-wrap: wrap; gap: 8px; }
     .lage .regler.paar .btn.klein { flex: 1 1 auto; padding: 7px 8px; }
+    /* Gleiche Optik wie die Knöpfe unten – außerhalb von `.knoepfe` erbt `.btn` sonst die helle
+       Grundfarbe und der Knopf konkurriert mit „Fertig + auf Sperrbildschirm“ (am Bild gesehen). */
+    .lage .btn.zurueckzeile { width: 100%; padding: 10px 12px; font-size: 14px; border-radius: 12px;
+      background: var(--flaeche); color: var(--muted); font-weight: 500; }
+    .lage .btn.zurueckzeile:disabled { opacity: .4; }
     .lage .regler input { flex: 1 1 auto; accent-color: var(--fg); }
     .lage .regler output { min-width: 4.2em; text-align: right; font-variant-numeric: tabular-nums; }
     /* Drehskala wie im Fotoeditor: feste Strichleiter, die unter einer Mittelmarke durchwandert.
@@ -689,14 +694,19 @@
         <button class="btn klein" type="button" id="lage-fit" aria-pressed="true">nach Text</button>
         <button class="btn klein" type="button" id="lage-quad" aria-pressed="false">quadratisch</button>
       </div>
-      <!-- Eigene Reihe für die beiden kleinen Zettel: nebeneinander / untereinander sind zwei Zustände
-           derselben Frage, tauschen gehört daneben. Nur da, wenn es einen dritten Zettel gibt. -->
+      <!-- Eigene Reihe für die beiden kleinen Zettel, nur da, wenn es einen dritten gibt. „untereinander“
+           gab es in 3.21 auch – wieder entfernt: unter dem ersten Zettel ist dafür kein Platz, die beiden
+           landeten übereinandergestapelt am unteren Rand (Auftraggeber am Bild, 10.9.2026). -->
       <div class="regler form paar" id="lage-paar" hidden>
         <span>2 + 3</span>
         <button class="btn klein" type="button" id="lage-neben">nebeneinander</button>
-        <button class="btn klein" type="button" id="lage-unter">untereinander</button>
         <button class="btn klein" type="button" id="lage-tausch">tauschen</button>
       </div>
+      <!-- Der Widerruf steht **hier**, bei den Knöpfen zum Ausprobieren, und nicht unten zwischen den
+           Foto- und Fertig-Knöpfen: dort hat der Auftraggeber ihn nicht gefunden. Eigene Zeile und
+           ausgeschriebener Text, damit klar ist, wohin er zurückführt – er nimmt **alles** im Fenster
+           zurück, nicht nur die Lage von 2 und 3. -->
+      <button class="btn zurueckzeile" type="button" id="lage-zurueck" disabled>Zurück zum Stand beim Öffnen</button>
       <p class="hinweis" id="lage-hinweis">Zettel mit dem Finger schieben.</p>
       <div class="knoepfe">
         <!-- Hintergrundfoto seit 3.15 hier statt auf der Startseite: man wechselt es „selten bis nie“
@@ -706,7 +716,6 @@
         <button class="btn" type="button" id="bgclear" hidden>Hintergrundfoto entfernen</button>
         <button class="btn" type="button" id="eichpick">Eichbild wählen</button>
         <button class="btn" type="button" id="eichclear" hidden>Eichbild entfernen</button>
-        <button class="btn" type="button" id="lage-zurueck" disabled title="Auf den Stand zurück, mit dem dieses Fenster geöffnet wurde">Widerrufen</button>
         <button class="btn" type="button" id="lage-reset" title="Auf die Standardlage – ein Zettel, mittig">Zurücksetzen</button>
         <button class="btn" type="button" id="lage-fertig">Fertig</button>
         <button class="btn primary" type="button" id="lage-kleben">Fertig + auf Sperrbildschirm</button>
@@ -739,7 +748,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.22';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.23';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -2838,10 +2847,9 @@
     // Der häufigste Wunsch direkt nach dem Schieben: sehen, wie es wirklich aussieht. Ein Knopf statt zwei Wege.
     $('lage-kleben').addEventListener('click', () => { lageOeffnen(false); stickViaShortcut(); });
     lageEl.addEventListener('click', e => { if (e.target === lageEl) lageOeffnen(false); });
-    $('lage-neben').addEventListener('click', () => { paarOrdnen(true); lagePlatzieren(); });
-    $('lage-unter').addEventListener('click', () => { paarOrdnen(false); lagePlatzieren(); });
+    $('lage-neben').addEventListener('click', () => { nebeneinander(); lagePlatzieren(); });
     $('lage-tausch').addEventListener('click', () => { paarTauschen(); lagePlatzieren(); });
-    $('lage-zurueck').addEventListener('click', () => { lageWiderrufen(); showInfo('Auf den Stand von vorhin zurück'); });
+    $('lage-zurueck').addEventListener('click', () => { lageWiderrufen(); showInfo('Zurück zum Stand beim Öffnen'); });
     $('lage-reset').addEventListener('click', () => {
       state.noteScale = 1; state.noteX = 0.5; state.noteY = 0.585;
       state.noteRot = NOTE_ROT_STD; state.noteFit = true;
@@ -3724,41 +3732,26 @@
     }
     // Drei Zettel untereinander werden zu klein. Deshalb liegen der zweite und dritte **nebeneinander**
     // unter dem ersten – je 44 % der Bildbreite (Faktor 0,55 auf die Layoutbreite von 80 %), dazwischen Luft.
-    // Zettel 2 und 3 ordnen: nebeneinander auf gleicher Höhe (`neben`) oder untereinander (sonst).
-    // Beides beginnt unter dem ersten Zettel und weicht nach oben aus, wenn es unten nicht mehr passt.
-    function paarOrdnen(neben) {
+    // Zettel 2 und 3 nebeneinander auf gleiche Höhe, unter den ersten – oder darüber, wenn es unten
+    // nicht mehr passt. Untereinander (3.21) gab es kurz und ist wieder weg: dafür reicht der Platz nicht.
+    function nebeneinander() {
       if (state.zettel.length < 3) return;
       zettelSichern();
       const t = targetCanvas();
       const masse = z => mitZettel(z, () => { const f = fitNote(t.w, t.h, t.layout, (z.text || '').trim() || '…');
         return { h: f.noteH / t.h, b: f.noteW / t.w }; });
       const erst = state.zettel[0], hErst = masse(erst).h;
-      for (let i = 1; i < 3; i++) state.zettel[i].noteScale = neben ? 0.55 : 0.7;
+      for (let i = 1; i < 3; i++) state.zettel[i].noteScale = 0.55;
       const m1 = masse(state.zettel[1]), m2 = masse(state.zettel[2]);
-      const luft = 0.02;
-      if (neben) {
-        const hKlein = Math.max(m1.h, m2.h);
-        let y = erst.noteY + hErst / 2 + luft + hKlein / 2;
-        if (y + hKlein / 2 > 1) y = erst.noteY - hErst / 2 - luft - hKlein / 2;   // sonst darüber
-        y = klemm(y, hKlein / 2, 1 - hKlein / 2);
-        state.zettel[1].noteX = klemm(0.25, m1.b / 2, 1 - m1.b / 2); state.zettel[1].noteY = y;
-        state.zettel[2].noteX = klemm(0.75, m2.b / 2, 1 - m2.b / 2); state.zettel[2].noteY = y;
-      } else {
-        // Untereinander: beide mittig, der dritte unter dem zweiten. Passt das Paar unten nicht mehr,
-        // rückt es geschlossen über den ersten Zettel.
-        let y1 = erst.noteY + hErst / 2 + luft + m1.h / 2;
-        let y2 = y1 + m1.h / 2 + luft + m2.h / 2;
-        if (y2 + m2.h / 2 > 1) {
-          y2 = erst.noteY - hErst / 2 - luft - m2.h / 2;
-          y1 = y2 - m2.h / 2 - luft - m1.h / 2;
-        }
-        state.zettel[1].noteX = 0.5; state.zettel[1].noteY = klemm(y1, m1.h / 2, 1 - m1.h / 2);
-        state.zettel[2].noteX = 0.5; state.zettel[2].noteY = klemm(y2, m2.h / 2, 1 - m2.h / 2);
-      }
+      const luft = 0.02, hKlein = Math.max(m1.h, m2.h);
+      let y = erst.noteY + hErst / 2 + luft + hKlein / 2;
+      if (y + hKlein / 2 > 1) y = erst.noteY - hErst / 2 - luft - hKlein / 2;   // sonst darüber
+      y = klemm(y, hKlein / 2, 1 - hKlein / 2);
+      state.zettel[1].noteX = klemm(0.25, m1.b / 2, 1 - m1.b / 2); state.zettel[1].noteY = y;
+      state.zettel[2].noteX = klemm(0.75, m2.b / 2, 1 - m2.b / 2); state.zettel[2].noteY = y;
       Object.assign(state, zettelFelder(state.zettel[state.aktiv | 0]));
       zettelAnwenden(); persist();
     }
-    const nebeneinander = () => paarOrdnen(true);
     // Tauschen heißt: die **Lage** wechseln, nicht der Inhalt. Größe und Neigung gehören zur Lage und
     // gehen mit – sonst säße ein großer Zettel plötzlich auf dem Platz des kleinen und umgekehrt.
     const LAGE_FELDER = ['noteX', 'noteY', 'noteScale', 'noteRot', 'noteFit'];

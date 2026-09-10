@@ -181,12 +181,8 @@ await page.click('#lage-neben'); await page.waitForTimeout(300);
 const neben = await lagen();
 check('nebeneinander: gleiche Höhe, links und rechts',
   Math.abs(neben[1].y - neben[2].y) < 0.001 && neben[1].x < 0.4 && neben[2].x > 0.6, JSON.stringify(neben));
-await page.click('#lage-unter'); await page.waitForTimeout(300);
-const unter = await lagen();
-check('untereinander: beide mittig, verschiedene Höhe',
-  Math.abs(unter[1].x - 0.5) < 0.001 && Math.abs(unter[2].x - 0.5) < 0.001 && unter[2].y > unter[1].y,
-  JSON.stringify(unter));
-await page.click('#lage-neben'); await page.waitForTimeout(300);
+// „untereinander“ gab es in 3.21 kurz – wieder entfernt, der Platz reicht nicht (Auftraggeber am Bild)
+check('kein „untereinander“ mehr', await page.evaluate(() => !document.getElementById('lage-unter')));
 const vorTausch = await lagen();
 await page.click('#lage-tausch'); await page.waitForTimeout(300);
 const nachTausch = await lagen();
@@ -199,17 +195,17 @@ check('die Texte bleiben bei ihrem Zettel – getauscht wird die Lage, nicht der
 // Widerrufen: zurück auf den Stand beim Öffnen des Fensters
 await page.click('#lage-zurueck'); await page.waitForTimeout(300);
 const zurueck = await lagen();
-check('Widerrufen stellt den Stand beim Öffnen wieder her',
+check('„Zurück zum Stand beim Öffnen“ stellt ihn wieder her',
   JSON.stringify(zurueck) === JSON.stringify(beimOeffnen),
   JSON.stringify(zurueck) + ' statt ' + JSON.stringify(beimOeffnen));
-check('danach ist „Widerrufen“ wieder gesperrt', await page.evaluate(() => document.getElementById('lage-zurueck').disabled));
+check('danach ist der Zurück-Knopf wieder gesperrt', await page.evaluate(() => document.getElementById('lage-zurueck').disabled));
 // Ein frisch geöffnetes Fenster hat nichts zu widerrufen
 await page.click('#lage-fertig'); await page.waitForTimeout(250);
 await page.click('#lagebtn'); await page.waitForTimeout(400);
-check('frisch geöffnet ist „Widerrufen“ gesperrt', await page.evaluate(() => document.getElementById('lage-zurueck').disabled));
+check('frisch geöffnet ist der Zurück-Knopf gesperrt', await page.evaluate(() => document.getElementById('lage-zurueck').disabled));
 // Tauschen statt „nebeneinander“: das ändert immer etwas, auch wenn schon nebeneinander gelegt war
 await page.click('#lage-tausch'); await page.waitForTimeout(300);
-check('nach einer Änderung ist „Widerrufen“ frei', await page.evaluate(() => !document.getElementById('lage-zurueck').disabled));
+check('nach einer Änderung ist der Zurück-Knopf frei', await page.evaluate(() => !document.getElementById('lage-zurueck').disabled));
 await page.click('#lage-fertig'); await page.waitForTimeout(250);
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();
