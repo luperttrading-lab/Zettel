@@ -71,17 +71,17 @@ await page.dblclick('#lage-dreh'); await page.waitForTimeout(250);
 check('Doppeltipp stellt gerade', await winkel() === 0, String(await winkel()));
 await page.screenshot({ path: out + '/form_fenster.png' });
 
-// 6) Der gedrehte Zettel bleibt ganz im Bild: die Klemmung rechnet mit dem gedrehten Umriss
+// 6) 3.11: Der Zettel darf über den Rand, nur seine Mitte bleibt im Bild – die Grenze ist darum 0…1,
+//    **unabhängig** vom Winkel. Bis 3.10 klemmte hier der gedrehte Umriss (|w·cos| + |h·sin|).
 const grenzen = g => page.evaluate(async g => {
   state.noteRot = g; state.noteScale = 1; syncPreview();
-  const q = lageGrenzen(), tc = targetCanvas();
-  const f = fitNote(tc.w, tc.h, tc.layout, noteText());
-  const a = Math.abs(g * Math.PI / 180);
-  return { minX: q.minX, breite: (f.noteW * Math.cos(a) + f.noteH * Math.sin(a)) / 2 / tc.w };
+  const q = lageGrenzen();
+  return { minX: q.minX, maxX: q.maxX, minY: q.minY, maxY: q.maxY };
 }, g);
 for (const g of [0, 10, -15]) {
   const q = await grenzen(g);
-  check('Klemmung bei ' + g + '° rechnet mit dem gedrehten Umriss', Math.abs(q.minX - q.breite) < 1e-9, JSON.stringify(q));
+  check('Grenze bei ' + g + '°: die Mitte bleibt im Bild, sonst nichts',
+    q.minX === 0 && q.maxX === 1 && q.minY === 0 && q.maxY === 1, JSON.stringify(q));
 }
 await page.evaluate(() => { state.noteRot = -2.5; lageOeffnen(false); });
 

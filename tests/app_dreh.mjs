@@ -88,9 +88,11 @@ const formen = new Set(gemessen.map(g => g.boxBreite + 'x' + g.boxHoehe));
 check('die drei Zettel stehen wirklich verschieden', formen.size === 3, [...formen].join(' '));
 
 
-// Am Bildrand: ein stark gedrehter Zettel darf nicht angeschnitten werden. Die Zeichnung muss auf den
-// **gedrehten** Umriss klemmen, so wie es lageGrenzen() im Fenster tut – sonst zeigt das Fenster einen
-// ganzen Zettel und das Display einen abgeschnittenen (gemessen ohne die Klemmung: 380 statt 417 px hoch).
+// Am Bildrand (3.11): der Zettel darf über den Rand, abgeschnitten wird, was draußen liegt – aber
+// Fenster und Bild müssen dieselbe Grenze haben (die Mitte bleibt im Bild). Bei noteY = 0,02 liegt die
+// Mitte knapp unter der Oberkante: sichtbar ist dann vom gedrehten Umriss der Teil unterhalb der Mitte
+// plus die 2 % darüber; das Papier beginnt bei y = 0 (angeschnitten). Bis 3.10 klemmte die Zeichnung auf
+// den ganzen Umriss – so wie das Fenster; das war die Parität aus 1.64.1, sie gilt jetzt mit der neuen Grenze.
 await page.evaluate(() => localStorage.clear());
 await page.reload(); await page.waitForTimeout(900);
 const rand = await page.evaluate(async () => {
@@ -111,11 +113,11 @@ const rand = await page.evaluate(async () => {
       if (y < y0) y0 = y; if (y > y1) y1 = y; break;
     }
   }
-  return { hoehe: y1 - y0 + 1, erwartet: Math.round(dm.h), oben: y0, fensterMinY: g_minY() };
-  function g_minY() { return +lageGrenzen().minY.toFixed(4); }
+  return { hoehe: y1 - y0 + 1, erwartet: Math.round(0.02 * t.h + dm.h / 2), oben: y0, fensterMinY: lageGrenzen().minY };
 });
-check('gedrehter Zettel am Bildrand bleibt ganz im Bild', Math.abs(rand.hoehe - rand.erwartet) <= 3 && rand.oben >= 0,
-  `${rand.hoehe} px hoch, erwartet ${rand.erwartet}, beginnt bei y=${rand.oben}`);
+check('gedrehter Zettel über dem Rand: angeschnitten, Mitte im Bild, Fenster und Bild einig',
+  Math.abs(rand.hoehe - rand.erwartet) <= 4 && rand.oben === 0 && rand.fensterMinY === 0,
+  `${rand.hoehe} px sichtbar, erwartet ${rand.erwartet}, beginnt bei y=${rand.oben}, Fenster minY=${rand.fensterMinY}`);
 
 
 // Die Ursache strukturell absichern: In `zeichneEinenZettel` darf hinter dem ersten `await` KEIN

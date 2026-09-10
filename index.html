@@ -696,7 +696,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.10';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.11';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -2489,11 +2489,12 @@
     function lageGrenzen() {
       const t = targetCanvas();
       const f = fitNote(t.w, t.h, t.layout, noteText() || '…');
-      // Der **gedrehte** Zettel braucht mehr Platz als seine eigene Breite und Höhe – sonst hinge bei
-      // schräger Lage eine Ecke über den Bildrand.
-      const d = drehMasse(f.noteW, f.noteH);
-      return { minX: d.w / 2 / t.w, maxX: 1 - d.w / 2 / t.w,
-               minY: d.h / 2 / t.h, maxY: 1 - d.h / 2 / t.h, t, f };
+      // Seit 3.11 darf der Zettel **über den Rand**: was draußen liegt, wird abgeschnitten – „das kann man
+      // dann selbst entscheiden, wie viel vom Zettel drauf ist oder ob eine Ecke sowieso unbeschrieben
+      // ist“ (Auftraggeber, 10.9.2026). Die eine Grenze, die bleibt: die **Mitte** bleibt im Bild, also
+      // höchstens die Hälfte draußen – sonst wäre er im Fenster nicht mehr zu greifen. Bis 3.10 klemmte
+      // hier der gedrehte Umriss (drehMasse), damit keine Ecke überhing; genau das ist jetzt erlaubt.
+      return { minX: 0, maxX: 1, minY: 0, maxY: 1, t, f };
     }
     // Miniatur eines Zettels im Rahmen platzieren (Anteile und Schriftgröße im Maßstab des Rahmens)
     // Grifffläche über dem gezeichneten Zettel: gleiche Lage, Größe und Neigung, aber unsichtbar.
@@ -2637,7 +2638,7 @@
     });
     sizeEl.addEventListener('change', persist);
 
-    // Schieben: der Zettel folgt dem Finger, bleibt aber immer ganz im Bild (klemm in lagePlatzieren).
+    // Schieben: der Zettel folgt dem Finger; nur seine Mitte bleibt im Bild (klemm in lagePlatzieren).
     let zieht = null;
     miniEl.addEventListener('pointerdown', e => {
       const r = schirmEl.getBoundingClientRect(), g = lageGrenzen();
@@ -3232,11 +3233,11 @@
       const m = pad * 2.2;
       const fastener = await svgImage(fastenersSvg(befPixel(noteW, noteH, pad), noteW, noteH, pad, fastenerLook())).catch(() => null);
 
-      // Lage: aus dem Zustand, in Anteilen des Bildes. Der Zettel bleibt immer ganz im Bild.
-      // Auf den **gedrehten** Umriss klemmen, mit derselben Rechnung wie lageGrenzen() – sonst schnitte
-      // das Bild eine Ecke ab, die im Fenster noch ganz zu sehen war (gemessen: 20 px bei −12°).
-      const dm = drehMasse(noteW, noteH, rot);
-      const cx = klemm(w * nx, dm.w / 2, w - dm.w / 2), cy = klemm(h * ny, dm.h / 2, h - dm.h / 2);
+      // Lage: aus dem Zustand, in Anteilen des Bildes. Geklemmt wird nur die **Mitte** auf das Bild –
+      // dieselbe Grenze wie lageGrenzen(); der Rest darf über den Rand und wird vom Bild abgeschnitten
+      // (3.11). Fenster und Bild müssen dieselbe Grenze haben, sonst zeigt das eine, was das andere
+      // abschneidet (so geschehen in 1.64.1 mit 20 px bei −12°).
+      const cx = klemm(w * nx, 0, w), cy = klemm(h * ny, 0, h);
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(rot * Math.PI / 180);

@@ -41,17 +41,16 @@ await page.evaluate(() => { const r = document.getElementById('lage-size'); r.va
 await page.waitForTimeout(200);
 check('Regler ändert die Größe', await page.evaluate(() => Math.abs(state.noteScale - 0.7) < 1e-9), await page.evaluate(() => String(state.noteScale)));
 
-// Der Zettel bleibt immer ganz im Bild – auch wenn man weit über den Rand zieht
+// 3.11: Der Zettel darf **über den Rand** – nur seine Mitte bleibt im Bild. Ein Zug weit nach links oben
+// endet also mit der Mitte in der Ecke (0, 0), nicht mehr mit dem ganzen Zettel im Bild.
 const p1 = await page.evaluate(() => { const r = document.getElementById('lage-zettel').getBoundingClientRect();
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
 await page.mouse.move(p1.x, p1.y); await page.mouse.down();
 await page.mouse.move(p1.x - 900, p1.y - 900, { steps: 6 }); await page.mouse.up();
 await page.waitForTimeout(200);
-const drin = await page.evaluate(() => { const t = targetCanvas(), f = fitNote(t.w, t.h, t.layout, noteText());
-  const kl = (v, a, c) => Math.max(a, Math.min(c, v));
-  const cx = kl(state.noteX * t.w, f.noteW / 2, t.w - f.noteW / 2), cy = kl(state.noteY * t.h, f.noteH / 2, t.h - f.noteH / 2);
-  return cx - f.noteW / 2 >= -0.5 && cy - f.noteH / 2 >= -0.5; });
-check('Zettel bleibt ganz im Bild', drin);
+const ecke = await page.evaluate(() => ({ x: state.noteX, y: state.noteY }));
+check('über den Rand gezogen: die Mitte bleibt im Bild, der Rest hängt heraus',
+  Math.abs(ecke.x) < 1e-9 && Math.abs(ecke.y) < 1e-9, JSON.stringify(ecke));
 
 // Gespeicherter Wert und gezeichnete Lage müssen **gleich** sein. Bis 1.60.1 wurde auf 0…1 geklemmt,
 // gezeichnet aber auf den Bereich, in dem der Zettel ganz ins Bild passt: nach einem Zug über den oberen
@@ -90,12 +89,16 @@ const mass = await page.evaluate(async () => {
     }
   }
   const f = fitNote(t.w, t.h, t.layout, noteText());
-  // Soll ist die **geklemmte** Lage: der Zettel bleibt ganz im Bild, ein Zug über den Rand hinaus zählt nicht
+  // Soll ist die Lage der Mitte (auf 0…1 geklemmt); was über den Rand hängt, ist im Bild nicht zu sehen,
+  // deshalb wird die Mitte des **sichtbaren** Papiers gegen die auf das Bild beschnittene Erwartung geprüft
   const kl = (v, a, c) => Math.max(a, Math.min(c, v));
-  const sollY = kl(state.noteY * t.h, f.noteH / 2, t.h - f.noteH / 2) / t.h;
-  return { breite: (x1 - x0) / t.w, sollBreite: f.noteW / t.w, mitteY: ((y0 + y1) / 2) / t.h, sollY };
+  const cx = kl(state.noteX, 0, 1) * t.w, cy = kl(state.noteY, 0, 1) * t.h;
+  const sollY = ((kl(cy - f.noteH / 2, 0, t.h) + kl(cy + f.noteH / 2, 0, t.h)) / 2) / t.h;
+  // Der Zettel steht nach dem Zug in die Ecke halb im Bild: erwartet ist die **sichtbare** Breite
+  const sollBreite = (kl(cx + f.noteW / 2, 0, t.w) - kl(cx - f.noteW / 2, 0, t.w)) / t.w;
+  return { breite: (x1 - x0) / t.w, sollBreite, mitteY: ((y0 + y1) / 2) / t.h, sollY };
 });
-check('Breite im Bild folgt dem Regler', Math.abs(mass.breite - mass.sollBreite) < 0.05,
+check('sichtbare Breite im Bild = Regler, beschnitten am Rand', Math.abs(mass.breite - mass.sollBreite) < 0.05,
   mass.breite.toFixed(3) + ' vs ' + mass.sollBreite.toFixed(3));
 check('Lage im Bild folgt dem Fenster', Math.abs(mass.mitteY - mass.sollY) < 0.05,
   mass.mitteY.toFixed(3) + ' vs ' + mass.sollY.toFixed(3));
