@@ -50,6 +50,10 @@ const modus = await page.evaluate(() => ({
 }));
 check('Editor gesperrt, „Fertig“ da, Zeilen animiert',
   modus.editierbar === false && modus.fertig && modus.animiert === 'wackeln', JSON.stringify(modus));
+// 3.18: Drehpunkt am linken Rand. Um die Mitte gedreht hob und senkte sich die linke Kante, und bei
+// gegenläufigen Nachbarzeilen wirkte der Zeilenabstand dort ungleich (Auftraggeber am Bild).
+const dreh = await page.evaluate(() => getComputedStyle(document.querySelectorAll('#text .ln')[0]).transformOrigin.split(' ')[0]);
+check('gedreht wird um den linken Rand, nicht um die Mitte', dreh === '0px', dreh);
 
 // 2) Ziehen ordnet um – zweite Zeile ganz nach oben, mit erneutem Greifen
 const von = await zeilenKasten(1), nach = await zeilenKasten(0);

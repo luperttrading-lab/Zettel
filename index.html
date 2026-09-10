@@ -347,12 +347,16 @@
        dabei nicht editierbar – sonst fährt iOS beim langen Drücken Lupe und Textauswahl aus. */
     .note .editor.sortieren { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
       caret-color: transparent; cursor: grab; }
-    .note .editor.sortieren .ln { animation: wackeln .42s ease-in-out infinite alternate; transform-origin: 50% 50%; }
+    /* Drehpunkt am **linken** Rand, nicht in der Mitte: dreht die Zeile um ihre Mitte, hebt und senkt sich
+       ihr linker Rand – bei gegenläufigen Nachbarzeilen wirkte der Zeilenabstand dort ungleich
+       (Auftraggeber am Bild, 10.9.2026). Am linken Rand stehen Markierung und Zeilenanfang, dort führt
+       das Auge entlang; mit origin 0 bleibt genau diese Kante ruhig. Winkel dafür von 0,55° auf 0,45°. */
+    .note .editor.sortieren .ln { animation: wackeln .42s ease-in-out infinite alternate; transform-origin: 0 50%; }
     .note .editor.sortieren .ln:nth-child(2n) { animation-delay: -.21s; }
     /* Während des Ziehens keine Animation: Wackeln und Verschieben nutzen beide `transform`. */
     .note .editor.sortieren.zieht .ln { animation: none; transition: transform .16s ease; }
     .note .editor.sortieren.zieht .ln.greift { transition: none; opacity: .9; }
-    @keyframes wackeln { from { transform: rotate(-.55deg); } to { transform: rotate(.55deg); } }
+    @keyframes wackeln { from { transform: rotate(-.45deg); } to { transform: rotate(.45deg); } }
     @media (prefers-reduced-motion: reduce) { .note .editor.sortieren .ln { animation: none; } }
     /* Der Wasserzettel liegt genau auf der Textfläche – Innenabstand und Größe setzt syncPreview */
     .note canvas.wasser { position: absolute; z-index: 2; }
@@ -707,7 +711,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.17';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.18';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -1047,12 +1051,14 @@
       const heute = 'Heute ' + literText(tag);
       const fussY = balken ? bh - fussH * 0.42 : bh - gross * 0.12;
       ctx.fillText(heute, 0, fussY);
-      if (typeof w.gestern === 'number') {
-        // Nebeneinander statt untereinander – zwei Zeilen kosteten Höhe, die die Gläser besser brauchen
+      {
+        // Nebeneinander statt untereinander – zwei Zeilen kosteten Höhe, die die Gläser besser brauchen.
+        // Ohne Wert ein **Strich** statt gar nichts: am ersten Tag stand dort eine Leerstelle, und man
+        // sah nicht, ob „gestern“ fehlt oder null Liter waren (Auftraggeber, 10.9.2026).
         const x = ctx.measureText(heute + '   ').width;
         ctx.font = `${weight} ${gesternFs}px ${family}`;
         ctx.globalAlpha = 0.5;
-        ctx.fillText('gestern ' + literText(w.gestern), x, fussY);
+        ctx.fillText('gestern ' + (typeof w.gestern === 'number' ? literText(w.gestern) : '–'), x, fussY);
         ctx.globalAlpha = 1;
       }
 

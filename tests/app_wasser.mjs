@@ -86,6 +86,22 @@ await page.reload(); await page.waitForTimeout(900);
 const s4 = await stand();
 check('neuer Tag beginnt bei null', s4.tag === 0, JSON.stringify(s4));
 check('die Menge des Vortags bleibt stehen', Math.abs(s4.gestern - 1.3) < 1e-9, 'gestern ' + s4.gestern + ' statt 1,3');
+// 3.18: Ohne Wert steht dort ein Strich – sonst sah man nicht, ob „gestern“ fehlt oder null Liter waren.
+const gesternText = () => page.evaluate(() => {
+  const c = document.createElement('canvas'), g = c.getContext('2d');
+  const wort = [];
+  const echt = g.fillText.bind(g);
+  g.fillText = (t, x, y) => { wort.push(String(t)); echt(t, x, y); };
+  const f = letzteMasse;
+  zeichneWasser(g, 400, 400, { w: wasserStand(), ink: '#000', family: f.family, weight: f.weight, fs: 12 });
+  return wort.find(t => t.startsWith('gestern')) || '';
+});
+await page.evaluate(() => { const w = wasserStand(); w.gestern = null; state.wasser = w; syncPreview(); });
+await page.waitForTimeout(200);
+check('ohne Vortagswert steht „gestern –“', (await gesternText()) === 'gestern –', await gesternText());
+await page.evaluate(() => { const w = wasserStand(); w.gestern = 2.4; state.wasser = w; syncPreview(); });
+await page.waitForTimeout(200);
+check('mit Vortagswert steht die Menge', (await gesternText()) === 'gestern 2,4 l', await gesternText());
 
 // 6) Die Vorschau zeichnet nichts Eigenes: derselbe Aufruf muss Pixel für Pixel dasselbe liefern
 await page.evaluate(() => { state.wasser = { tag: heuteKennung(), v12: ['klein','gross'], v18: ['mittel'], n18: [], gestern: 2.4 }; syncPreview(); });
