@@ -340,6 +340,20 @@
       -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
     }
     .note .zettelknopf svg { width: 14px; height: 14px; display: block; }
+    /* Oben rechts, nicht unten: unten liegt die Statuszeile darüber (am Bild gesehen). */
+    .note .zettelknopf.rechts { left: auto; right: 1.5%; bottom: auto; top: 1.5%; }
+    .note .zettelknopf.wort { line-height: 1.3; padding: 5px 10px; font: 600 12px/1.3 system-ui, sans-serif; }
+    /* Sortieren: die Zeilen wackeln wie Icons auf dem Homescreen und lassen sich ziehen. Der Editor ist
+       dabei nicht editierbar – sonst fährt iOS beim langen Drücken Lupe und Textauswahl aus. */
+    .note .editor.sortieren { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+      caret-color: transparent; cursor: grab; }
+    .note .editor.sortieren .ln { animation: wackeln .42s ease-in-out infinite alternate; transform-origin: 50% 50%; }
+    .note .editor.sortieren .ln:nth-child(2n) { animation-delay: -.21s; }
+    /* Während des Ziehens keine Animation: Wackeln und Verschieben nutzen beide `transform`. */
+    .note .editor.sortieren.zieht .ln { animation: none; transition: transform .16s ease; }
+    .note .editor.sortieren.zieht .ln.greift { transition: none; opacity: .9; }
+    @keyframes wackeln { from { transform: rotate(-.55deg); } to { transform: rotate(.55deg); } }
+    @media (prefers-reduced-motion: reduce) { .note .editor.sortieren .ln { animation: none; } }
     /* Der Wasserzettel liegt genau auf der Textfläche – Innenabstand und Größe setzt syncPreview */
     .note canvas.wasser { position: absolute; z-index: 2; }
     .note.wasserzettel .editor { visibility: hidden; }
@@ -531,6 +545,7 @@
       <div class="fastener" id="fastener-preview" aria-hidden="true"></div>
       <!-- Der Mülleimer sitzt am Zettel, nicht in der Leiste darunter: der Wasserzettel wird täglich
            geleert, die Lage im Bild dagegen einmal eingestellt (Auftraggeber, 9.9.2026). -->
+      <button type="button" class="zettelknopf rechts wort" id="sortdone" hidden title="Sortieren beenden">Fertig</button>
       <button type="button" class="zettelknopf" id="clear" title="Den Zettel leeren" aria-label="Zettel leeren"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button>
       <span class="pin over" id="overpin" hidden>⚠ Zu viel Text</span>
       <!-- Zustand als Marke in der Zettelecke: in der Kopfzeile lag er auf dem Hintergrundfoto
@@ -692,7 +707,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.16';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.17';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -2184,11 +2199,18 @@
       textEl.value = v;
       onTextChanged(); flush();
       wasserLeisteBauen();   // die Glas-Knöpfe erscheinen und verschwinden mit der Listenart
+      sortModus(false);      // andere Listenart: ein laufendes Umsortieren ist damit beendet
       // Cursor nur nachziehen, wenn ohnehin im Text getippt wird. Sonst setzt setCaret eine Auswahl in das
       // contenteditable, und iOS springt aus der Auswahlleiste in den Text und blendet die Tastatur ein.
       if (document.activeElement === textEl.el) textEl.selectionStart = textEl.selectionEnd = textEl.value.length;
     });
-    function applyList() { stripList.set(state.list); wasserLeisteBauen(); }
+    // **Vor** applyList deklariert: applyList() läuft schon beim Start und ruft sortModus(false); mit den
+    // Deklarationen weiter unten stünde `sortAn` dann in der zeitlichen Totzone und der Aufruf würfe.
+    // Dieselbe Falle wie bei `const` vor Gebrauch, die in diesem Projekt schon zweimal zuschlug.
+    let sortAn = false, sortTimer = null, sortZug = null;
+    function applyList() { stripList.set(state.list); wasserLeisteBauen();
+      sortModus(false);                       // Listenart oder Zettel gewechselt: Sortieren beenden
+    }
 
     // ── Bedienung des Wasserzettels ────────────────────────────────────────────────────────────────
     const wasserLeisteEl = $('wasserleiste'), wasserZeitenEl = $('wasser-zeiten'), wasserGlaeserEl = $('wasser-glaeser');
@@ -2337,6 +2359,7 @@
       return [...textEl.el.children].indexOf(d);
     }
     textEl.el.addEventListener('pointerdown', e => {
+      if (sortAn) return;                 // im Sortiermodus gehört jeder Druck dem Ziehen
       const i = hakenZeile(e);
       if (i < 0) return;
       e.preventDefault();
@@ -2346,6 +2369,7 @@
     });
     const hakenEnde = e => {
       clearTimeout(hakenTimer);
+      if (sortAn) return;                 // sonst setzte das Loslassen nach einem Zug einen Haken
       if (hakenLang) { hakenLang = false; return; }                       // langes Drücken hat das Fenster geöffnet
       const i = hakenZeile(e);
       if (i < 0) return;
@@ -2358,6 +2382,115 @@
     textEl.el.addEventListener('pointerup', hakenEnde);
     textEl.el.addEventListener('pointercancel', () => { clearTimeout(hakenTimer); hakenLang = false; });
     hakenBildSetzen();
+
+    // ── Zeilen umsortieren (3.17) ────────────────────────────────────────────────────────────────
+    // Lang auf eine Zeile drücken: alle Zeilen wackeln wie Icons auf dem Homescreen, dann lassen sie
+    // sich ziehen. **Nicht** bei Terminen (dort ordnet die Uhrzeit, nicht die Wichtigkeit) und nicht
+    // beim Wasserzettel (dort steht kein Text). Der Bereich links auf der Markierung und rechts hinter
+    // dem Text bleibt dem Haken – gedrückt wird **im** Text.
+    const sortDoneEl = $('sortdone');
+    const sortierbar = () => state.list !== 'termin' && !istWasser() && textEl.value.split('\n').length > 1;
+    // Nur Listen, deren Markierung von der Position abhängt, müssen nach dem Verschieben neu gezählt
+    // werden – heute allein „1. 2. 3.“. Über mark(0) ≠ mark(1) gefragt statt über den Namen, damit eine
+    // künftige Listenart nicht vergessen wird.
+    const zaehltMit = m => !!(LISTS[m] && LISTS[m].mark && LISTS[m].mark(0) !== LISTS[m].mark(1));
+    function sortModus(an) {
+      an = !!an && sortierbar();
+      if (an === sortAn) return;
+      sortAn = an;
+      textEl.el.classList.toggle('sortieren', an);
+      textEl.el.contentEditable = an ? 'false' : 'true';
+      sortDoneEl.hidden = !an;
+      if (an) { try { window.getSelection().removeAllRanges(); } catch (_) {} showInfo('Zeile ziehen zum Umsortieren.', 3); }
+      else {
+        sortZug = null;
+        textEl.el.classList.remove('zieht');
+        [...textEl.el.children].forEach(k => { k.style.transform = ''; k.classList.remove('greift'); });
+      }
+    }
+    // Wie weit die anderen Zeilen ausweichen: um die Höhe der gegriffenen Zeile. Bei ungleich hohen
+    // Zeilen (Überschrift, umgebrochener Text) ist das eine Näherung – beim Loslassen wird ohnehin neu
+    // gezeichnet, dann sitzt alles genau.
+    function sortVorschau(z) {
+      const h = z.boxen[z.von].h;
+      z.kinder.forEach((k, i) => {
+        if (i === z.von) return;
+        let d = 0;
+        if (z.ziel > z.von && i > z.von && i <= z.ziel) d = -h;
+        if (z.ziel < z.von && i >= z.ziel && i < z.von) d = h;
+        k.style.transform = d ? 'translateY(' + d + 'px)' : '';
+      });
+    }
+    function sortGreifen(d, pointerId, y) {
+      const kinder = [...textEl.el.children], von = kinder.indexOf(d);
+      if (von < 0 || (state.title && von === 0)) return;
+      try { textEl.el.setPointerCapture(pointerId); } catch (_) {}
+      const boxen = kinder.map(k => { const r = k.getBoundingClientRect(); return { h: r.height, mitte: r.top + r.height / 2 }; });
+      sortZug = { id: pointerId, von, ziel: von, y0: y, boxen, kinder };
+      textEl.el.classList.add('zieht');
+      d.classList.add('greift');
+    }
+    textEl.el.addEventListener('pointerdown', e => {
+      const d = e.target.closest && e.target.closest('.ln');
+      if (!d || !sortierbar()) return;
+      // Die Überschrift ist keine Listenzeile – sie bleibt oben und wird nicht gezogen
+      if ([...textEl.el.children].indexOf(d) < 0 || (state.title && d === textEl.el.firstElementChild)) return;
+      if (sortAn) { e.preventDefault(); sortGreifen(d, e.pointerId, e.clientY); return; }
+      if (hakenZeile(e) >= 0) return;                   // dort öffnet langes Drücken das Haken-Fenster
+      clearTimeout(sortTimer);
+      const x0 = e.clientX, y0 = e.clientY; let yJetzt = y0;
+      const loesen = () => { textEl.el.removeEventListener('pointermove', weg);
+        textEl.el.removeEventListener('pointerup', ab); textEl.el.removeEventListener('pointercancel', ab); };
+      const weg = ev => { yJetzt = ev.clientY;
+        if (Math.abs(ev.clientX - x0) > 8 || Math.abs(ev.clientY - y0) > 8) ab(); };
+      const ab = () => { clearTimeout(sortTimer); loesen(); };
+      textEl.el.addEventListener('pointermove', weg);
+      textEl.el.addEventListener('pointerup', ab);
+      textEl.el.addEventListener('pointercancel', ab);
+      sortTimer = setTimeout(() => {
+        loesen(); sortModus(true);
+        // **Ohne loszulassen weiterziehen** – so wie Icons auf dem Homescreen. Der erste Anlauf verlangte
+        // Loslassen und neu Greifen; am Bild geprüft, dass der Zug so ins Leere lief.
+        if (sortAn) sortGreifen(d, e.pointerId, yJetzt);
+      }, 520);
+    });
+    textEl.el.addEventListener('pointermove', e => {
+      const z = sortZug; if (!z || e.pointerId !== z.id) return;
+      e.preventDefault();
+      const dy = e.clientY - z.y0;
+      z.kinder[z.von].style.transform = 'translateY(' + dy + 'px)';
+      // Maßgeblich ist die **Mitte der gezogenen Zeile**, nicht die Fingerposition: greift man die Zeile
+      // am Rand, läge der Finger sonst um den halben Zeilenabstand daneben. Vergleich mit ≤/≥, damit der
+      // Grenzfall „genau auf der Mitte“ schon zählt – mit < blieb die Zeile eine Position zurück.
+      const mitte = z.boxen[z.von].mitte + dy;
+      let ziel = z.von;
+      for (let i = 0; i < z.boxen.length; i++) {
+        if (i === z.von || (state.title && i === 0)) continue;
+        if (i < z.von && mitte <= z.boxen[i].mitte) ziel = Math.min(ziel, i);
+        if (i > z.von && mitte >= z.boxen[i].mitte) ziel = Math.max(ziel, i);
+      }
+      if (ziel !== z.ziel) { z.ziel = ziel; sortVorschau(z); }
+    });
+    const sortEnde = e => {
+      const z = sortZug; if (!z || (e && e.pointerId !== undefined && e.pointerId !== z.id)) return;
+      sortZug = null;
+      textEl.el.classList.remove('zieht');
+      z.kinder.forEach(k => { k.style.transform = ''; k.classList.remove('greift'); });
+      if (z.ziel === z.von) return;
+      const zeilen = textEl.value.split('\n');
+      const [w] = zeilen.splice(z.von, 1);
+      zeilen.splice(z.ziel, 0, w);
+      let v = zeilen.join('\n');
+      if (zaehltMit(state.list)) v = relist(v, state.list);
+      textEl.value = v; onTextChanged(); flush();
+    };
+    textEl.el.addEventListener('pointerup', sortEnde);
+    textEl.el.addEventListener('pointercancel', sortEnde);
+    sortDoneEl.addEventListener('click', () => sortModus(false));
+    // Ein Tipp irgendwo außerhalb beendet den Modus – wie das Haken-Fenster
+    document.addEventListener('pointerdown', e => {
+      if (sortAn && !textEl.el.contains(e.target) && e.target !== sortDoneEl) sortModus(false);
+    }, true);
     // Überschrift an/aus: erste Zeile fett, ohne Listenmarkierung
     const titleToggle = $('titleon'), sizesEl = $('tsizes');
     titleToggle.checked = !!state.title;
