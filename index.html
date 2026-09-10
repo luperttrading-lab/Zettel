@@ -696,7 +696,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.9';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.10';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -1038,7 +1038,7 @@
       // Vier Formen zur Auswahl (state.wasserZiel). Die Säule allein überzeugte den Auftraggeber nicht,
       // deshalb steht die Wahl im Zustand statt fest im Code.
       const anteil = Math.min(1, tag / ziel);
-      const skFs = Math.max(klein * 0.8, 7);
+      const skFs = Math.max(klein * 0.95, 8);   // 0,95 statt 0,8: „die Zahlen etwas größer“ (Auftraggeber, 10.9.2026)
       const rund = (x, y, ww, hh, rr) => { const p = new Path2D(); p.moveTo(x + rr, y); p.arcTo(x + ww, y, x + ww, y + hh, rr); p.arcTo(x + ww, y + hh, x, y + hh, rr); p.arcTo(x, y + hh, x, y, rr); p.arcTo(x, y, x + ww, y, rr); p.closePath(); return p; };
       const art = ZIEL_ARTEN[state.wasserZiel] ? state.wasserZiel : 'saeule';
 
@@ -1061,20 +1061,19 @@
           ctx.globalAlpha = 1; ctx.restore(); ctx.fillStyle = ink;
         }
         ctx.lineWidth = Math.max(1, saeuleB * 0.05); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-        ctx.globalAlpha = 0.5; ctx.stroke(rund(sx, sy, saeuleB, sh, r)); ctx.globalAlpha = 1;
+        // Oben **offen**, wie die Gläser und Flaschen daneben: zwei Wände und ein Boden, kein Deckel. Der
+        // Auftraggeber wollte oben keinen Strich mehr („wie du die Säule am besten abschließt“) – und ein
+        // Messgefäß ist nun mal oben offen; der Kopfraum liest sich so als Platz zum Nachfüllen.
+        const wand = new Path2D();
+        wand.moveTo(sx, sy); wand.lineTo(sx, sy + sh - r); wand.arcTo(sx, sy + sh, sx + r, sy + sh, r);
+        wand.lineTo(sx + saeuleB - r, sy + sh); wand.arcTo(sx + saeuleB, sy + sh, sx + saeuleB, sy + sh - r, r);
+        wand.lineTo(sx + saeuleB, sy);
+        ctx.globalAlpha = 0.5; ctx.stroke(wand); ctx.globalAlpha = 1;
         ctx.font = `${weight} ${skFs}px ${family}`;
-        // **Eine** Deckkraft für alle Zahlen und Striche: die Zielzahl stand auf 0,85, die anderen auf
-        // 0,45 – „die Zahlen sollten alle in dem gleichen Farbton sein" (Auftraggeber). Das Tagesziel
-        // hebt sich jetzt über die **Strichlänge** ab, nicht über die Farbe.
+        // **Eine** Deckkraft für alle Striche (SKALA_ALPHA); die Zahlen stehen in voller Tinte.
         ctx.globalAlpha = SKALA_ALPHA;
-        // Der Abschlussstrich auf der Oberkante trägt **keine** Zahl. Mit „4 l" daran sah die Oberkante nach
-        // der wichtigsten Marke aus, obwohl das Ziel bei 3 l liegt – beschriftet endet die Skala also bei 3,
-        // darüber bleibt unbeschrifteter Kopfraum. Er ragt nach links über die Säule hinaus: bündig gesetzt
-        // lag er genau auf dem Umriss und war als Strich nicht mehr zu erkennen (am Bild gesehen). Nur nach
-        // links – rechts endet die Säule am Papierrand.
-        ctx.save(); ctx.lineWidth *= 1.5;
-        ctx.beginPath(); ctx.moveTo(sx - saeuleB * 0.14, sy); ctx.lineTo(sx + saeuleB, sy); ctx.stroke();
-        ctx.restore();
+        // Kein Abschlussstrich mehr (3.10): beschriftet endet die Skala am Ziel, darüber bleibt
+        // unbeschrifteter Kopfraum, und die Säule ist oben offen (siehe `wand`).
         // Striche **unter** dem Pegel werden hell. Tinte auf der Füllung war kaum zu sehen, und seit die
         // Skala bis SAEULE_FASST reicht, liegt gerade die Zielmarke im Wasser, sobald man das Ziel
         // erreicht hat – also genau dann unsichtbar, wenn man sie sehen will (am Bild bei 4,2 l gesehen).
@@ -1092,18 +1091,16 @@
         for (let l = schritt; l < ziel - schritt * 0.55; l += schritt) marken.push(l);
         marken.push(ziel);
         for (const l of marken) {
-          const y = yVon(l), istZiel = Math.abs(l - ziel) < 1e-9, nass = y > pegelY + 0.5;
-          // Das Ziel ragt wie der Abschluss nach links heraus, geht innen aber **nicht** durch: quer über
-          // die ganze Breite las es sich als Trennwand, die Säule wirkte in zwei Kammern geteilt (am Bild).
-          const a = istZiel ? sx - saeuleB * 0.28 : sx;
+          const y = yVon(l), nass = y > pegelY + 0.5;
+          // Alle Marken gleich lang, auch das Ziel („soll nicht länger sein als die anderen“, 10.9.2026).
+          // Das Ziel erkennt man daran, dass es die oberste Zahl ist – darüber steht nichts mehr.
           if (nass) { ctx.strokeStyle = WASSER_FARBE.kante; ctx.globalAlpha = 1; }
-          ctx.beginPath(); ctx.moveTo(a, y); ctx.lineTo(sx + saeuleB * (istZiel ? 0.55 : 0.4), y); ctx.stroke();
-          // Der Überstand nach links liegt auf dem Papier, nicht im Wasser – dort wieder in der Tinte
-          if (nass && istZiel) { ctx.strokeStyle = ink; ctx.globalAlpha = SKALA_ALPHA;
-            ctx.beginPath(); ctx.moveTo(a, y); ctx.lineTo(sx, y); ctx.stroke(); }
-          ctx.strokeStyle = ink; ctx.globalAlpha = SKALA_ALPHA;
-          // Am Ziel die Einheit, aber ohne erzwungene Nachkommastelle: „5,0 l" war unnötig breit
-          const t2 = zahlText(l) + (istZiel ? ' l' : '');
+          else { ctx.strokeStyle = ink; ctx.globalAlpha = SKALA_ALPHA; }
+          ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx + saeuleB * 0.4, y); ctx.stroke();
+          // Zahlen in voller Tinte („in schwarz“) und ohne Einheit („ohne das l hinten dran“); die Einheit
+          // steht ohnehin in der Fußzeile bei „Heute … l“.
+          ctx.strokeStyle = ink; ctx.globalAlpha = 1;
+          const t2 = zahlText(l);
           ctx.fillText(t2, sx - saeuleB * 0.34 - ctx.measureText(t2).width, y + skFs * 0.36);
         }
         ctx.globalAlpha = 1;
