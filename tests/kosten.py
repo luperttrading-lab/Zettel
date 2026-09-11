@@ -26,12 +26,18 @@ def antwort(ts, out, cache_read=0):
                           'usage': {'input_tokens': 0, 'output_tokens': out,
                                     'cache_creation_input_tokens': 0, 'cache_read_input_tokens': cache_read}})
 
-def lauf(zeilen):
-    """Skript in einem eigenen HOME laufen lassen, damit es das gebaute Protokoll liest."""
+def lauf(zeilen, eichung=None):
+    """Skript in einem eigenen HOME laufen lassen, damit es das gebaute Protokoll liest.
+
+    `eichung`: Inhalt für tools/eichung.json im Arbeitsverzeichnis des Laufs. Das Skript sucht die
+    Datei unter `tools/` **relativ zum Arbeitsverzeichnis**, deshalb wird sie dort angelegt."""
     with tempfile.TemporaryDirectory() as tmp:
         d = os.path.join(tmp, '.claude', 'projects', 'p')
         os.makedirs(d)
         with open(os.path.join(d, 's.jsonl'), 'w') as fh: fh.write('\n'.join(zeilen) + '\n')
+        if eichung is not None:
+            os.makedirs(os.path.join(tmp, 'tools'), exist_ok=True)
+            with open(os.path.join(tmp, 'tools', 'eichung.json'), 'w') as fh: json.dump(eichung, fh)
         umg = dict(os.environ, HOME=tmp)
         r = subprocess.run([sys.executable, os.path.join(WURZEL, 'tools', 'kostentabelle.py')],
                            capture_output=True, text=True, cwd=tmp, env=umg)
@@ -104,6 +110,23 @@ pruef('Kontrollzeile nennt Zahl und Beginn der Runde', '»' in err and 'Antworte
 nur_antwort = [antwort(T % 1, 40000)]
 aus, err = lauf(nur_antwort)
 pruef('ohne Nutzerbeitrag warnt das Skript', 'KEIN Nutzerbeitrag' in err, repr(err))
+
+# 6) Eichung: das Protokoll kennt nicht alle Abrechnungen (11.9.2026 gemessen: 22 % zu wenig).
+# tools/eichung.json hebt den gerechneten Betrag auf Anthropics eigene Summe – aber nur für die
+# Sitzung, in der gemessen wurde. Ein fremder Faktor darf NICHT greifen, sonst wandert eine Zahl
+# aus einer alten Sitzung stillschweigend in eine neue Rechnung.
+u = frage_usd(lauf(ohne_bild, eichung={'sitzung': 's', 'faktor': 1.25, 'stand': '2026-09-11', 'anthropic_usd': 99}))
+pruef('Eichung derselben Sitzung wird angewandt', abs(u - 2.50) < 0.01, f'{u} $ statt 2,50 $')
+
+u = frage_usd(lauf(ohne_bild, eichung={'sitzung': 'fremde-sitzung', 'faktor': 1.25, 'stand': '2026-09-11'}))
+pruef('Eichung einer fremden Sitzung wird NICHT angewandt', abs(u - 2.00) < 0.01, f'{u} $ statt 2,00 $')
+
+_, err = lauf(ohne_bild, eichung={'sitzung': 'fremde-sitzung', 'faktor': 1.25})
+pruef('die Kontrollzeile sagt, dass ungeeicht gerechnet wurde', 'ungeeicht' in err, repr(err))
+
+_, err = lauf(ohne_bild)
+pruef('ohne Eichdatei nennt die Kontrollzeile den Betrag als Untergrenze',
+      'Untergrenze' in err, repr(err))
 
 print(f'{fehler} Prüfung(en) fehlgeschlagen' if fehler else 'alle Prüfungen bestanden')
 sys.exit(1 if fehler else 0)

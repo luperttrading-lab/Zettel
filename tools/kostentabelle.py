@@ -8,6 +8,8 @@ daran erkennt man sofort, wenn der Beginn der Runde falsch bestimmt wurde.
 Aufruf:  python3 tools/kostentabelle.py [-v] [--ttl5]
   -v      zusätzlich Summen je Tag und je Modell
   --ttl5  Cache-Schreibpreis für 5-Minuten-Cache statt 1 Stunde
+  --eichen <usd>  Eichfaktor neu setzen: Anthropics Gesamtsumme für DIESE Sitzung (aus get_session,
+          external_metadata.usage.cost_usd). Siehe Abschnitt „Eichung" weiter unten im Skript.
 
 Fremdkosten (Bildgenerierung, Hosting, fremde APIs) kommen aus tools/fremdkosten.json:
   [{"ts": "2026-09-08T17:20:00Z", "usd": 0.34, "dienst": "RouteLLM", "was": "gpt_image2 Panda"}, ...]
@@ -88,10 +90,49 @@ def lokal(ts):                                  # Tagesgrenze in Ortszeit, nicht
                  + datetime.timedelta(hours=TZ)).strftime('%Y-%m-%d')
     except: return ''
 
-c_ges   = sum(cost(mo, u) for _, mo, u in seen.values())
-c_heute = sum(cost(mo, u) for ts, mo, u in seen.values() if lokal(ts) == heute_lokal)
+# ---------- Eichung: das Protokoll kennt nicht alle Abrechnungen ----------
+# Gemessen am 11.9.2026 gegen Anthropics eigene Abrechnung (get_session -> external_metadata.usage):
+# im Protokoll fehlten 92 % der reinen Eingabe-, 40 % der Ausgabe-, 26 % der Cache-Schreib- und 10 %
+# der Cache-Lese-Token. **Die Preise oben stimmen** (Opus 5: 5/25 $, Fable 5.1: 10/50 $ mit Cache-Lesen
+# zu 0,25 $, geprüft an der Modellreferenz); falsch ist allein die Erfassung. Ohne Eichung ist der
+# gerechnete Betrag also eine **Untergrenze** – hier lag er 22 % zu niedrig.
+# tools/eichung.json hält den Faktor je Sitzung fest. Er gilt nur für die Sitzung, in der er gemessen
+# wurde: eine andere Sitzung hat ein anderes Verhältnis, deshalb wird ein fremder Faktor nicht benutzt.
+# Neu eichen (nur Claude kann die Zahl beschaffen, sie steht in get_session):
+#     python3 tools/kostentabelle.py --eichen 740.21
+SITZUNG   = os.path.basename(f)[:-6]
+EICHDATEI = os.path.join('tools', 'eichung.json')
+
+def roh_gesamt():
+    return sum(cost(mo, u) for _, mo, u in seen.values())
+
+if '--eichen' in sys.argv:
+    ziel = float(sys.argv[sys.argv.index('--eichen') + 1].replace(',', '.'))
+    roh = roh_gesamt()
+    if roh <= 0:
+        print('Nichts zu eichen: das Protokoll ergibt 0,00 $.', file=sys.stderr); sys.exit(1)
+    json.dump({'sitzung': SITZUNG, 'stand': jetzt.strftime('%Y-%m-%dT%H:%M'),
+               'anthropic_usd': round(ziel, 2), 'log_usd': round(roh, 2),
+               'faktor': round(ziel / roh, 4),
+               'quelle': 'get_session -> external_metadata.usage.cost_usd'},
+              open(EICHDATEI, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    print(f'geeicht: {ziel:.2f} $ / {roh:.2f} $ = Faktor {ziel / roh:.4f}', file=sys.stderr)
+
+def eichung_lesen():
+    try: e = json.load(open(EICHDATEI, encoding='utf-8'))
+    except Exception: return 1.0, 'ungeeicht – der Betrag ist eine Untergrenze (tools/eichung.json fehlt)'
+    if e.get('sitzung') != SITZUNG:
+        return 1.0, ('ungeeicht – die Eichung gehört zu Sitzung ' + str(e.get('sitzung'))[:8]
+                     + '…, nicht zu dieser; der Betrag ist eine Untergrenze')
+    fk = float(e.get('faktor', 1.0))
+    return fk, f"Eichfaktor {fk:.4f} (gemessen {e.get('stand', '?')[:10]}: {e.get('anthropic_usd')} $ laut Anthropic)"
+
+FAKTOR, EICHTEXT = eichung_lesen()
+
+c_ges   = FAKTOR * roh_gesamt()
+c_heute = FAKTOR * sum(cost(mo, u) for ts, mo, u in seen.values() if lokal(ts) == heute_lokal)
 runde   = [ts for ts, _, _ in seen.values() if last_user and ts >= last_user]
-c_frage = sum(cost(mo, u) for ts, mo, u in seen.values() if last_user and ts >= last_user)
+c_frage = FAKTOR * sum(cost(mo, u) for ts, mo, u in seen.values() if last_user and ts >= last_user)
 
 # Kontrollzeile auf stderr – **nicht** in der Tabelle, die geht wörtlich in die Antwort. Sie macht den
 # Wert prüfbar: Am 9.9.2026 stand hier eine Runde mit 87 Antworten als „8 Antworten seit 16:16" da, und
@@ -100,6 +141,7 @@ def hinweis(t):
     print('» ' + t, file=sys.stderr)
 hinweis(f'diese Frage: {len(runde)} Antworten seit {(last_user or "?")[11:19]} UTC'
         + ('' if last_user else ' – KEIN Nutzerbeitrag gefunden, Betrag ist 0'))
+hinweis(EICHTEXT)
 if last_user and not ORIGIN_GEFUNDEN:
     hinweis('Achtung: kein Eintrag mit origin.kind=="human" – die Ersatzregel greift. Wenn Claude Code '
             'sein Protokollformat geändert hat, bitte tests/kosten.py laufen lassen.')
@@ -150,7 +192,7 @@ for r in range(3):
 if '-v' in sys.argv:
     days, mods = collections.Counter(), collections.Counter()
     for ts, mo, u in seen.values():
-        days[lokal(ts)] += cost(mo, u); mods[mo] += cost(mo, u)
+        days[lokal(ts)] += FAKTOR * cost(mo, u); mods[mo] += FAKTOR * cost(mo, u)
     print()
     print('Tage:   ', {d: round(c, 2) for d, c in sorted(days.items())})
     print('Modelle:', {m: round(c, 2) for m, c in mods.items()})

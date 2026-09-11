@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Kostenzeile für Claude Code: liest das Sitzungsprotokoll und gibt eine kurze Zeile aus.
 
+ABGELÖST – maßgeblich ist tools/kostentabelle.py (siehe docs/KOSTENTABELLE.md). Diese Fassung rechnet
+**ungeeicht**: das Protokoll enthält nicht alle Abrechnungen, am 11.9.2026 fehlten dadurch 22 %
+gegenüber Anthropics eigener Summe. Wer diese Zeile benutzt, bekommt eine Untergrenze.
+
 Aufruf:  python3 tools/kosten.py [-v] [--ttl5]
   -v      zusätzlich Summen je Tag und je Modell
   --ttl5  Cache-Schreibpreis für 5-Minuten-Cache statt 1 Stunde (siehe CACHE unten)

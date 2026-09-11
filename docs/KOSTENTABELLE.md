@@ -135,6 +135,45 @@ Verlauf neu geschrieben wird. Sonst liegt eine Frage bei 10 bis 30 Cent.
 
 Das sind API-Listenpreise, keine Rechnung. Bei einem Abo zahlt man den Pauschalpreis.
 
+## Eichung: das Protokoll kennt nicht alle Abrechnungen
+
+**Am 11.9.2026 gemessen:** Das Skript rechnete 583,86 $ für diesen Chat, Anthropic wies für dieselbe
+Sitzung **742,22 $** aus – **22 % zu wenig**. Die Ursache ist *nicht* die Preistabelle oben (die wurde
+gegen die Modellreferenz geprüft und stimmt) und *nicht* die Entdopplung (je `requestId` sind alle
+Einträge im Protokoll wortgleich). Es fehlen **Abrechnungen im Protokoll**:
+
+| Größe | im Protokoll | laut Anthropic | erfasst |
+|---|---:|---:|---:|
+| Eingabe (ungecacht) | 7.092 | 89.198 | 8 % |
+| Ausgabe | 2.176.875 | 3.648.668 | 60 % |
+| Cache schreiben | 13.455.481 | 18.395.531 | 73 % |
+| Cache lesen | 756.167.298 | 836.556.054 | 90 % |
+
+Das Protokoll umfasst die ganze Sitzung (erster Eintrag sechs Sekunden nach dem Start), es fehlt also
+kein Zeitraum, sondern es stehen Aufrufe nicht darin – die zehn Kompaktierungen dieser Sitzung und
+weitere Nebenaufrufe der Oberfläche. Welche genau, ist **nicht abschließend geklärt**.
+
+Deshalb trägt `tools/eichung.json` einen Faktor:
+
+```json
+{"sitzung": "4df14235-…", "stand": "2026-09-11T10:57", "anthropic_usd": 742.22,
+ "log_usd": 583.86, "faktor": 1.2712, "quelle": "get_session -> external_metadata.usage.cost_usd"}
+```
+
+**Der Faktor gilt nur für die Sitzung, in der er gemessen wurde.** Passt die Sitzungskennung nicht,
+rechnet das Skript ungeeicht und sagt es in der `»`-Kontrollzeile – sonst wanderte eine Zahl aus einer
+alten Sitzung stillschweigend in eine neue Rechnung. Ohne Eichung ist der Betrag eine **Untergrenze**.
+
+Neu eichen kann nur Claude, denn die Vergleichszahl steht in `get_session`
+(`external_metadata.usage.cost_usd`). In einer **neuen Sitzung gehört das zu den ersten Schritten**:
+
+```
+python3 tools/kostentabelle.py --eichen 742.22
+```
+
+Vier Prüfungen in `tests/kosten.py` sichern das ab: eigene Sitzung wird geeicht, fremde nicht, und die
+Kontrollzeile sagt in beiden Fällen, woran man ist.
+
 ## Das Skript
 
 Ablegen als `tools/kostentabelle.py`. `-v` gibt zusätzlich Summen je Tag und Modell aus,
@@ -165,9 +204,15 @@ Drei Feinheiten, die leicht falsch gemacht werden:
 #!/usr/bin/env python3
 """Kostentabelle für Claude Code: Claude neben jedem weiteren Dienst, Datum und Uhrzeit in der Kopfzeile.
 
+In die Antwort gehört **nur die Tabelle** (stdout). Die Zeile mit » davor geht nach stderr und ist eine
+Kontrollzeile für Claude selbst: Sie nennt, wie viele Antworten zur Runde gezählt wurden und ab wann –
+daran erkennt man sofort, wenn der Beginn der Runde falsch bestimmt wurde.
+
 Aufruf:  python3 tools/kostentabelle.py [-v] [--ttl5]
   -v      zusätzlich Summen je Tag und je Modell
   --ttl5  Cache-Schreibpreis für 5-Minuten-Cache statt 1 Stunde
+  --eichen <usd>  Eichfaktor neu setzen: Anthropics Gesamtsumme für DIESE Sitzung (aus get_session,
+          external_metadata.usage.cost_usd). Siehe Abschnitt „Eichung" weiter unten im Skript.
 
 Fremdkosten (Bildgenerierung, Hosting, fremde APIs) kommen aus tools/fremdkosten.json:
   [{"ts": "2026-09-08T17:20:00Z", "usd": 0.34, "dienst": "RouteLLM", "was": "gpt_image2 Panda"}, ...]
@@ -176,8 +221,12 @@ Für jeden Namen unter "dienst" entsteht automatisch eine Spalte – neue Dienst
 
 Zwei Feinheiten, die leicht falsch gemacht werden:
  1. Jede Nachricht wird EINMAL gezählt (nach message.id entdoppeln) – sonst etwa das Dreifache.
- 2. „diese Frage" = alle Antworten ab dem letzten ECHTEN Nutzerbeitrag; Werkzeugergebnisse
-    stehen im Protokoll ebenfalls als `user`, zählen aber nicht als Frage.
+ 2. „diese Frage" = alle Antworten ab dem letzten ECHTEN Nutzerbeitrag. Das Protokoll führt vieles
+    als `user`, was keine Frage ist: Werkzeugergebnisse, aber auch die Zeile „[Image: original …]",
+    die entsteht, sobald Claude selbst ein Bild ansieht, dazu Aufgaben-Meldungen, Slash-Befehle und
+    die Zusammenfassung nach einer Kompaktierung. Maßgeblich ist deshalb allein `origin.kind ==
+    "human"` – die Heuristik über die Blocktypen zählte am 9.9.2026 eine Runde mit 87 Antworten als
+    8 und meldete 1,31 $ statt 14,91 $ (Faktor 11), weil dazwischen vier Bilder angesehen wurden.
 """
 import json, os, glob, collections, datetime, sys
 
@@ -197,19 +246,37 @@ slug = os.getcwd().replace('/', '-')
 files = glob.glob(f'{base}/{slug}/*.jsonl') or glob.glob(f'{base}/*/*.jsonl')
 f = max(files, key=os.path.getmtime)
 
-seen, last_user = {}, None
+# MASCHINELL: Zeilen, die das Protokoll als `user` führt, ohne dass jemand etwas getippt hat.
+# `isMeta` trägt unter anderem die Zeile „[Image: original …]", die beim Ansehen eines Bildes entsteht.
+MASCHINELL = ('isMeta', 'isCompactSummary', 'isVisibleInTranscriptOnly')
+MARKER = ('<task-notification>', '<command-name>', '<local-command-stdout>', '<wake ', '<webhook-payload>')
+
+def menschlich(d, m):
+    if (d.get('origin') or {}).get('kind') == 'human': return True
+    if any(d.get(k) for k in MASCHINELL): return False
+    c = m.get('content')                        # Ersatzregel für Protokolle ohne `origin`
+    if isinstance(c, str): txt = c
+    elif isinstance(c, list):
+        if any(b.get('type') == 'tool_result' for b in c if isinstance(b, dict)): return False
+        if not any(b.get('type') == 'text' for b in c if isinstance(b, dict)): return False
+        txt = ' '.join(b.get('text', '') for b in c if isinstance(b, dict) and b.get('type') == 'text')
+    else: return False
+    return not txt.lstrip().startswith(MARKER)
+
+seen, last_user, ersatz, ORIGIN_GEFUNDEN = {}, None, None, False
 for line in open(f):
     try: d = json.loads(line)
     except: continue
     t, m = d.get('type'), d.get('message', {})
-    if t == 'user':                             # nur echte Nutzerfragen, keine Werkzeugergebnisse
-        c = m.get('content')
-        if isinstance(c, str) or (isinstance(c, list)
-                and any(b.get('type') == 'text' for b in c if isinstance(b, dict))
-                and not any(b.get('type') == 'tool_result' for b in c if isinstance(b, dict))):
-            last_user = d.get('timestamp')
+    if t == 'user':
+        if (d.get('origin') or {}).get('kind') == 'human':
+            last_user = d.get('timestamp'); ORIGIN_GEFUNDEN = True
+        elif menschlich(d, m): ersatz = d.get('timestamp')
     if t == 'assistant' and m.get('usage'):     # je Nachricht nur die letzte Fassung zählen
         seen[m.get('id') or d.get('uuid')] = (d.get('timestamp', ''), m.get('model'), m['usage'])
+# Kennt das Protokoll `origin` gar nicht (andere Claude-Code-Fassung), gilt die Ersatzregel.
+# Ohne diesen Rückfall stünde bei „diese Frage" stillschweigend 0,00 $.
+if last_user is None: last_user = ersatz
 
 def cost(model, u):
     p = PREISE.get(model, STD)
@@ -226,9 +293,61 @@ def lokal(ts):                                  # Tagesgrenze in Ortszeit, nicht
                  + datetime.timedelta(hours=TZ)).strftime('%Y-%m-%d')
     except: return ''
 
-c_ges   = sum(cost(mo, u) for _, mo, u in seen.values())
-c_heute = sum(cost(mo, u) for ts, mo, u in seen.values() if lokal(ts) == heute_lokal)
-c_frage = sum(cost(mo, u) for ts, mo, u in seen.values() if last_user and ts >= last_user)
+# ---------- Eichung: das Protokoll kennt nicht alle Abrechnungen ----------
+# Gemessen am 11.9.2026 gegen Anthropics eigene Abrechnung (get_session -> external_metadata.usage):
+# im Protokoll fehlten 92 % der reinen Eingabe-, 40 % der Ausgabe-, 26 % der Cache-Schreib- und 10 %
+# der Cache-Lese-Token. **Die Preise oben stimmen** (Opus 5: 5/25 $, Fable 5.1: 10/50 $ mit Cache-Lesen
+# zu 0,25 $, geprüft an der Modellreferenz); falsch ist allein die Erfassung. Ohne Eichung ist der
+# gerechnete Betrag also eine **Untergrenze** – hier lag er 22 % zu niedrig.
+# tools/eichung.json hält den Faktor je Sitzung fest. Er gilt nur für die Sitzung, in der er gemessen
+# wurde: eine andere Sitzung hat ein anderes Verhältnis, deshalb wird ein fremder Faktor nicht benutzt.
+# Neu eichen (nur Claude kann die Zahl beschaffen, sie steht in get_session):
+#     python3 tools/kostentabelle.py --eichen 740.21
+SITZUNG   = os.path.basename(f)[:-6]
+EICHDATEI = os.path.join('tools', 'eichung.json')
+
+def roh_gesamt():
+    return sum(cost(mo, u) for _, mo, u in seen.values())
+
+if '--eichen' in sys.argv:
+    ziel = float(sys.argv[sys.argv.index('--eichen') + 1].replace(',', '.'))
+    roh = roh_gesamt()
+    if roh <= 0:
+        print('Nichts zu eichen: das Protokoll ergibt 0,00 $.', file=sys.stderr); sys.exit(1)
+    json.dump({'sitzung': SITZUNG, 'stand': jetzt.strftime('%Y-%m-%dT%H:%M'),
+               'anthropic_usd': round(ziel, 2), 'log_usd': round(roh, 2),
+               'faktor': round(ziel / roh, 4),
+               'quelle': 'get_session -> external_metadata.usage.cost_usd'},
+              open(EICHDATEI, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    print(f'geeicht: {ziel:.2f} $ / {roh:.2f} $ = Faktor {ziel / roh:.4f}', file=sys.stderr)
+
+def eichung_lesen():
+    try: e = json.load(open(EICHDATEI, encoding='utf-8'))
+    except Exception: return 1.0, 'ungeeicht – der Betrag ist eine Untergrenze (tools/eichung.json fehlt)'
+    if e.get('sitzung') != SITZUNG:
+        return 1.0, ('ungeeicht – die Eichung gehört zu Sitzung ' + str(e.get('sitzung'))[:8]
+                     + '…, nicht zu dieser; der Betrag ist eine Untergrenze')
+    fk = float(e.get('faktor', 1.0))
+    return fk, f"Eichfaktor {fk:.4f} (gemessen {e.get('stand', '?')[:10]}: {e.get('anthropic_usd')} $ laut Anthropic)"
+
+FAKTOR, EICHTEXT = eichung_lesen()
+
+c_ges   = FAKTOR * roh_gesamt()
+c_heute = FAKTOR * sum(cost(mo, u) for ts, mo, u in seen.values() if lokal(ts) == heute_lokal)
+runde   = [ts for ts, _, _ in seen.values() if last_user and ts >= last_user]
+c_frage = FAKTOR * sum(cost(mo, u) for ts, mo, u in seen.values() if last_user and ts >= last_user)
+
+# Kontrollzeile auf stderr – **nicht** in der Tabelle, die geht wörtlich in die Antwort. Sie macht den
+# Wert prüfbar: Am 9.9.2026 stand hier eine Runde mit 87 Antworten als „8 Antworten seit 16:16" da, und
+# genau das wäre aufgefallen. Wer die Zahl liest, sieht sofort, ob der Beginn der Runde stimmt.
+def hinweis(t):
+    print('» ' + t, file=sys.stderr)
+hinweis(f'diese Frage: {len(runde)} Antworten seit {(last_user or "?")[11:19]} UTC'
+        + ('' if last_user else ' – KEIN Nutzerbeitrag gefunden, Betrag ist 0'))
+hinweis(EICHTEXT)
+if last_user and not ORIGIN_GEFUNDEN:
+    hinweis('Achtung: kein Eintrag mit origin.kind=="human" – die Ersatzregel greift. Wenn Claude Code '
+            'sein Protokollformat geändert hat, bitte tests/kosten.py laufen lassen.')
 
 # Weitere Spalten: selbst gepflegte Fremdkosten (Bildgenerierung, andere Dienste, was auch immer)
 # tools/fremdkosten.json: [{"ts": "...Z", "usd": 0.34, "dienst": "RouteLLM", "was": "gpt_image2 Panda"}, ...]
@@ -276,7 +395,7 @@ for r in range(3):
 if '-v' in sys.argv:
     days, mods = collections.Counter(), collections.Counter()
     for ts, mo, u in seen.values():
-        days[lokal(ts)] += cost(mo, u); mods[mo] += cost(mo, u)
+        days[lokal(ts)] += FAKTOR * cost(mo, u); mods[mo] += FAKTOR * cost(mo, u)
     print()
     print('Tage:   ', {d: round(c, 2) for d, c in sorted(days.items())})
     print('Modelle:', {m: round(c, 2) for m, c in mods.items()})
@@ -288,5 +407,8 @@ if '-v' in sys.argv:
   und tauchen erst beim nächsten Mal auf. Bei „diese Frage" sind das 10 bis 50 Cent.
 - Nur diese eine Sitzung wird gezählt. Andere Chats zum selben Projekt stehen in eigenen Protokollen.
 - Zeitzone fest auf UTC+2. Im Winter auf 1 ändern.
+- **Ohne Eichung ist der Betrag eine Untergrenze**, siehe oben – zuletzt 22 % zu niedrig. Der Faktor
+  gilt je Sitzung; in einer neuen Sitzung muss einmal `--eichen` laufen, sonst rechnet das Skript zu
+  billig, und zwar stillschweigend bis auf die `»`-Kontrollzeile.
 - Die Fremdspalten sind nur so gut wie `tools/fremdkosten.json` gepflegt wird. Ein Dienst, den
   niemand einträgt, taucht nirgends auf – die Tabelle sieht dann vollständig aus, ohne es zu sein.

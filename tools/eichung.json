@@ -1,0 +1,8 @@
+{
+ "sitzung": "4df14235-b172-5079-bfe8-e27496d7f945",
+ "stand": "2026-09-11T10:57",
+ "anthropic_usd": 742.22,
+ "log_usd": 583.86,
+ "faktor": 1.2712,
+ "quelle": "get_session -> external_metadata.usage.cost_usd"
+}
