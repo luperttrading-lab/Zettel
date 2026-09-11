@@ -183,6 +183,41 @@ check('nebeneinander: gleiche Höhe, links und rechts',
   Math.abs(neben[1].y - neben[2].y) < 0.001 && neben[1].x < 0.4 && neben[2].x > 0.6, JSON.stringify(neben));
 // „untereinander“ gab es in 3.21 kurz – wieder entfernt, der Platz reicht nicht (Auftraggeber am Bild)
 check('kein „untereinander“ mehr', await page.evaluate(() => !document.getElementById('lage-unter')));
+
+// 3.30: Die Automatik muss einen **sichtbaren** Rand lassen, und zwar für den **gedrehten** Zettel.
+// Vorher rechnete sie mit der ungedrehten Breite und stellte die Zettel „gerade noch hinein“: 3 %
+// Luft, nach Abzug der Neigung knapp 2 % – der Zettel klebte am Rand. Am Sperrbildschirm des
+// Auftraggebers (11.9.2026) stieß Zettel 3 bündig an die rechte Kante; gemessen war nichts gezoomt,
+// alle Breiten stimmten auf unter ein Prozent, nur der Rand fehlte.
+const ueberstand = () => page.evaluate(() => {
+  const t = targetCanvas();
+  return alleZettel().map(z => mitZettel(z, () => {
+    const f = fitNote(t.w, t.h, t.layout, (z.text || '').trim() || '…');
+    const rad = Math.abs((noteRot() || 0) * Math.PI / 180), cos = Math.cos(rad), sin = Math.sin(rad);
+    const b = (f.noteW * cos + f.noteH * sin) / t.w, h = (f.noteH * cos + f.noteW * sin) / t.h;
+    return { links: +(z.noteX - b / 2).toFixed(3), rechts: +(z.noteX + b / 2).toFixed(3),
+             oben: +(z.noteY - h / 2).toFixed(3), unten: +(z.noteY + h / 2).toFixed(3) };
+  }));
+});
+const raender = (await ueberstand()).slice(1);
+check('Zettel 2 und 3 halten seitlich einen sichtbaren Rand – auch gedreht',
+  raender.every(r => r.links >= 0.025 && r.rechts <= 0.975), JSON.stringify(raender));
+check('und stoßen auch oben und unten nicht an die Kante',
+  raender.every(r => r.oben >= 0 && r.unten <= 1), JSON.stringify(raender));
+// Der Rand muss auch halten, wenn der Zettel durch mehr Text **höher** wird: die Neigung macht einen
+// hohen Zettel waagerecht breiter, und genau das hatte die alte Rechnung nicht gesehen.
+await page.evaluate(() => {
+  zettelWechseln(2);
+  textEl.value = 'Mo. 9:20 Miklody\nMo. 11:00 Nadine anrufen\nMo. 13:30 Molly Tierarzt\nMo 15:00 Lola Tierarzt\nSa. 19:00 Gabi Isy';
+  onTextChanged(); flush(); state.list = 'termin'; applyList(); zettelSichern(); nebeneinander();
+});
+await page.waitForTimeout(400);
+const langRand = (await ueberstand()).slice(1);
+check('auch mit fünf Terminzeilen bleibt der Rand stehen',
+  langRand.every(r => r.links >= 0.025 && r.rechts <= 0.975), JSON.stringify(langRand));
+await page.evaluate(() => { zettelWechseln(2); textEl.value = 'Drei'; onTextChanged(); flush();
+  state.list = 'none'; applyList(); zettelSichern(); nebeneinander(); zettelWechseln(0); });
+await page.waitForTimeout(400);
 const vorTausch = await lagen();
 await page.click('#lage-tausch'); await page.waitForTimeout(300);
 const nachTausch = await lagen();

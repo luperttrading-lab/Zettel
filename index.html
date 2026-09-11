@@ -762,7 +762,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.29';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.30';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -3779,21 +3779,37 @@
     // unter dem ersten – je 44 % der Bildbreite (Faktor 0,55 auf die Layoutbreite von 80 %), dazwischen Luft.
     // Zettel 2 und 3 nebeneinander auf gleiche Höhe, unter den ersten – oder darüber, wenn es unten
     // nicht mehr passt. Untereinander (3.21) gab es kurz und ist wieder weg: dafür reicht der Platz nicht.
+    // Rand, den die Automatik zum Bildrand freilässt (Anteil der Bild**breite**, damit er oben, unten
+    // und an den Seiten gleich breit aussieht). Ohne ihn stellte die Rechnung die Zettel „gerade noch
+    // hinein": bei 44 % Breite um die Mitte 25 % blieben 3 % Luft, nach Abzug der Drehung knapp 2 % –
+    // ein Zettel wirkte am Rand angeklebt, und zwei Prozent Verschieben genügten, um ihn anzuschneiden
+    // (Auftraggeber am Sperrbildschirm, 11.9.2026: „irgendwie war das Bild von alleine nach außen
+    // gezoomt" – gezoomt war nichts, gemessen stimmten alle Breiten auf unter ein Prozent).
+    const PAAR_RAND = 0.03;
+    // **Mit der Drehung rechnen.** Ein um θ geneigter Zettel braucht waagerecht b·cos θ + h·sin θ und
+    // senkrecht h·cos θ + b·sin θ. Die alte Rechnung nahm die ungedrehte Breite und ließ den geneigten
+    // Zettel über die selbst gesetzte Grenze ragen – am stärksten bei hohen Zetteln, und die Höhe
+    // wächst mit jeder Textzeile. Deshalb reicht es nicht, nur die Breite zu prüfen.
     function nebeneinander() {
       if (state.zettel.length < 3) return;
       zettelSichern();
       const t = targetCanvas();
-      const masse = z => mitZettel(z, () => { const f = fitNote(t.w, t.h, t.layout, (z.text || '').trim() || '…');
-        return { h: f.noteH / t.h, b: f.noteW / t.w }; });
+      const masse = z => mitZettel(z, () => {
+        const f = fitNote(t.w, t.h, t.layout, (z.text || '').trim() || '…');
+        const rad = Math.abs((noteRot() || 0) * Math.PI / 180), cos = Math.cos(rad), sin = Math.sin(rad);
+        return { h: (f.noteH * cos + f.noteW * sin) / t.h, b: (f.noteW * cos + f.noteH * sin) / t.w };
+      });
       const erst = state.zettel[0], hErst = masse(erst).h;
       for (let i = 1; i < 3; i++) state.zettel[i].noteScale = 0.55;
       const m1 = masse(state.zettel[1]), m2 = masse(state.zettel[2]);
       const luft = 0.02, hKlein = Math.max(m1.h, m2.h);
+      const randY = PAAR_RAND * t.w / t.h;          // gleicher Abstand in Pixeln, nicht in Anteilen
       let y = erst.noteY + hErst / 2 + luft + hKlein / 2;
-      if (y + hKlein / 2 > 1) y = erst.noteY - hErst / 2 - luft - hKlein / 2;   // sonst darüber
-      y = klemm(y, hKlein / 2, 1 - hKlein / 2);
-      state.zettel[1].noteX = klemm(0.25, m1.b / 2, 1 - m1.b / 2); state.zettel[1].noteY = y;
-      state.zettel[2].noteX = klemm(0.75, m2.b / 2, 1 - m2.b / 2); state.zettel[2].noteY = y;
+      if (y + hKlein / 2 + randY > 1) y = erst.noteY - hErst / 2 - luft - hKlein / 2;   // sonst darüber
+      y = klemm(y, randY + hKlein / 2, 1 - randY - hKlein / 2);
+      state.zettel[1].noteX = klemm(0.25, PAAR_RAND + m1.b / 2, 1 - PAAR_RAND - m1.b / 2);
+      state.zettel[2].noteX = klemm(0.75, PAAR_RAND + m2.b / 2, 1 - PAAR_RAND - m2.b / 2);
+      state.zettel[1].noteY = y; state.zettel[2].noteY = y;
       Object.assign(state, zettelFelder(state.zettel[state.aktiv | 0]));
       zettelAnwenden(); persist();
     }
