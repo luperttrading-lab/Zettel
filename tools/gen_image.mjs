@@ -44,7 +44,10 @@ const body = {
   modalities: ['image', 'text'],
   messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
 };
-// gpt_image2 lehnt aspect_ratio:'1:1' mit HTTP 400 ab (geprüft 6.9.2026). Mit --noconfig
+// gpt_image2 lehnt aspect_ratio:'1:1' mit HTTP 400 ab (geprüft 6.9.2026), die Gemini-Bildmodelle
+// ebenso – dort heißt der Vorwurf „Invalid image config param resolution“ (geprüft 11.9.2026 an
+// gemini-2.5-flash-image). Faustregel: schlägt ein Modell mit HTTP 400 zu image_config fehl, ist das
+// kein Schlüsselproblem (das wäre 401) – einfach --noconfig anhängen. Mit --noconfig
 // wird image_config ganz weggelassen; das Modell nimmt dann sein Standardformat (quadratisch).
 if (!opt.noConfig) body.image_config = image_config;
 
