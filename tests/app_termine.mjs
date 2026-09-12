@@ -196,6 +196,45 @@ check('ein Tipp in eine andere Zeile schließt den Kopf wieder',
 check('und der Einzug steht wieder bei allen', (await kopfStand()).pad.every(p => p > 0),
   JSON.stringify((await kopfStand()).pad));
 
+// 3.32: **Der Rohzustand hing an einem Index.** Fiel eine Zeile weg oder verschmolzen zwei, rutschte
+// alles darunter hoch – der Index zeigte dann auf eine fremde Zeile, die offene klappte zu und der
+// Cursor sprang hinter das Datum (Auftraggeber, 12.9.2026: „müsste ja eigentlich vorne stehen
+// bleiben"). Jetzt wandert der Rohzustand mit dem Cursor: offen ist die Zeile, in der gearbeitet wird.
+const zeileVonPos = (text, pos) => { const zs = text.split('\n'); let li = 0, c = pos;
+  while (li < zs.length - 1 && c > zs[li].length) { c -= zs[li].length + 1; li++; } return li; };
+await page.evaluate(v => { textEl.value = v; onTextChanged(); flush(); }, VOR);
+await page.waitForTimeout(400);
+// Zeile 2 öffnen, dann den Kopf wegtippen, bis die Zeilen verschmelzen
+await page.evaluate(() => { textEl.focus(); textEl.selectionStart = 'Sa. 16:30 Jan-Niklas\nSo. 11:00 '.length; });
+await page.waitForTimeout(200);
+for (let k = 0; k < 11; k++) { await page.keyboard.press('Backspace'); await page.waitForTimeout(110); }
+await page.keyboard.press('Backspace'); await page.waitForTimeout(300);
+const nachMerge = await kopfStand();
+check('nach dem Verschmelzen ist die Zeile offen, in der der Cursor steht',
+  nachMerge.mk.findIndex(m => m === null) === zeileVonPos(nachMerge.text, nachMerge.pos),
+  JSON.stringify({ mk: nachMerge.mk, pos: nachMerge.pos, text: nachMerge.text }));
+check('und es ist weiterhin höchstens eine Zeile offen',
+  nachMerge.mk.filter(m => m === null).length <= 1, JSON.stringify(nachMerge.mk));
+
+// Derselbe Fall von vorn: Cursor **vor** dem Datum, dann die Zeile darüber wegnehmen
+await page.evaluate(v => { textEl.value = v; onTextChanged(); flush(); }, VOR);
+await page.waitForTimeout(400);
+await page.evaluate(() => { textEl.focus(); textEl.selectionStart = 'Sa. 16:30 Jan-Niklas\nSo. 11:00 '.length; });
+await page.waitForTimeout(200);
+await page.keyboard.press('Backspace'); await page.waitForTimeout(250);   // öffnet die Zeile
+await page.evaluate(() => { textEl.selectionStart = 'Sa. 16:30 Jan-Niklas\n'.length; });  // ganz nach vorn, vor das Datum
+await page.waitForTimeout(200);
+const vorDem = await kopfStand();
+check('vor dem Datum lässt sich der Cursor überhaupt hinstellen',
+  vorDem.pos === 'Sa. 16:30 Jan-Niklas\n'.length, String(vorDem.pos));
+await page.keyboard.press('Backspace'); await page.waitForTimeout(300);
+const nahtStand = await kopfStand();
+check('der Cursor bleibt an der Nahtstelle und springt nicht hinter das Datum',
+  nahtStand.pos === 'Sa. 16:30 Jan-Niklas'.length, String(nahtStand.pos)
+    + ' erwartet ' + 'Sa. 16:30 Jan-Niklas'.length);
+check('der Text ist genau um den Umbruch kürzer',
+  nahtStand.text === VOR.replace('Jan-Niklas\nSo.', 'Jan-NiklasSo.'), JSON.stringify(nahtStand.text));
+
 check('keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));
 console.log(fails ? fails + ' Prüfung(en) fehlgeschlagen' : 'alle Prüfungen bestanden');
 await b.close();

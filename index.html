@@ -762,7 +762,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.31';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.32';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -1323,6 +1323,13 @@
         this.render('');
       }
       addEventListener(...a) { this.el.addEventListener(...a); }
+      // Zu welcher Zeile gehört dieser Offset im Gesamttext? (bisher zweimal ausgeschrieben)
+      static zeileVon(text, offset) {
+        const zs = text.split('\n');
+        let li = 0, col = offset;
+        while (li < zs.length - 1 && col > zs[li].length) { col -= zs[li].length + 1; li++; }
+        return { zeile: li, spalte: col };
+      }
       // Der Kopf dieser Zeile: null, solange sie „roh" ist – dann gehört er in den Textfluss
       markeVon(i, zeile) { return i === rohZeile ? null : marke(zeile); }
       // Kopf in den Text zurückholen. `offset` ist die Stelle im **Gesamttext**, an die der Cursor soll.
@@ -1427,7 +1434,13 @@
       }
       _afterInput() {
         const text = Editor.linesOf(this.el).join('\n');
-        if (rohZeile >= text.split('\n').length) rohZeile = -1;   // Zeile weggelöscht
+        // **Ein Index allein trägt nicht.** Fällt eine Zeile weg oder verschmelzen zwei, rutschen alle
+        // darunter hoch – `rohZeile` zeigte dann auf eine fremde Zeile: die offene klappte zu, ihr Kopf
+        // wurde wieder Etikett, und der Cursor sprang hinter das Datum (Auftraggeber, 12.9.2026: „wenn
+        // ich vorne bin und die oberste Zeile lösche, springt die Textstelle wieder hinter das Datum,
+        // müsste ja eigentlich vorne stehen bleiben"). Deshalb wandert der Rohzustand **mit dem Cursor**:
+        // offen ist immer die Zeile, in der gerade gearbeitet wird.
+        if (rohZeile >= 0) rohZeile = Editor.zeileVon(text, this._caretOffsets()[0]).zeile;
         if (this._isCanonical()) { this._value = text; this.applyIndents(); }
         else { const c = this._caretOffsets()[0]; this.render(text); this.setCaret(c); }
       }
@@ -1445,8 +1458,7 @@
       setCaret(offset) {
         offset = Math.max(0, Math.min(offset, this._value.length));
         const lines = this._value.split('\n');
-        let li = 0, col = offset;
-        while (li < lines.length - 1 && col > lines[li].length) { col -= lines[li].length + 1; li++; }
+        let { zeile: li, spalte: col } = Editor.zeileVon(this._value, offset);
         const mk = this.markeVon(li, lines[li] || ''); if (mk) col = Math.max(0, col - mk[0].length); // Markierung steht nicht im DOM-Text
         const d = this.el.children[li]; if (!d) return;
         const r = document.createRange();
@@ -2517,8 +2529,7 @@
       const sel = window.getSelection();
       if (!sel || !sel.isCollapsed) return;
       const pos = textEl.selectionStart, zeilen = textEl.value.split('\n');
-      let li = 0, col = pos;
-      while (li < zeilen.length - 1 && col > zeilen[li].length) { col -= zeilen[li].length + 1; li++; }
+      const { zeile: li, spalte: col } = Editor.zeileVon(textEl.value, pos);
       const m = marke(zeilen[li] || '');
       if (!m || col !== m[0].length) return;        // nur genau vorn im Rumpf, sonst löscht es normal
       e.preventDefault();
