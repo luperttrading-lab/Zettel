@@ -455,14 +455,33 @@
        Schieben. Der Hintergrund ist das Eichbild (ein Screenshot des echten Sperrbildschirms) – nur hier
        sichtbar, nie im fertigen Bild. Ohne Eichbild das Hintergrundfoto, sonst der dunkle Verlauf. */
     .lage { position: fixed; inset: 0; z-index: 22; background: rgba(0,0,0,.92);
-      display: flex; align-items: center; justify-content: center; padding: 16px; }
+      display: flex; align-items: center; justify-content: center; padding: 8px; }
     .lage[hidden] { display: none; }
-    .lage .karte { background: #141416; border: 1px solid #33333c; border-radius: 20px; padding: 16px;
-      width: min(92vw, 420px); max-height: 94vh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+    /* Polster und Abstände knapp: jeder Punkt, den die Karte hier spart, bleibt der Vorschau (3.34).
+       Bei zehn Zeilen bringen 4 px weniger Abstand allein 40 Punkte. */
+    /* Die Karte füllt die Höhe, damit die Vorschau den **übrigen** Platz nehmen kann (flex: 1 unten).
+       Mit max-height statt height gäbe es keinen Rest zu verteilen: die Karte wäre nur so hoch wie ihr
+       Inhalt, und die Vorschau bliebe bei ihrem Grundmaß. */
+    .lage .karte { background: #141416; border: 1px solid #33333c; border-radius: 20px; padding: 12px 14px;
+      width: min(92vw, 420px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px);
+      overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
     .lage h2 { margin: 0; font-size: 17px; }
-    .lage .schirm { position: relative; margin: 0 auto; width: auto; height: 54vh; max-width: 100%;
+    /* **flex: 0 0 auto ist hier das Entscheidende.** Die Karte ist eine Flex-Spalte; ohne diese Zeile
+       gilt flex-shrink: 1, und das Vorschaufeld gab bei jeder neu hinzugekommenen Bedienzeile still
+       Platz ab. Am 12.9.2026 gemessen: 331 statt 460 Punkte hoch – 32 % der Displaygröße, also wirkte
+       jede Fingerbewegung dreifach. Wer hier eine Zeile ergänzt, nimmt sie nicht mehr der Vorschau weg,
+       sondern lässt die Karte scrollen; passt es nicht, gehört die neue Zeile unter „Mehr“. */
+    .lage .schirm { position: relative; margin: 0 auto; width: auto; height: auto; max-width: 100%;
+      flex: 1 1 auto; min-height: 42vh;
       border-radius: 14px; overflow: hidden; background: #0b0b0d center / cover no-repeat;
       box-shadow: 0 0 0 1px #33333c; touch-action: none; }
+    .lage .mehr { border-top: 1px solid #2a2a31; padding-top: 8px; }
+    .lage .mehr > summary { cursor: pointer; font-size: 14px; color: var(--muted); padding: 4px 2px;
+      list-style: none; display: flex; align-items: center; gap: 8px; }
+    .lage .mehr > summary::-webkit-details-marker { display: none; }
+    .lage .mehr > summary::before { content: '▸'; transition: transform .15s; }
+    .lage .mehr[open] > summary::before { transform: rotate(90deg); }
+    .lage .mehr .knoepfe { margin-top: 8px; }
     /* Der Zettel wird im Rahmen **echt gezeichnet** (canvas darunter, gleicher Weg wie fürs Display).
        Diese Flächen liegen nur noch unsichtbar darüber und fangen den Finger ab – so kann die Vorschau
        gar nicht mehr von dem abweichen, was aufs Display kommt (bis 1.63.1 war sie eine Attrappe ohne
@@ -722,15 +741,26 @@
            zurück, nicht nur die Lage von 2 und 3. -->
       <button class="btn zurueckzeile" type="button" id="lage-zurueck" disabled>Zurück zum Stand beim Öffnen</button>
       <p class="hinweis" id="lage-hinweis">Zettel mit dem Finger schieben.</p>
+      <!-- Seit 3.34 hinter einer Ausklappzeile. Grund: **die Vorschau war auf 127 × 331 Punkte
+           zusammengedrückt** – ein Drittel der Displaygröße, jede Fingerbewegung wirkte dreifach
+           („man kann es nicht mehr sehen und trifft die Position nicht“, Auftraggeber am Bild,
+           12.9.2026). Diese fünf Knöpfe braucht man selten bis nie; zugeklappt bekommt die Vorschau
+           ihre volle Höhe zurück, ohne dass die Karte scrollen muss. -->
+      <details class="mehr" id="lage-mehr">
+        <summary>Hintergrundfoto, Eichbild, Zurücksetzen</summary>
+        <p class="hinweis" id="lage-eichhinweis">Für die echte Lage von Uhr und Widgets: Screenshot deines Sperrbildschirms als Eichbild wählen.</p>
+        <div class="knoepfe">
+          <!-- Hintergrundfoto seit 3.15 hier statt auf der Startseite: man wechselt es „selten bis nie“
+               (Auftraggeber), und hier sieht man das ganze Bild, in dem es liegt. Neben dem Eichbild –
+               beides sind Fotos, deshalb tragen beide Knöpfe ihren Zweck im Namen. -->
+          <button class="btn" type="button" id="bgpick" title="Gespeichert wird ein auf Displaygröße zugeschnittener JPEG-Abzug, nicht das Original">Hintergrundfoto wählen</button>
+          <button class="btn" type="button" id="bgclear" hidden>Hintergrundfoto entfernen</button>
+          <button class="btn" type="button" id="eichpick">Eichbild wählen</button>
+          <button class="btn" type="button" id="eichclear" hidden>Eichbild entfernen</button>
+          <button class="btn" type="button" id="lage-reset" title="Auf die Standardlage – ein Zettel, mittig">Zurücksetzen</button>
+        </div>
+      </details>
       <div class="knoepfe">
-        <!-- Hintergrundfoto seit 3.15 hier statt auf der Startseite: man wechselt es „selten bis nie“
-             (Auftraggeber), und hier sieht man das ganze Bild, in dem es liegt. Neben dem Eichbild –
-             beides sind Fotos, deshalb tragen beide Knöpfe ihren Zweck im Namen. -->
-        <button class="btn" type="button" id="bgpick" title="Gespeichert wird ein auf Displaygröße zugeschnittener JPEG-Abzug, nicht das Original">Hintergrundfoto wählen</button>
-        <button class="btn" type="button" id="bgclear" hidden>Hintergrundfoto entfernen</button>
-        <button class="btn" type="button" id="eichpick">Eichbild wählen</button>
-        <button class="btn" type="button" id="eichclear" hidden>Eichbild entfernen</button>
-        <button class="btn" type="button" id="lage-reset" title="Auf die Standardlage – ein Zettel, mittig">Zurücksetzen</button>
         <button class="btn" type="button" id="lage-fertig">Fertig</button>
         <button class="btn primary" type="button" id="lage-kleben">Fertig + auf Sperrbildschirm</button>
       </div>
@@ -762,7 +792,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.33';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.34';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -2817,9 +2847,13 @@
       if (!eich && !bg) schirmEl.style.backgroundImage = 'linear-gradient(#1b1b1f, #09090b)';
       eichClear.hidden = !eich;
       eichPick.textContent = eich ? 'Anderes Eichbild' : 'Eichbild wählen';
-      $('lage-hinweis').textContent = eich
-        ? 'Zettel mit dem Finger schieben. Das Eichbild ist nur hier zu sehen, nie im fertigen Bild.'
-        : 'Zettel mit dem Finger schieben. Für die echte Lage von Uhr und Widgets: Screenshot deines Sperrbildschirms als Eichbild wählen.';
+      // Oben nur der eine Satz, der immer gilt – der Eichbild-Hinweis steht bei seinem Knopf unter „Mehr“.
+      // Drei Zeilen Hinweis über der Knopfreihe kosteten so viel Höhe wie zwei Knöpfe, und die fehlte
+      // der Vorschau (siehe 3.34).
+      $('lage-hinweis').textContent = 'Zettel mit dem Finger schieben.';
+      $('lage-eichhinweis').textContent = eich
+        ? 'Das Eichbild ist nur hier zu sehen, nie im fertigen Bild.'
+        : 'Für die echte Lage von Uhr und Widgets: Screenshot deines Sperrbildschirms als Eichbild wählen.';
     }
 
     // Grenzen, in denen die Zettelmitte liegen darf, damit der Zettel ganz im Bild bleibt.

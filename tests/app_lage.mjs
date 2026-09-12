@@ -103,8 +103,9 @@ check('sichtbare Breite im Bild = Regler, beschnitten am Rand', Math.abs(mass.br
 check('Lage im Bild folgt dem Fenster', Math.abs(mass.mitteY - mass.sollY) < 0.05,
   mass.mitteY.toFixed(3) + ' vs ' + mass.sollY.toFixed(3));
 
-// Zurücksetzen
+// Zurücksetzen – seit 3.34 unter der Ausklappzeile „Mehr", also erst aufklappen (wie am Gerät auch)
 await page.click('#lagebtn'); await page.waitForTimeout(300);
+await page.click('#lage-mehr > summary'); await page.waitForTimeout(250);
 await page.click('#lage-reset'); await page.waitForTimeout(200);
 check('Zurücksetzen stellt die Vorgabe her',
   await page.evaluate(() => state.noteX === 0.5 && state.noteY === 0.585 && state.noteScale === 1));
@@ -242,6 +243,30 @@ check('frisch geöffnet ist der Zurück-Knopf gesperrt', await page.evaluate(() 
 await page.click('#lage-tausch'); await page.waitForTimeout(300);
 check('nach einer Änderung ist der Zurück-Knopf frei', await page.evaluate(() => !document.getElementById('lage-zurueck').disabled));
 await page.click('#lage-fertig'); await page.waitForTimeout(250);
+// 3.34: **Die Vorschau darf nicht schrumpfen.** Die Karte ist eine Flex-Spalte; ohne eigene Regel gilt
+// flex-shrink: 1, und das Vorschaufeld gab bei jeder neuen Bedienzeile still Platz ab – gemessen am
+// Gerät des Auftraggebers: 127 × 331 statt 212 × 460 Punkte, also ein Drittel der Displaygröße. Jede
+// Fingerbewegung wirkte dreifach („man kann es nicht mehr sehen und trifft die Position nicht“).
+await page.evaluate(() => { const l = document.getElementById('lage'); if (l.hidden) document.getElementById('lagebtn').click(); });
+await page.waitForTimeout(600);
+const fenster = await page.evaluate(() => {
+  const s = document.getElementById('lage-schirm').getBoundingClientRect();
+  const k = document.querySelector('.lage .karte');
+  return { b: Math.round(s.width), h: Math.round(s.height), hoehe: window.innerHeight,
+           scrollt: k.scrollHeight > k.clientHeight + 2 };
+});
+check('die Vorschau nimmt mindestens 45 % der Fensterhöhe ein',
+  fenster.h / fenster.hoehe >= 0.45, JSON.stringify(fenster));
+check('bei drei Zetteln passt das Fenster ohne Scrollen', !fenster.scrollt, JSON.stringify(fenster));
+// Die selten gebrauchten Knöpfe sind da, aber eingeklappt – das ist der Platz, den die Vorschau bekam
+check('Hintergrundfoto, Eichbild und Zurücksetzen stehen unter „Mehr" und sind zugeklappt',
+  await page.evaluate(() => { const d = document.getElementById('lage-mehr');
+    return !!d && !d.open && ['bgpick', 'eichpick', 'lage-reset'].every(id => d.contains(document.getElementById(id))); }));
+check('aufgeklappt sind sie erreichbar',
+  await page.evaluate(() => { const d = document.getElementById('lage-mehr'); d.open = true;
+    const r = document.getElementById('eichpick').getBoundingClientRect(); return r.width > 0 && r.height > 0; }));
+await page.evaluate(() => { document.getElementById('lage-mehr').open = false; });
+
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
 await b.close();
 console.log(fails ? `${fails} FEHLER` : 'ALLE TESTS OK');
