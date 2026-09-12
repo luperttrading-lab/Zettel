@@ -53,6 +53,11 @@ sagen, was passiert ist, nicht dass etwas passiert ist („1.63.0 live: Zettelh�
 - `APP_VERSION` in `index.html` bei jeder Änderung hochzählen, sonst holt die App das Update nicht.
   **Seit 3.3 zwei Stellen** (so gewünscht): vorn die große Sache, hinten jede Änderung – aus 3.3 wird 3.4.
   Die Update-Prüfung vergleicht nur Zeichenketten, das Format ist ihr gleich.
+  **Hinten lückenlos zählen.** Am 12.9.2026 durchgezählt: 144 Fassungen in sieben Tagen, darin drei
+  Lücken (3.1, 3.2 und 3.28) und eine nie vergebene Hauptversion 2 – der Sprung 1.65.2 → 3.0.0 war ein
+  Zählfehler, kein Meilenstein. Wer eine Nummer vergibt, prüft vorher die letzte in `docs/UEBERGABE.md`.
+  Die vordere Stelle steigt **nur**, wenn die App etwas Neues kann, das man auf dem Zettel sieht –
+  bisher gerechtfertigt: mehrere Zettel (1.61.0) und der Wasserzettel (1.65.0).
 - Layoutregeln stehen doppelt in `index.html` und `lib/render.js` (Vorschau/Bild-Parität). Wer eine ändert,
   ändert beide und prüft Schriftgröße und Zeilenzahl für denselben Text.
 - Bilder vor dem Einbauen **anschauen** (Read), nicht nur messen. Jedes Bild, das für den Auftraggeber

@@ -792,7 +792,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.34';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.35';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -4036,6 +4036,20 @@
 
     // ---------- Offline / Installierbar / Selbst-Aktualisierung ----------
     $('version').textContent = APP_VERSION; $('ver').textContent = 'v' + APP_VERSION;
+    // **Nach einem Update einmal deutlich sagen, welche Fassung jetzt läuft.** Die Nummer steht zwar
+    // schon oben neben „Zettel", aber klein und grau – der Auftraggeber hat sie dort nicht wahrgenommen
+    // (12.9.2026: „wäre günstiger, wenn das im Startbildschirm kurz eingeblendet ist"). Die Einblendung
+    // kommt nur, wenn sich die Nummer seit dem letzten Start **geändert** hat; beim allerersten Start
+    // gar nicht, sonst begrüßte die App einen neuen Nutzer mit einer Versionsmeldung.
+    {
+      const GESEHEN = 'zettel.gesehen';
+      let vorher = null;
+      try { vorher = localStorage.getItem(GESEHEN); } catch (_) {}
+      if (vorher !== APP_VERSION) {
+        try { localStorage.setItem(GESEHEN, APP_VERSION); } catch (_) {}
+        if (vorher) setTimeout(() => showInfo('Version ' + APP_VERSION + ' ist geladen', 4), 400);
+      }
+    }
     // Maße des erzeugten Bildes dauerhaft sichtbar – dazu die Rohwerte, aus denen sie entstehen.
     // Meldet `screen` eine zu kleine Höhe, ist das Bild zu kurz, iOS füllt es formatfüllend auf und
     // zoomt dabei den Zettel. Genau dieser Fall trat am 8.9.2026 auf (632 statt 852 → Bild 1179 × 1896).

@@ -155,6 +155,29 @@ check('alter Eintrag: „Stand unbekannt“', (await leiste()).satz === 'Stand u
 await page.evaluate(() => { const el = document.getElementById('shortcut'); el.value = 'Notiz'; el.dispatchEvent(new Event('input')); }); await page.waitForTimeout(200);
 check('Ansage nennt den eingestellten Namen', (await page.evaluate(() => document.querySelector('#ansage .z2').textContent)).includes('„Notiz“'), await page.evaluate(() => document.querySelector('#ansage .z2').textContent));
 
+// 3.35: Nach einem Update sagt die App einmal deutlich, welche Fassung läuft. Die Nummer steht zwar
+// klein oben neben „Zettel", dort hat der Auftraggeber sie aber nicht wahrgenommen (12.9.2026).
+const infoStand = () => page.evaluate(() => ({ sichtbar: !document.getElementById('update').hidden,
+  text: document.getElementById('update-text').textContent,
+  gemerkt: localStorage.getItem('zettel.gesehen'), version: APP_VERSION }));
+await page.evaluate(() => localStorage.removeItem('zettel.gesehen'));
+await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(1100);
+const ersteFahrt = await infoStand();
+check('beim allerersten Start kommt keine Versionsmeldung',
+  !ersteFahrt.sichtbar && ersteFahrt.gemerkt === ersteFahrt.version, JSON.stringify(ersteFahrt));
+await page.evaluate(() => localStorage.setItem('zettel.gesehen', '0.0'));
+await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(1200);
+const nachUpdate = await infoStand();
+check('nach einem Update wird die neue Nummer eingeblendet',
+  nachUpdate.sichtbar && nachUpdate.text === 'Version ' + nachUpdate.version + ' ist geladen',
+  JSON.stringify(nachUpdate));
+await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(1200);
+check('beim nächsten Start mit derselben Nummer bleibt es still',
+  !(await infoStand()).sichtbar, JSON.stringify(await infoStand()));
+check('die Nummer steht außerdem dauerhaft im Kopf',
+  await page.evaluate(() => document.getElementById('ver').textContent === 'v' + APP_VERSION),
+  await page.evaluate(() => document.getElementById('ver').textContent));
+
 const sw = await page.evaluate(() => document.documentElement.scrollWidth);
 check('scrollWidth ≤ 408 bei 390 px', sw <= 408, String(sw));
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));
