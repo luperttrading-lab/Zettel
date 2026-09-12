@@ -128,6 +128,74 @@ const fertig = await zeilenLage();
 check('mit dem Leerzeichen wird daraus ein Termin mit Kopf und Einzug',
   fertig[1].mk === 'Sa. 19:00' && fertig[1].pad === fertig[0].pad, JSON.stringify(fertig[1]));
 
+// 3.31: **Der Terminkopf muss erreichbar sein.** Er steht im Attribut data-mk, also nicht im DOM-Text –
+// der Cursor kam nicht hinein, das Datum war nicht zu ändern, und ein Rückschritt am Rumpfanfang
+// verschmolz die Zeile mit der darüber und verlor dabei den eigenen Kopf (Auftraggeber am Bild,
+// 12.9.2026). Jetzt holt der erste Rückschritt – und ein Tipp in die Kopfspalte – den Kopf in den Text.
+await page.evaluate(() => {
+  state.list = 'termin'; applyList();
+  textEl.value = 'Sa. 16:30 Jan-Niklas\nSo. 11:00 Wohnung Emely\nMo. 9:20 Miklody';
+  onTextChanged(); flush(); persist();
+});
+await page.waitForTimeout(400);
+const kopfStand = () => page.evaluate(() => ({
+  text: textEl.value,
+  mk: [...textEl.el.children].map(d => d.getAttribute('data-mk')),
+  pad: [...textEl.el.children].map(d => Math.round(parseFloat(getComputedStyle(d).paddingLeft) || 0)),
+  pos: textEl.selectionStart,
+}));
+const VOR = 'Sa. 16:30 Jan-Niklas\nSo. 11:00 Wohnung Emely\nMo. 9:20 Miklody';
+await page.evaluate(() => { textEl.focus(); textEl.selectionStart = 'Sa. 16:30 Jan-Niklas\nSo. 11:00 '.length; });
+await page.waitForTimeout(200);
+await page.keyboard.press('Backspace'); await page.waitForTimeout(300);
+const nachRueck = await kopfStand();
+check('Rückschritt vorn im Rumpf verschluckt die Zeile darüber nicht',
+  nachRueck.text === VOR, JSON.stringify(nachRueck.text));
+check('stattdessen steht der Kopf jetzt im Text', nachRueck.mk[1] === null, JSON.stringify(nachRueck.mk));
+// **Der Kopf darf beim Öffnen nicht springen** – man tippt ja auf ihn. Er stand als Etikett bei
+// left:0 und muss dort bleiben; der Rumpf rutscht statt dessen an ihn heran, das ist das Signal
+// „Zeile offen". Gemessen wird die linke Kante der Zeile ohne Einzug.
+const kopfX = () => page.evaluate(() => [...textEl.el.children].map(d =>
+  Math.round(d.getBoundingClientRect().left + (parseFloat(getComputedStyle(d).paddingLeft) || 0)
+             - (d.hasAttribute('data-mk') ? parseFloat(getComputedStyle(d).paddingLeft) || 0 : 0))));
+const xNachRueck = await kopfX();
+check('der Kopf bleibt beim Öffnen an seiner Stelle',
+  Math.abs(xNachRueck[1] - xNachRueck[0]) <= 2, JSON.stringify(xNachRueck));
+check('die anderen Zeilen behalten ihren Kopf',
+  nachRueck.mk[0] === 'Sa. 16:30' && nachRueck.mk[2] === 'Mo. 9:20', JSON.stringify(nachRueck.mk));
+check('der Cursor steht hinter dem Kopf – von dort ist er zu löschen',
+  nachRueck.pos === 'Sa. 16:30 Jan-Niklas\nSo. 11:00 '.length, String(nachRueck.pos));
+// Der zweite Rückschritt löscht jetzt ein Zeichen des Kopfes, statt Zeilen zu verschmelzen
+await page.keyboard.press('Backspace'); await page.waitForTimeout(300);
+check('der nächste Rückschritt trifft den Kopf, nicht die Zeile darüber',
+  (await kopfStand()).text === 'Sa. 16:30 Jan-Niklas\nSo. 11:00Wohnung Emely\nMo. 9:20 Miklody',
+  JSON.stringify((await kopfStand()).text));
+
+// Tipp in die Kopfspalte: Cursor landet **im** Kopf
+await page.evaluate(v => { textEl.value = v; onTextChanged(); flush(); }, VOR);
+await page.waitForTimeout(400);
+const treffer = await page.evaluate(() => { const r = textEl.el.children[2].getBoundingClientRect();
+  return { x: r.left + 14, y: r.top + r.height / 2 }; });
+await page.mouse.click(treffer.x, treffer.y); await page.waitForTimeout(400);
+const nachTipp = await kopfStand();
+const zeile3Start = 'Sa. 16:30 Jan-Niklas\nSo. 11:00 Wohnung Emely\n'.length;
+check('ein Tipp in die Kopfspalte öffnet genau diese Zeile',
+  nachTipp.mk[2] === null && nachTipp.mk[0] === 'Sa. 16:30' && nachTipp.mk[1] === 'So. 11:00',
+  JSON.stringify(nachTipp.mk));
+check('und setzt den Cursor in den Kopf, nicht dahinter',
+  nachTipp.pos >= zeile3Start && nachTipp.pos < zeile3Start + 'Mo. 9:20'.length,
+  String(nachTipp.pos) + ' erwartet zwischen ' + zeile3Start + ' und ' + (zeile3Start + 8));
+check('der Text bleibt beim Öffnen unverändert', nachTipp.text === VOR, JSON.stringify(nachTipp.text));
+// Ein Tipp in eine andere Zeile schließt die offene wieder – es ist immer höchstens eine offen
+const andere = await page.evaluate(() => { const r = textEl.el.children[0].getBoundingClientRect();
+  return { x: r.right - 20, y: r.top + r.height / 2 }; });
+await page.mouse.click(andere.x, andere.y); await page.waitForTimeout(400);
+const nachWechsel = await kopfStand();
+check('ein Tipp in eine andere Zeile schließt den Kopf wieder',
+  nachWechsel.mk.every(m => m !== null), JSON.stringify(nachWechsel.mk));
+check('und der Einzug steht wieder bei allen', (await kopfStand()).pad.every(p => p > 0),
+  JSON.stringify((await kopfStand()).pad));
+
 check('keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));
 console.log(fails ? fails + ' Prüfung(en) fehlgeschlagen' : 'alle Prüfungen bestanden');
 await b.close();

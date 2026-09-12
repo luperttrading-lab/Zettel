@@ -762,7 +762,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.30';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.31';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -1300,6 +1300,15 @@
     // Editierbarer Bereich mit einem <div class="ln"> pro Zeile. Nach außen verhält er sich wie ein
     // Textfeld (value, selectionStart/End, focus). Die Listenmarkierung steht als data-mk am Zeilenblock
     // und wird per CSS gezeichnet (nicht editierbar); die Zeile ist um indentFn(zeile) px eingerückt.
+    //
+    // **Genau das war die Grenze der Bedienung:** Was im Attribut steht, steht nicht im DOM-Text – der
+    // Cursor kommt nicht hinein, das Datum ist nicht zu ändern, und ein Rückschritt am Rumpfanfang
+    // verschmilzt die Zeile mit der darüber (Auftraggeber am Bild, 12.9.2026: „ich kann den Cursor nur
+    // im Text hinstellen und nicht vor das Datum … dann rutscht alles hoch, das ist unlogisch").
+    // `rohZeile` ist der Ausweg: **eine** Zeile darf ihren Kopf als gewöhnlichen Text zeigen, solange man
+    // an ihr arbeitet. Der gespeicherte Text ändert sich dabei nicht – nur die Darstellung. Deklaration
+    // **hier oben**, denn der Konstruktor rendert sofort; weiter unten läge sie in der zeitlichen Totzone.
+    let rohZeile = -1;
     class Editor {
       constructor(el) {
         this.el = el; this._value = ''; this.indentFn = () => 0; this._composing = false; this.titleStyle = null;
@@ -1314,12 +1323,29 @@
         this.render('');
       }
       addEventListener(...a) { this.el.addEventListener(...a); }
+      // Der Kopf dieser Zeile: null, solange sie „roh" ist – dann gehört er in den Textfluss
+      markeVon(i, zeile) { return i === rohZeile ? null : marke(zeile); }
+      // Kopf in den Text zurückholen. `offset` ist die Stelle im **Gesamttext**, an die der Cursor soll.
+      kopfOeffnen(i, offset) {
+        if (rohZeile === i) return false;
+        rohZeile = i;
+        this.render(this._value);
+        if (offset != null) this.setCaret(offset);
+        return true;
+      }
+      // Zurück zum Etikett. Den Cursor **vorher** ablesen: danach ist der Kopf wieder aus dem DOM.
+      kopfSchliessen() {
+        if (rohZeile < 0) return;
+        const c = this._caretOffsets()[0];
+        rohZeile = -1;
+        this.render(this._value); this.setCaret(c);
+      }
       focus() { this.el.focus(); }
       get style() { return this.el.style; }
       get scrollHeight() { return this.el.scrollHeight; }
       get clientHeight() { return this.el.clientHeight; }
       get value() { return this._value; }
-      set value(v) { this.render(String(v)); }
+      set value(v) { rohZeile = -1; this.render(String(v)); }
       get selectionStart() { return this._caretOffsets()[0]; }
       get selectionEnd() { return this._caretOffsets()[1]; }
       set selectionStart(v) { this.setCaret(v); }
@@ -1362,7 +1388,7 @@
         const zeilen = Editor.linesOf(this.el), kinder = this.el.children;
         if (zeilen.length !== kinder.length) return false;
         for (let i = 0; i < zeilen.length; i++) {
-          const m = marke(zeilen[i]);
+          const m = this.markeVon(i, zeilen[i]);
           if ((m ? m[0].trim() : '') !== (kinder[i].getAttribute('data-mk') || '')) return false;
         }
         return true;
@@ -1370,8 +1396,8 @@
       render(text) {
         this._value = text;
         const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-        this.el.innerHTML = text.split('\n').map(l => {
-          const m = marke(l);
+        this.el.innerHTML = text.split('\n').map((l, i) => {
+          const m = this.markeVon(i, l);
           const body = m ? l.slice(m[0].length) : l;
           const haken = DONE_RE.test(body);           // steht als Attribut, damit der Strich vor ihm endet
           const rumpf = haken ? ohneHaken(body) : body;
@@ -1385,7 +1411,12 @@
       applyIndents() {
         const lines = this._value.split('\n');
         [...this.el.children].forEach((d, i) => {
-          const ind = Math.round(this.indentFn(lines[i] || '') * 100) / 100;
+          // Die rohe Zeile trägt ihren Kopf im Fluss und bekommt **keinen** Einzug: dann steht der Kopf
+          // genau dort, wo eben noch das Etikett stand – und wer ihn antippt, trifft ihn auch. Der Rumpf
+          // rutscht dabei an den Kopf heran; dieser Sprung ist gewollt und zeigt, dass die Zeile offen
+          // ist. (Erst umgekehrt gebaut – Rumpf still, Kopf verschoben –, aber dann sprang beim Tippen
+          // das Datum unter dem Finger weg, und der Cursor landete davor statt darin.)
+          const ind = i === rohZeile ? 0 : Math.round(this.indentFn(lines[i] || '') * 100) / 100;
           d.style.paddingLeft = ind ? ind + 'px' : '';
           if (i === 0) {   // Überschrift im Linienraster (syncPreview setzt titleStyle), sonst gilt das CSS
             const t = this.titleStyle || {};
@@ -1396,6 +1427,7 @@
       }
       _afterInput() {
         const text = Editor.linesOf(this.el).join('\n');
+        if (rohZeile >= text.split('\n').length) rohZeile = -1;   // Zeile weggelöscht
         if (this._isCanonical()) { this._value = text; this.applyIndents(); }
         else { const c = this._caretOffsets()[0]; this.render(text); this.setCaret(c); }
       }
@@ -1415,7 +1447,7 @@
         const lines = this._value.split('\n');
         let li = 0, col = offset;
         while (li < lines.length - 1 && col > lines[li].length) { col -= lines[li].length + 1; li++; }
-        const mk = marke(lines[li] || ''); if (mk) col = Math.max(0, col - mk[0].length); // Markierung steht nicht im DOM-Text
+        const mk = this.markeVon(li, lines[li] || ''); if (mk) col = Math.max(0, col - mk[0].length); // Markierung steht nicht im DOM-Text
         const d = this.el.children[li]; if (!d) return;
         const r = document.createRange();
         const tn = [...d.childNodes].find(n => n.nodeType === 3);
@@ -2449,6 +2481,50 @@
       if (!links && !rechts) return -1;
       return [...textEl.el.children].indexOf(d);
     }
+    // Tipp in die Kopfspalte einer Terminzeile: dort steht das Etikett (data-mk), in das kein Cursor
+    // passt. Der Tipp holt den Kopf in den Textfluss und setzt den Cursor genau an die getippte Stelle –
+    // der Kopf beginnt vorher wie nachher bei left:0, die Stelle stimmt also. Damit ist die Kopfspalte
+    // das „Tabellenfeld", in das der Auftraggeber tippen wollte.
+    function kopfZeile(e) {
+      if (listeJetzt() !== 'termin') return -1;
+      const d = e.target.closest && e.target.closest('.ln');
+      if (!d || !d.hasAttribute('data-mk')) return -1;
+      const einzug = parseFloat(getComputedStyle(d).paddingLeft) || 0;
+      if (!(einzug > 0)) return -1;
+      return e.clientX - d.getBoundingClientRect().left <= einzug ? [...textEl.el.children].indexOf(d) : -1;
+    }
+    textEl.el.addEventListener('pointerdown', e => {
+      if (sortAn) return;
+      const k = kopfZeile(e);
+      if (k >= 0) {
+        e.preventDefault();
+        textEl.kopfOeffnen(k);
+        textEl.focus();
+        try { const r = document.caretRangeFromPoint(e.clientX, e.clientY);
+              if (r) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); } } catch (_) {}
+        return;
+      }
+      // Tipp in eine andere Zeile beendet die Rohdarstellung – nur die bearbeitete Zeile zeigt ihren Kopf
+      const d = e.target.closest && e.target.closest('.ln');
+      if (rohZeile >= 0 && d !== textEl.el.children[rohZeile]) textEl.kopfSchliessen();
+    });
+    // Rückschritt am Rumpfanfang: **erst den Kopf holen, nicht die Zeile darüber verschlucken.** Vorher
+    // verschmolz der Browser die beiden Zeilen und der Kopf dieser Zeile war spurlos weg.
+    textEl.el.addEventListener('keydown', e => {
+      if (listeJetzt() !== 'termin') return;
+      if (e.key === 'Enter' && rohZeile >= 0) { rohZeile = -1; return; }   // der Umbruch zeichnet gleich neu
+      if (e.key !== 'Backspace' || rohZeile >= 0) return;
+      const sel = window.getSelection();
+      if (!sel || !sel.isCollapsed) return;
+      const pos = textEl.selectionStart, zeilen = textEl.value.split('\n');
+      let li = 0, col = pos;
+      while (li < zeilen.length - 1 && col > zeilen[li].length) { col -= zeilen[li].length + 1; li++; }
+      const m = marke(zeilen[li] || '');
+      if (!m || col !== m[0].length) return;        // nur genau vorn im Rumpf, sonst löscht es normal
+      e.preventDefault();
+      textEl.kopfOeffnen(li, pos);
+    });
+    textEl.el.addEventListener('blur', () => textEl.kopfSchliessen());
     textEl.el.addEventListener('pointerdown', e => {
       if (sortAn) return;                 // im Sortiermodus gehört jeder Druck dem Ziehen
       const i = hakenZeile(e);
