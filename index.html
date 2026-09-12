@@ -762,7 +762,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.32';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.33';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -2524,7 +2524,11 @@
     // verschmolz der Browser die beiden Zeilen und der Kopf dieser Zeile war spurlos weg.
     textEl.el.addEventListener('keydown', e => {
       if (listeJetzt() !== 'termin') return;
-      if (e.key === 'Enter' && rohZeile >= 0) { rohZeile = -1; return; }   // der Umbruch zeichnet gleich neu
+      // Return **beendet die Rohdarstellung nicht**. Tat es das (3.31), wurde die neue Zeile sofort
+      // wieder zum Etikett – und weil vor einem Etikett kein DOM-Text liegt, rutschte der Cursor an den
+      // Rumpfanfang: „nicht vorne vor der Uhrzeit, sondern hinten beim Termin" (Auftraggeber am Bild,
+      // 12.9.2026). Seit 3.32 wandert der Rohzustand ohnehin mit dem Cursor, der Sonderfall war nur noch
+      // schädlich. Die offene Zeile ist nach dem Umbruch die, in der die Einfügemarke steht.
       if (e.key !== 'Backspace' || rohZeile >= 0) return;
       const sel = window.getSelection();
       if (!sel || !sel.isCollapsed) return;
@@ -3058,16 +3062,27 @@
         next = v.slice(0, pos) + '\n' + v.slice(end);
         caretLine = lineIdx + 1; caretInLine = 0;
       } else {
-        next = v.slice(0, pos) + '\n' + LISTS[state.list].mark(0) + v.slice(end);
-        caretLine = lineIdx + 1; caretInLine = -1; // hinter die Markierung
+        const zeichen = LISTS[state.list].mark(0);
+        next = v.slice(0, pos) + '\n' + zeichen + v.slice(end);
+        caretLine = lineIdx + 1;
+        // „Hinter die Markierung" gilt nur, wenn wirklich eine **gesetzt** wurde. Bei Terminen setzt die
+        // App keine (das Datum tippt man selbst, siehe LISTS.termin). Dort schob der Sprung den Cursor
+        // hinter einen Kopf, der gar nicht neu ist, sondern mit seiner Zeile nach unten gerutscht war –
+        // „nicht vorne vor der Uhrzeit, sondern hinten beim Termin" (Auftraggeber am Bild, 12.9.2026).
+        caretInLine = zeichen ? -1 : 0;
       }
       next = relist(next, state.list);
       const lines = next.split('\n');
       let caret = 0;
       for (let i = 0; i < caretLine && i < lines.length; i++) caret += lines[i].length + 1;
-      if (caretInLine === -1) { const m = marke(lines[caretLine] || ''); caret += m ? m[0].length : 0; }
+      const zielKopf = marke(lines[caretLine] || '');
+      if (caretInLine === -1) caret += zielKopf ? zielKopf[0].length : 0;
       textEl.value = next;
-      textEl.selectionStart = textEl.selectionEnd = Math.min(caret, next.length);
+      caret = Math.min(caret, next.length);
+      // Soll der Cursor **vor** einen vorhandenen Kopf, muss dessen Zeile offen sein – vor dem Etikett
+      // liegt kein DOM-Text, der Cursor rutschte sonst wieder dahinter.
+      if (caretInLine === 0 && zielKopf) textEl.kopfOeffnen(caretLine, caret);
+      else textEl.selectionStart = textEl.selectionEnd = caret;
       onTextChanged();
     });
     function flush() { if (t) { clearTimeout(t); t = null; persist(); } }

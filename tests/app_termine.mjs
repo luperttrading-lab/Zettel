@@ -235,6 +235,43 @@ check('der Cursor bleibt an der Nahtstelle und springt nicht hinter das Datum',
 check('der Text ist genau um den Umbruch kürzer',
   nahtStand.text === VOR.replace('Jan-Niklas\nSo.', 'Jan-NiklasSo.'), JSON.stringify(nahtStand.text));
 
+// 3.33: **Return vorne in der Zeile.** Der Listen-Enter-Handler sprang grundsätzlich „hinter die
+// Markierung" – sinnvoll, wenn er gerade eine gesetzt hat (Punkt, Zahl, Kästchen). Bei Terminen setzt
+// die App keine; dort schob der Sprung den Cursor hinter einen Kopf, der gar nicht neu war, sondern
+// mit seiner Zeile nach unten gerutscht ist: „nicht vorne vor der Uhrzeit, sondern hinten beim Termin"
+// (Auftraggeber am Bild, 12.9.2026). Gemessen: Cursor auf 11 statt auf 1.
+await page.evaluate(v => { textEl.value = v; onTextChanged(); flush(); }, VOR);
+await page.waitForTimeout(400);
+await page.evaluate(() => { textEl.focus(); textEl.selectionStart = 'Sa. 16:30 '.length; });
+await page.waitForTimeout(200);
+await page.keyboard.press('Backspace'); await page.waitForTimeout(250);      // Zeile 1 öffnen
+await page.evaluate(() => { textEl.selectionStart = 0; }); await page.waitForTimeout(200);
+await page.keyboard.press('Enter'); await page.waitForTimeout(350);
+const nachRet = await kopfStand();
+check('Return vorne schiebt den Termin nach unten und lässt den Cursor davor',
+  nachRet.pos === 1, String(nachRet.pos) + ' erwartet 1');
+check('die Zeile mit dem Termin bleibt dabei offen – sonst könnte der Cursor dort nicht stehen',
+  nachRet.mk[1] === null, JSON.stringify(nachRet.mk));
+check('der Text bekommt genau einen Umbruch davor', nachRet.text === '\n' + VOR, JSON.stringify(nachRet.text));
+// In die neue leere Zeile lässt sich der nächste Termin tippen
+await page.evaluate(() => { textEl.selectionStart = 0; }); await page.waitForTimeout(200);
+await page.keyboard.type('Fr. 8:00 Zahnarzt', { delay: 15 }); await page.waitForTimeout(400);
+const neuTermin = await kopfStand();
+check('der neue Termin landet in der neuen Zeile, die alten bleiben unberührt',
+  neuTermin.text === 'Fr. 8:00 Zahnarzt\n' + VOR, JSON.stringify(neuTermin.text));
+// Gegenprobe: bei einer Punktliste muss der Sprung hinter die frisch gesetzte Markierung bleiben
+await page.evaluate(() => { state.list = 'dot'; applyList();
+  textEl.value = relist('Milch\nBrot', 'dot'); onTextChanged(); flush();
+  textEl.focus(); textEl.selectionStart = textEl.value.split('\n')[0].length; });
+await page.waitForTimeout(300);
+await page.keyboard.press('Enter'); await page.waitForTimeout(350);
+const punkt = await page.evaluate(() => ({ text: textEl.value, pos: textEl.selectionStart }));
+check('Punktliste unverändert: Return setzt einen Punkt und der Cursor steht dahinter',
+  punkt.pos === punkt.text.indexOf('\n') + 3 && punkt.text.split('\n').length === 3,
+  JSON.stringify(punkt));
+await page.evaluate(() => { state.list = 'termin'; applyList(); });
+await page.waitForTimeout(300);
+
 check('keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));
 console.log(fails ? fails + ' Prüfung(en) fehlgeschlagen' : 'alle Prüfungen bestanden');
 await b.close();
