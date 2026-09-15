@@ -22,6 +22,76 @@ Drei Schichten halten jeweils eine alte Fassung fest. Jede muss einzeln entschä
 Der vierte Punkt ist kein Cache, sondern Wahrnehmung: Selbst wenn das Update ankommt, **merkt es
 niemand** – und dann hält man einen alten Fehler für ungelöst.
 
+## Baustein 0: das Banner, über das alles gemeldet wird
+
+Ohne diesen Teil sind die Bausteine 3 und 4 nicht lauffähig – sie rufen `showInfo()` und
+`zeigeBanner()` auf. Deshalb hier zuerst, vollständig. Ein Element, zwei Zustände: **grün** für „neue
+Version da" (mit Knopf), **grau** für eine bloße Auskunft wie „ist geladen".
+
+```html
+<div class="update" id="update" hidden>
+  <span id="update-text"></span>
+  <button class="btn" id="update-go">Jetzt laden</button>
+</div>
+```
+
+```css
+.update {
+  position: fixed; left: 12px; right: 12px; top: max(env(safe-area-inset-top), 12px); z-index: 30;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: #34c759; color: #06240e;            /* grün = Handlungsaufforderung */
+  padding: 12px 14px; border-radius: 14px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.5);
+}
+.update[hidden] { display: none; }
+.update.info { background: #2d2d33; color: #f2f2f7; font-weight: 500; }   /* grau = nur Auskunft */
+.update .btn { width: auto; padding: 8px 14px; font-size: 15px; background: #06240e; color: #fff; }
+```
+
+`top: max(env(safe-area-inset-top), 12px)` ist kein Schmuck: Ohne das liegt das Banner auf einem
+iPhone unter der Dynamic Island.
+
+```js
+const updateEl = document.getElementById('update');
+let infoTimer = null;
+
+// Graue Auskunft, verschwindet nach `sekunden` von selbst (0 = bleibt stehen)
+function showInfo(text, sekunden = 2) {
+  updateEl.className = 'update info';
+  document.getElementById('update-text').textContent = text;
+  document.getElementById('update-go').hidden = true;
+  updateEl.hidden = false;
+  clearTimeout(infoTimer);
+  if (sekunden) infoTimer = setTimeout(() => {
+    if (updateEl.classList.contains('info')) updateEl.hidden = true;
+  }, sekunden * 1000);
+}
+
+// Grünes Banner mit Knopf
+function zeigeBanner(text) {
+  updateEl.className = 'update';
+  document.getElementById('update-text').textContent = text;
+  document.getElementById('update-go').hidden = false;
+  updateEl.hidden = false;
+}
+
+// Antippen schließt eine Auskunft; der Knopf lädt sofort neu
+updateEl.addEventListener('click', () => { if (updateEl.classList.contains('info')) updateEl.hidden = true; });
+document.getElementById('update-go').addEventListener('click', () => { speichereAlles(); location.reload(); });
+```
+
+### Was du durch Eigenes ersetzen musst
+
+| Platzhalter in dieser Anleitung | Was dort hingehört |
+|---|---|
+| `speichereAlles()` | deine Funktion, die den Zustand **sofort** sichert (in Zettel: `flush()`) |
+| `textfeld` | das Eingabefeld, in dem jemand gerade tippen könnte (mehrere: alle prüfen) |
+| `titelElement` | das Element, das die Prüfung von Hand auslöst (in Zettel die Überschrift) |
+| `'app.gesehen'` | ein eigener Schlüssel im localStorage, pro App verschieden |
+| `'meine-app'` | der Cache-Name im Service Worker, pro App verschieden |
+
+Hat die App kein Textfeld, fällt die Tipp-Prüfung weg und `announceUpdate` lädt immer nach drei
+Sekunden neu.
+
 ## Baustein 1: Service Worker – eigene Dateien „Netz zuerst"
 
 Vollständige `sw.js` aus Zettel, das Wesentliche ist der `fetch`-Handler:
@@ -187,6 +257,18 @@ Der Reihe nach am Gerät durchgehen, nicht am Schreibtisch annehmen:
   offline läuft gar nichts mehr. Ein *Netz-zuerst*-Worker ist besser als keiner.
 - **`Cache-Control`-Header allein.** Sie helfen, ersetzen aber Baustein 3 nicht: Eine App, die im
   Hintergrund liegt, lädt von sich aus überhaupt nichts nach.
+
+## Am Gerät beobachtet (15.9.2026)
+
+Der Auftraggeber hat 3.35 → 3.36 mitgemacht, **während die App offen war** – also über den
+60-Sekunden-Takt, nicht über `visibilitychange`. Beide Meldungen kamen in der erwarteten Reihenfolge:
+
+1. grünes Banner **„Neue Version 3.36 ist da"** mit Knopf *Jetzt laden*,
+2. nach dem Neuladen graue Auskunft **„Version 3.36 ist geladen"**, dazu `v3.36` im Kopf.
+
+Das ist der Beleg, dass die Kette in beiden Richtungen greift: Die App findet das Update von selbst,
+**und** sie sagt hinterher, was jetzt läuft. Genau dieses zweite Stück fehlt in den meisten
+Anleitungen – und ohne es hält man ein angekommenes Update für ausgeblieben.
 
 ## Herkunft
 
