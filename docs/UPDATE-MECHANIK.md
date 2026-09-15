@@ -7,6 +7,10 @@ diese vier Bausteine regelmäßig schiefgeht.
 Gilt für: eine statisch ausgelieferte Web-App (GitHub Pages, Vercel, Netlify), die über
 *Teilen → Zum Home-Bildschirm* installiert wird.
 
+Änderungen 15.9.2026 (nach dem Nachbau in der Standort-Uhr): Abschnitt „Die Meldung steht immer am
+Kopf" korrigiert – der Auslöser bleibt, wo das Design ihn hat, das Banner antwortet an seiner Kante.
+Überblendung als Anforderung ergänzt. Prüfliste 9 und der Takt-Hinweis angepasst.
+
 ## Warum man Updates überhaupt verpasst
 
 Drei Schichten halten jeweils eine alte Fassung fest. Jede muss einzeln entschärft werden:
@@ -41,7 +45,9 @@ Version da" (mit Knopf), **grau** für eine bloße Auskunft wie „ist geladen".
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   background: #34c759; color: #06240e;            /* grün = Handlungsaufforderung */
   padding: 12px 14px; border-radius: 14px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  opacity: 0; transition: opacity .35s ease; pointer-events: none;   /* Überblendung, siehe unten */
 }
+.update.an { opacity: 1; pointer-events: auto; }
 .update[hidden] { display: none; }
 .update.info { background: #2d2d33; color: #f2f2f7; font-weight: 500; }   /* grau = nur Auskunft */
 .update .btn { width: auto; padding: 8px 14px; font-size: 15px; background: #06240e; color: #fff; }
@@ -70,61 +76,91 @@ ab.
 `top: max(env(safe-area-inset-top), 12px)` ist kein Schmuck: Ohne das liegt das Banner auf einem
 iPhone unter der Dynamic Island.
 
-### Die Meldung steht immer am Kopf des Bildschirms
+### Es blendet ein, es springt nicht
 
-**Ein fester Ort, oben.** Das ist die Entscheidung des Auftraggebers (15.9.2026) und sie hat drei
-Gründe: Eine Meldung, die **die App selbst** auslöst, hat keinen Finger, an dem sie sich orientieren
-könnte – sie braucht einen Platz, den man kennt. iOS setzt seine eigenen Banner ebenfalls an den
-oberen Rand, die Stelle ist also gelernt. Und ein Ort, der sich je nach Anlass verschiebt, zwingt
-zum Suchen.
+Ein Banner, das hart erscheint und hart verschwindet, wirkt wie ein Fehler. Deshalb `opacity` mit
+Übergang und `hidden` nur als **Endzustand**: `display: none` lässt sich nicht animieren, also erst
+`hidden` entfernen, einen Reflow erzwingen, dann die Klasse `an` setzen – und beim Ausblenden
+umgekehrt, `hidden` erst nach Ablauf des Übergangs.
 
-Daraus folgt eine Anforderung an den **Auslöser**, nicht an das Banner: Die antippbare
-Versionsnummer gehört ebenfalls nach oben. Steht sie am Fuß der Seite, tippt man unten und die
-Antwort erscheint am anderen Ende des Bildschirms – auf einem großen Telefon übersieht man sie.
-Genau das war der Anlass für diesen Abschnitt.
+```js
+let ausTimer = null;
+function einblenden() {
+  clearTimeout(ausTimer);
+  updateEl.hidden = false; void updateEl.offsetWidth;   // Reflow, sonst läuft der Übergang nicht an
+  updateEl.classList.add('an');
+}
+function ausblenden() {
+  updateEl.classList.remove('an'); clearTimeout(ausTimer);
+  ausTimer = setTimeout(() => { if (!updateEl.classList.contains('an')) updateEl.hidden = true; }, 380);
+}
+```
 
-Geht das nicht, weil der Platz unten gebraucht wird, dreht diese Klasse das Banner an die andere
-Kante – gemessen am Auslöser, nicht am zuletzt berührten Punkt:
+Gemessen (Standort-Uhr 15.9.2026): Deckkraft 0,09 nach 60 ms, 1,00 nach 560 ms; beim Ausblenden
+zurück auf 0, danach `hidden`.
+
+### Die Meldung der App steht oben – die Antwort auf einen Tipp beim Auslöser
+
+**Zwei verschiedene Fälle, zwei Orte.** Das ist die Entscheidung des Auftraggebers (15.9.2026,
+nach dem Nachbau in der Standort-Uhr):
+
+- Eine Meldung, die **die App selbst** auslöst („neue Version ist da", „ist geladen"), hat keinen
+  Finger, an dem sie sich orientieren könnte – sie braucht einen Platz, den man kennt: **oben**. iOS
+  setzt seine eigenen Banner ebenfalls an den oberen Rand, die Stelle ist gelernt.
+- Die Antwort auf einen **Tipp** („ist aktuell", „Offline") erscheint **dort, wo getippt wurde** –
+  an der Kante, an der der Auslöser sitzt. Sonst tippt man unten und die Antwort kommt am anderen
+  Ende des Bildschirms; auf einem großen Telefon übersieht man sie.
+
+Daraus folgt **nicht**, dass der Auslöser nach oben muss. Der erste Entwurf dieses Abschnitts hatte
+das verlangt; in der Standort-Uhr führte das zu einer zweiten Versionsnummer im Kopf, und die hat das
+Bild der App zerstört. **Der Auslöser bleibt, wo das Design ihn hat** – in Zettel oben in der
+Überschrift, in der Standort-Uhr unten am Fuß. Das Banner dreht sich nach ihm:
 
 ```css
 .update.unten { top: auto; bottom: max(env(safe-area-inset-bottom), 12px); }
 ```
 
 ```js
-function bannerAnKante(ausloeser) {   // einmal beim Start und nach jedem Drehen aufrufen
+// Vor jedem Einblenden aufrufen: null = Meldung der App selbst (immer oben),
+// sonst das Element, das getippt wurde.
+function bannerAnKante(ausloeser) {
+  if (!ausloeser) { updateEl.classList.remove('unten'); return; }
   const r = ausloeser.getBoundingClientRect();
   updateEl.classList.toggle('unten', r.top + r.height / 2 > window.innerHeight / 2);
 }
 ```
 
-In Zettel wird das nicht gebraucht: Auslöser und Meldung sitzen beide oben.
+In Zettel greift die Klasse nie, weil der Auslöser oben sitzt. In der Standort-Uhr greift sie bei
+jedem Tipp auf die Versionszeile am Fuß.
 
 ```js
 const updateEl = document.getElementById('update');
 let infoTimer = null;
 
 // Graue Auskunft, verschwindet nach `sekunden` von selbst (0 = bleibt stehen)
-function showInfo(text, sekunden = 2) {
+function showInfo(text, sekunden = 2, ausloeser = null) {
+  bannerAnKante(ausloeser);
   updateEl.className = 'update info';
   document.getElementById('update-text').textContent = text;
   document.getElementById('update-go').hidden = true;
-  updateEl.hidden = false;
+  einblenden();
   clearTimeout(infoTimer);
   if (sekunden) infoTimer = setTimeout(() => {
-    if (updateEl.classList.contains('info')) updateEl.hidden = true;
+    if (updateEl.classList.contains('info')) ausblenden();
   }, sekunden * 1000);
 }
 
-// Grünes Banner mit Knopf
+// Grünes Banner mit Knopf – immer oben, es kommt von der App
 function zeigeBanner(text) {
+  bannerAnKante(null);
   updateEl.className = 'update';
   document.getElementById('update-text').textContent = text;
   document.getElementById('update-go').hidden = false;
-  updateEl.hidden = false;
+  einblenden();
 }
 
 // Antippen schließt eine Auskunft; der Knopf lädt sofort neu
-updateEl.addEventListener('click', () => { if (updateEl.classList.contains('info')) updateEl.hidden = true; });
+updateEl.addEventListener('click', () => { if (updateEl.classList.contains('info')) ausblenden(); });
 document.getElementById('update-go').addEventListener('click', () => { speichereAlles(); location.reload(); });
 ```
 
@@ -134,7 +170,7 @@ document.getElementById('update-go').addEventListener('click', () => { speichere
 |---|---|
 | `speichereAlles()` | deine Funktion, die den Zustand **sofort** sichert (in Zettel: `flush()`) |
 | `textfeld` | das Eingabefeld, in dem jemand gerade tippen könnte (mehrere: alle prüfen) |
-| `titelElement` | das Element, das die Prüfung von Hand auslöst (in Zettel die Überschrift) |
+| `titelElement` | das Element, das die Prüfung von Hand auslöst (in Zettel die Überschrift, in der Standort-Uhr die Versionszeile am Fuß) |
 | `'app.gesehen'` | ein eigener Schlüssel im localStorage, pro App verschieden |
 | `'meine-app'` | der Cache-Name im Service Worker, pro App verschieden |
 
@@ -193,6 +229,11 @@ Die drei Stellen, an denen es sonst hakt:
   heißt *nachfragen*, nicht *nicht speichern*; bei unverändertem Inhalt antwortet der Server mit
   304 und es fließen kaum Daten.
 
+**Vorsicht bei fremden Adressen, über die Daten laufen.** Der Zweig „Cache zuerst" ist für
+Schriften und Bibliotheken richtig. Spricht die App über fremde Adressen mit einer Datenbank
+(Firebase, ein API), darf der Worker die **nicht** anfassen – ein gecachter Datenbank-Abruf friert
+die App auf einem alten Stand ein. Die Standort-Uhr lässt deshalb alles Fremde unberührt durch.
+
 ## Baustein 2: eine Versionsmarke im HTML
 
 ```html
@@ -248,13 +289,14 @@ document.addEventListener('visibilitychange', () => {
 titelElement.addEventListener('click', () => checkForUpdate(true)); // (I)
 ```
 
-**Bewusst kein Takt.** Naheliegend wäre `setInterval(checkForUpdate, 60000)` – Zettel hatte das bis
-3.36 und hat es wieder ausgebaut. Der Grund ist gemessen: Jede Prüfung holt die **ganze**
-`index.html` – bei Zettel 275 KB roh, über die Leitung rund 87 KB –, um daraus sechs Zeichen zu
-lesen. Das sind **etwa 5 MB je Stunde offener App**, für einen Fall, den niemand braucht: Wer eine
-App benutzt, legt sie zwischendurch weg und holt sie zurück, und genau dann greift (H). Wer eine
-frisch ausgelieferte Fassung **sofort** sehen will – also der Entwickler beim Testen –, tippt auf
-(I). Baue den Takt nur ein, wenn du einen Fall hast, in dem beides nicht reicht.
+**Takt nur, wenn die Prüfung billig ist.** Naheliegend wäre `setInterval(checkForUpdate, 60000)` –
+Zettel hatte das bis 3.36 und hat es wieder ausgebaut. Der Grund ist gemessen: Jede Prüfung holt
+dort die **ganze** `index.html` – 275 KB roh, über die Leitung rund 87 KB –, um daraus sechs Zeichen
+zu lesen. Das sind **etwa 5 MB je Stunde offener App**, für einen Fall, den kaum jemand braucht:
+Wer eine App benutzt, legt sie zwischendurch weg und holt sie zurück, und genau dann greift (H).
+Anders liegt es, wenn die Prüfung eine kleine `version.json` liest (rund 20 Byte, in der
+Standort-Uhr): Dann kostet ein Minutentakt etwa 18 KB je Stunde, und ein Update erreicht auch eine
+App, die offen liegen bleibt. Die Standort-Uhr behält den Takt deshalb, Zettel nicht.
 
 - **(D) `cache: 'no-store'`** – diese eine Anfrage darf aus keinem Speicher beantwortet werden.
 - **(E) Regex auf den Quelltext** – die Anfrage holt die neue `index.html` als Text und liest die
@@ -267,11 +309,12 @@ frisch ausgelieferte Fassung **sofort** sehen will – also der Entwickler beim 
   ist fort. Zettel prüft `document.activeElement`.
 - **(H) `visibilitychange`** ist der Auslöser, der am meisten bringt: Er greift genau dann, wenn man
   die App aus dem Hintergrund zurückholt – der übliche Weg auf dem iPhone.
-- **(I) Ein Tipp auf den Titel** prüft von Hand und meldet auch, wenn **kein** Update da ist. Das
+- **(I) Ein Tipp auf den Auslöser** prüft von Hand und meldet auch, wenn **kein** Update da ist. Das
   ist wichtiger, als es klingt: Ohne diese Rückmeldung weiß man nie, ob die Prüfung funktioniert
   oder nur schweigt. **Und er muss sichtbar sein** – in Zettel war er über hundert Fassungen lang
   nur ein `title`-Attribut, das auf dem iPhone niemand sieht; der Auftraggeber kannte den Weg nicht.
-  Seit 3.37 ist die Versionsnummer daneben gepunktet unterstrichen.
+  Seit 3.37 ist die Versionsnummer gepunktet unterstrichen. **Er bleibt, wo das Design ihn hat** –
+  keine zweite Versionsnummer an anderer Stelle nur für den Tipp (siehe Baustein 0).
 
 ## Baustein 4: nach dem Update einmal sagen, was jetzt läuft
 
@@ -293,6 +336,10 @@ Zwei Feinheiten: Beim **allerersten** Start bleibt es still (`if (vorher)`), son
 einen neuen Nutzer mit einer Versionsmeldung. Und `localStorage` steht in Klammern von `try`, weil
 es in privaten Fenstern und in manchen Vorschau-Zusammenhängen fehlt.
 
+Folge beim Nachrüsten: Die **erste** Fassung, die diesen Baustein trägt, meldet sich nach dem Update
+noch nicht – keine ältere Fassung hat je `app.gesehen` gesetzt, für die App ist es ein Erststart.
+Erst der Sprung danach zeigt die Meldung. Das ist kein Fehler, verwirrt aber, wenn man es nicht weiß.
+
 ## Prüfliste: hat man es richtig gemacht?
 
 Der Reihe nach am Gerät durchgehen, nicht am Schreibtisch annehmen:
@@ -301,19 +348,18 @@ Der Reihe nach am Gerät durchgehen, nicht am Schreibtisch annehmen:
    abwarten, sonst prüft man gegen die alte Datei und hält den Mechanismus für kaputt).
 2. App aus dem Hintergrund zurückholen → Banner muss binnen Sekunden erscheinen.
 3. Nach dem Neuladen muss die neue Nummer im Kopf stehen **und** die Meldung einmal aufblitzen.
-4. Tipp auf den Titel bei aktueller Fassung → muss „ist aktuell" melden, nicht schweigen.
-5. Flugmodus an, App öffnen → muss weiterlaufen (Cache greift) und beim Tipp auf den Titel
+4. Tipp auf den Auslöser bei aktueller Fassung → muss „ist aktuell" melden, nicht schweigen.
+5. Flugmodus an, App öffnen → muss weiterlaufen (Cache greift) und beim Tipp auf den Auslöser
    „Offline" melden.
 6. Etwas eintippen, währenddessen ein Update ausliefern → es darf **nicht** mitten im Tippen neu
    laden, und die Eingabe darf nicht verloren gehen.
-7. App im Vordergrund liegen lassen und den Netzverkehr mitschreiben → es darf **nichts** fließen,
-   solange niemand etwas tut. Fließt jede Minute etwas, läuft irgendwo noch ein Takt.
-8. Auf die Versionsnummer tippen und dabei auf den Inhalt darunter schauen → er darf sich **nicht
+7. App im Vordergrund liegen lassen und den Netzverkehr mitschreiben → ohne Takt darf **nichts**
+   fließen; mit Takt nur die kleine Versionsdatei, nie die ganze Seite.
+8. Auf den Auslöser tippen und dabei auf den Inhalt darunter schauen → er darf sich **nicht
    bewegen**. Messbar: die Position eines Elements und `document.documentElement.scrollHeight` vor
    und während der Einblendung vergleichen; beides muss gleich bleiben.
-9. Steht die antippbare Versionsnummer oben, bei der Meldung? Wenn nicht, sieht man die Antwort
-   auf den eigenen Tipp womöglich gar nicht – dann entweder den Auslöser nach oben holen oder das
-   Banner mit `.unten` an die andere Kante drehen.
+9. Sitzt der Auslöser unten, muss die Antwort auf den Tipp **unten** erscheinen (`.unten`); die
+   Meldungen der App selbst stehen trotzdem oben. Beides mit Überblendung, nichts springt.
 
 ## Was nicht hilft
 
@@ -323,14 +369,22 @@ Der Reihe nach am Gerät durchgehen, nicht am Schreibtisch annehmen:
   offline läuft gar nichts mehr. Ein *Netz-zuerst*-Worker ist besser als keiner.
 - **`Cache-Control`-Header allein.** Sie helfen, ersetzen aber Baustein 3 nicht: Eine App, die im
   Hintergrund liegt, lädt von sich aus überhaupt nichts nach.
+- **Eine zweite Versionsnummer nur für den Tipp.** Sie löst das Ortsproblem der Antwort, aber auf
+  Kosten des Bildes – die Antwort gehört zum Auslöser, nicht der Auslöser zur Antwort.
 
 ## Am Gerät beobachtet (15.9.2026)
 
-Der Auftraggeber hat 3.35 → 3.36 mitgemacht, **während die App offen war** – also über den
-60-Sekunden-Takt, nicht über `visibilitychange`. Beide Meldungen kamen in der erwarteten Reihenfolge:
+Der Auftraggeber hat in Zettel 3.35 → 3.36 mitgemacht, **während die App offen war** – also über
+den damaligen 60-Sekunden-Takt, nicht über `visibilitychange`. Beide Meldungen kamen in der
+erwarteten Reihenfolge:
 
 1. grünes Banner **„Neue Version 3.36 ist da"** mit Knopf *Jetzt laden*,
 2. nach dem Neuladen graue Auskunft **„Version 3.36 ist geladen"**, dazu `v3.36` im Kopf.
+
+In der Standort-Uhr (v0.53 → v0.60 am selben Tag) dasselbe Bild, dazu zwei Lehren: Ein Banner im
+Textfluss schob die ganze Uhr nach unten (behoben mit `position: fixed`), und eine zusätzliche
+Versionsnummer im Kopf – eingebaut, um die Antwort auf den Tipp oben zu haben – wurde als Störung
+des Bildes sofort wieder entfernt. Seitdem antwortet das Banner an der Kante des Auslösers.
 
 Das ist der Beleg, dass die Kette in beiden Richtungen greift: Die App findet das Update von selbst,
 **und** sie sagt hinterher, was jetzt läuft. Genau dieses zweite Stück fehlt in den meisten
@@ -339,5 +393,7 @@ Anleitungen – und ohne es hält man ein angekommenes Update für ausgeblieben.
 ## Herkunft
 
 Alles Beschriebene läuft in `luperttrading-lab/Zettel` (`index.html`, `sw.js`) und ist dort durch
-Prüfungen in `tests/app_leiste.mjs` abgesichert. Baustein 4 kam am 12.9.2026 dazu, nachdem der
-Auftraggeber die klein gesetzte Versionsnummer im Kopf nicht wahrgenommen hatte.
+Prüfungen in `tests/app_leiste.mjs` abgesichert; der Nachbau mit Versionsdatei, Takt und
+`.unten`-Banner in `luperttrading-lab/weasley` (Standort-Uhr, ab v0.56). Baustein 4 kam am
+12.9.2026 dazu, nachdem der Auftraggeber die klein gesetzte Versionsnummer im Kopf nicht
+wahrgenommen hatte.

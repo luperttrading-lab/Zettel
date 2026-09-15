@@ -206,6 +206,32 @@ check('die Versionsnummer ist als antippbar gekennzeichnet',
   await page.evaluate(() => getComputedStyle(document.querySelector('header h1 small')).borderBottomStyle === 'dotted'));
 page.off('request', zaehler);
 
+// 3.38: Das Banner blendet ein statt aufzuspringen – aus der Standort-Uhr übernommen
+// (docs/UPDATE-MECHANIK.md). `display: none` ist nicht animierbar, deshalb trägt `hidden` nur den
+// Endzustand und die Klasse `an` die Deckkraft; ohne den erzwungenen Reflow liefe der Übergang nicht an.
+// Sauber zurücksetzen: Läuft aus einer früheren Prüfung noch ein Banner, ist `an` schon gesetzt
+// und es gäbe gar keinen Übergang zu messen.
+await page.evaluate(() => ausblenden());
+await page.waitForTimeout(600);
+await page.evaluate(() => showInfo('Probe', 0));
+await page.waitForTimeout(70);
+const frueh = await page.evaluate(() => +getComputedStyle(document.getElementById('update')).opacity);
+await page.waitForTimeout(500);
+const spaet = await page.evaluate(() => +getComputedStyle(document.getElementById('update')).opacity);
+check('das Banner blendet ein statt aufzuspringen', frueh < 0.6 && spaet > 0.95,
+  'nach 70 ms ' + frueh + ', nach 570 ms ' + spaet);
+const vorher = await page.evaluate(() => [Math.round(document.getElementById('note').getBoundingClientRect().y),
+  document.documentElement.scrollHeight]);
+check('auch während der Einblendung verschiebt sich nichts',
+  JSON.stringify(vorher) === JSON.stringify(await page.evaluate(() => {
+    const u = document.getElementById('update'); u.classList.remove('an');
+    const r = [Math.round(document.getElementById('note').getBoundingClientRect().y), document.documentElement.scrollHeight];
+    u.classList.add('an'); return r; })), JSON.stringify(vorher));
+await page.evaluate(() => ausblenden());
+await page.waitForTimeout(600);
+check('nach dem Ausblenden ist das Banner wieder hidden',
+  await page.evaluate(() => document.getElementById('update').hidden));
+
 const sw = await page.evaluate(() => document.documentElement.scrollWidth);
 check('scrollWidth ≤ 408 bei 390 px', sw <= 408, String(sw));
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));

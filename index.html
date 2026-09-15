@@ -443,11 +443,18 @@
     }
 
     /* --- Hinweis „Neue Version“ --- */
+    /* Überblendung statt hartem Erscheinen: ein Banner, das aufspringt, wirkt wie ein Fehler.
+       `display: none` lässt sich nicht animieren, deshalb trägt `hidden` nur den Endzustand und die
+       Klasse `an` die Deckkraft (siehe einblenden/ausblenden). Aus der Standort-Uhr übernommen,
+       docs/UPDATE-MECHANIK.md, 15.9.2026. */
     .update {
       position: fixed; left: 12px; right: 12px; top: max(env(safe-area-inset-top), 12px); z-index: 30;
       display: flex; align-items: center; justify-content: space-between; gap: 12px;
       background: #34c759; color: #06240e; padding: 12px 14px; border-radius: 14px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.5);
+      opacity: 0; transition: opacity .35s ease; pointer-events: none;
     }
+    .update.an { opacity: 1; pointer-events: auto; }
+    @media (prefers-reduced-motion: reduce) { .update { transition: none; } }
     .update[hidden] { display: none; }
     .update.info { background: #2d2d33; color: var(--fg); font-weight: 500; }
     header h1 { cursor: pointer; }
@@ -795,7 +802,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.37';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.38';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -2827,7 +2834,7 @@
       bgGen++;   // ein noch laufendes Dekodieren darf das Foto nicht wiederbeleben
       try { localStorage.removeItem(BG_KEY); } catch {}
       bgImage = null; bgKennung = ''; bgFehler = false; bgReady = Promise.resolve(); bgAnzeigen(null); updatePinBadge();
-      if (!updateEl.hidden && $('update-text').textContent === BG_FEHLER) updateEl.hidden = true;
+      if (!updateEl.hidden && $('update-text').textContent === BG_FEHLER) ausblenden();
       if (meldung === BG_FEHLER) zeigeMeldung('');
       showInfo('Hintergrundfoto entfernt');
     });
@@ -4080,23 +4087,35 @@
     let checking = false, announced = null;
     const updateEl = $('update');
     // Meldung im Banner (z. B. „ist aktuell“): bleibt stehen, bis sie angetippt wird
-    let infoTimer = null;
+    let infoTimer = null, ausTimer = null;
+    // Erst `hidden` weg, dann einen Reflow erzwingen, dann die Klasse – ohne den Reflow springt der
+    // Browser direkt auf den Endwert und der Übergang läuft gar nicht an.
+    function einblenden() {
+      clearTimeout(ausTimer);
+      updateEl.hidden = false; void updateEl.offsetWidth;
+      updateEl.classList.add('an');
+    }
+    // `hidden` erst nach dem Übergang, sonst verschwindet das Banner schlagartig
+    function ausblenden() {
+      updateEl.classList.remove('an'); clearTimeout(ausTimer);
+      ausTimer = setTimeout(() => { if (!updateEl.classList.contains('an')) updateEl.hidden = true; }, 380);
+    }
     function showInfo(text, sekunden = 2) {
       updateEl.className = 'update info'; $('update-text').textContent = text; $('update-go').hidden = true;
-      updateEl.hidden = false;
+      einblenden();
       // von selbst wieder weg – sonst steht „ist aktuell“ dort, bis man es wegtippt
       clearTimeout(infoTimer);
       // sekunden = 0: bleibt stehen (der Foto-Fehler beschreibt einen Zustand, keinen Fehlgriff)
-      if (sekunden) infoTimer = setTimeout(() => { if (updateEl.classList.contains('info')) updateEl.hidden = true; }, sekunden * 1000);
+      if (sekunden) infoTimer = setTimeout(() => { if (updateEl.classList.contains('info')) ausblenden(); }, sekunden * 1000);
     }
-    updateEl.addEventListener('click', e => { if (updateEl.classList.contains('info')) updateEl.hidden = true; });
+    updateEl.addEventListener('click', e => { if (updateEl.classList.contains('info')) ausblenden(); });
     // Neue Version: Banner mit Knopf. Nach bewusster Prüfung (Tipp auf den Titel) lädt die App nach 1,5 s selbst neu;
     // beim automatischen Fund nur, wenn gerade nicht getippt wird.
     function announceUpdate(v, manual) {
       if (announced === v && !manual) return;
       announced = v; flush();
       updateEl.className = 'update'; $('update-text').textContent = 'Neue Version ' + v + ' ist da'; $('update-go').hidden = false;
-      updateEl.hidden = false;
+      einblenden();
       const typing = document.activeElement === textEl.el;
       if (manual || !typing) setTimeout(() => location.reload(), manual ? 1500 : 3000);
     }
