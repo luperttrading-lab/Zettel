@@ -1,14 +1,16 @@
 ---
-name: pwa-update
+name: app-update-iphone
 description: >
-  Sorgt dafür, dass eine Web-App auf dem iPhone (PWA vom Home-Bildschirm, GitHub Pages / Vercel /
-  Netlify) neue Fassungen wirklich erreicht – und dass der Nutzer merkt, dass ein Update angekommen
-  ist. Enthält Service-Worker (Netz-zuerst), Versionsmarke, aktive Prüfung, Meldebanner samt CSS und
-  eine Prüfliste am Gerät. Nutze diese Skill immer, wenn es um Updates, Caching, Service Worker,
-  APP_VERSION, „die App holt die neue Version nicht", ein Update-Banner, „ist aktuell"-Meldungen,
-  Offline-Betrieb oder das Ausliefern einer Web-App auf iOS geht – auch wenn nicht ausdrücklich nach
-  einem Update-Mechanismus gefragt wird. Ebenso beim Anlegen einer neuen PWA: der Mechanismus gehört
-  von Anfang an hinein, nachrüsten ist teurer.
+  Sorgt dafür, dass eine Web-App auf dem iPhone neue Fassungen wirklich erreicht – gemeint ist eine
+  Seite, die über „Teilen → Zum Home-Bildschirm“ installiert wird und dort wie eine App liegt
+  (Fachwort: PWA, Progressive Web App; ausgeliefert über GitHub Pages, Vercel oder Netlify). Und
+  dafür, dass der Nutzer merkt, dass ein Update angekommen ist. Enthält Service-Worker
+  (Netz-zuerst), Versionsmarke, aktive Prüfung, Meldebanner samt CSS und eine Prüfliste am Gerät.
+  Nutze diese Skill immer, wenn es um Updates, Caching, Service Worker, APP_VERSION, „die App holt
+  die neue Version nicht“, ein Update-Banner, „ist aktuell“-Meldungen, Offline-Betrieb oder das
+  Ausliefern einer Web-App auf iOS oder Android geht – auch wenn nicht ausdrücklich nach einem
+  Update-Mechanismus gefragt wird. Ebenso beim Anlegen einer neuen solchen App: der Mechanismus
+  gehört von Anfang an hinein, nachrüsten ist teurer.
 ---
 
 # Updates, die auf dem iPhone wirklich ankommen
