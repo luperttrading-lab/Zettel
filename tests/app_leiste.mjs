@@ -178,6 +178,34 @@ check('die Nummer steht außerdem dauerhaft im Kopf',
   await page.evaluate(() => document.getElementById('ver').textContent === 'v' + APP_VERSION),
   await page.evaluate(() => document.getElementById('ver').textContent));
 
+// 3.37: **Kein Takt mehr.** Bis 3.36 fragte die App jede Minute nach einer neuen Fassung und holte
+// dabei jedes Mal die ganze index.html (275 KB roh, ~87 KB über die Leitung) – rund 5 MB je Stunde
+// offener App, für einen Fall, den niemand braucht. Geprüft wird jetzt beim Öffnen, beim Zurückholen
+// in den Vordergrund und auf Tipp (Auftraggeber, 15.9.2026: „dann brauchen wir kein dauerndes
+// Aktualisieren – beim Schließen und beim Öffnen reicht").
+let abrufe = 0;
+const zaehler = r => { if (r.url().includes('index.html')) abrufe++; };
+page.on('request', zaehler);
+await page.waitForTimeout(300); abrufe = 0;
+await page.waitForTimeout(3500);
+check('im Vordergrund fragt die App von sich aus nicht nach', abrufe === 0, String(abrufe) + ' Abrufe');
+await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+  document.dispatchEvent(new Event('visibilitychange')); });
+await page.waitForTimeout(600);
+check('im Hintergrund erst recht nicht', abrufe === 0, String(abrufe) + ' Abrufe');
+await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+  document.dispatchEvent(new Event('visibilitychange')); });
+await page.waitForTimeout(1200);
+check('beim Zurückholen in den Vordergrund wird geprüft', abrufe === 1, String(abrufe) + ' Abrufe');
+const vorTipp = abrufe;
+await page.click('header h1'); await page.waitForTimeout(1200);
+check('ein Tipp auf den Kopf prüft von Hand und meldet auch „ist aktuell"',
+  abrufe - vorTipp === 1 && /ist aktuell/.test(await page.evaluate(() => document.getElementById('update-text').textContent)),
+  await page.evaluate(() => document.getElementById('update-text').textContent));
+check('die Versionsnummer ist als antippbar gekennzeichnet',
+  await page.evaluate(() => getComputedStyle(document.querySelector('header h1 small')).borderBottomStyle === 'dotted'));
+page.off('request', zaehler);
+
 const sw = await page.evaluate(() => document.documentElement.scrollWidth);
 check('scrollWidth ≤ 408 bei 390 px', sw <= 408, String(sw));
 check('keine Fehler', errors.length === 0, JSON.stringify(errors));

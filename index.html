@@ -58,7 +58,10 @@
     }
     header { width: 100%; max-width: 420px; display: flex; justify-content: space-between; align-items: baseline; padding: 0 2px; }
     header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .02em; }
-    header h1 small { font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 6px; letter-spacing: 0; }
+    /* Gepunktete Linie: der einzige Hinweis darauf, dass ein Tipp auf den Kopf auf Updates prüft.
+       Ohne sie kannte der Auftraggeber den Weg nach über hundert Fassungen nicht (15.9.2026). */
+    header h1 small { font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 6px; letter-spacing: 0;
+      border-bottom: 1px dotted var(--muted); padding-bottom: 1px; }
     header span { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
     /* Zettelwahl in der Kopfzeile: kostet keine eigene Zeile, ist aber immer sichtbar */
     /* Der Reiter ist eine **Miniatur seines Zettels**: Papierfarbe, Tinte, und wenn ein Bildmagnet
@@ -792,7 +795,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.36';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.37';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -4065,8 +4068,15 @@
     }
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
-    // Neue Version auf dem Server? Geprüft beim Öffnen, beim Zurückholen in den Vordergrund und alle 60 s,
-    // solange die App sichtbar ist. Dann Banner oben; wird gerade nicht getippt, lädt die App nach 3 s selbst neu.
+    // Neue Version auf dem Server? Geprüft **beim Öffnen und beim Zurückholen in den Vordergrund** –
+    // sonst nie von selbst. Dann Banner oben; wird gerade nicht getippt, lädt die App nach 3 s selbst neu.
+    //
+    // **Kein Takt mehr (seit 3.37).** Bis 3.36 lief zusätzlich `setInterval(checkForUpdate, 60000)`.
+    // Am 15.9.2026 nachgemessen: jede Prüfung holt die **ganze** index.html – 275 KB roh, über die
+    // Leitung rund 87 KB –, um daraus sechs Zeichen zu lesen. Das sind ~5 MB je Stunde offener App,
+    // für einen Fall, den niemand braucht: Wer die App benutzt, legt sie zwischendurch weg und holt
+    // sie zurück, und genau dann greift `visibilitychange`. Wer eine frisch ausgelieferte Fassung
+    // **sofort** sehen will (also der Entwickler beim Testen), tippt auf den Titel.
     let checking = false, announced = null;
     const updateEl = $('update');
     // Meldung im Banner (z. B. „ist aktuell“): bleibt stehen, bis sie angetippt wird
@@ -4115,6 +4125,7 @@
     // Tipp auf „Zettel“ oben links: sofort prüfen
     const titleEl = document.querySelector('header h1');
     titleEl.setAttribute('role', 'button'); titleEl.title = 'Auf neue Version prüfen';
+    titleEl.setAttribute('aria-label', 'Zettel – tippen, um auf eine neue Version zu prüfen');
     titleEl.addEventListener('click', () => checkForUpdate(true));
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'visible') return;
@@ -4123,7 +4134,6 @@
       checkForUpdate();
     });
     window.addEventListener('pageshow', () => setTimeout(checkForUpdate, 800));
-    setInterval(checkForUpdate, 60000);
   </script>
 </body>
 </html>

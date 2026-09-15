@@ -196,9 +196,16 @@ window.addEventListener('pageshow', () => setTimeout(checkForUpdate, 800));
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') checkForUpdate();     // (H) der wichtigste
 });
-setInterval(checkForUpdate, 60000);
 titelElement.addEventListener('click', () => checkForUpdate(true)); // (I)
 ```
+
+**Bewusst kein Takt.** Naheliegend wäre `setInterval(checkForUpdate, 60000)` – Zettel hatte das bis
+3.36 und hat es wieder ausgebaut. Der Grund ist gemessen: Jede Prüfung holt die **ganze**
+`index.html` – bei Zettel 275 KB roh, über die Leitung rund 87 KB –, um daraus sechs Zeichen zu
+lesen. Das sind **etwa 5 MB je Stunde offener App**, für einen Fall, den niemand braucht: Wer eine
+App benutzt, legt sie zwischendurch weg und holt sie zurück, und genau dann greift (H). Wer eine
+frisch ausgelieferte Fassung **sofort** sehen will – also der Entwickler beim Testen –, tippt auf
+(I). Baue den Takt nur ein, wenn du einen Fall hast, in dem beides nicht reicht.
 
 - **(D) `cache: 'no-store'`** – diese eine Anfrage darf aus keinem Speicher beantwortet werden.
 - **(E) Regex auf den Quelltext** – die Anfrage holt die neue `index.html` als Text und liest die
@@ -213,7 +220,9 @@ titelElement.addEventListener('click', () => checkForUpdate(true)); // (I)
   die App aus dem Hintergrund zurückholt – der übliche Weg auf dem iPhone.
 - **(I) Ein Tipp auf den Titel** prüft von Hand und meldet auch, wenn **kein** Update da ist. Das
   ist wichtiger, als es klingt: Ohne diese Rückmeldung weiß man nie, ob die Prüfung funktioniert
-  oder nur schweigt.
+  oder nur schweigt. **Und er muss sichtbar sein** – in Zettel war er über hundert Fassungen lang
+  nur ein `title`-Attribut, das auf dem iPhone niemand sieht; der Auftraggeber kannte den Weg nicht.
+  Seit 3.37 ist die Versionsnummer daneben gepunktet unterstrichen.
 
 ## Baustein 4: nach dem Update einmal sagen, was jetzt läuft
 
@@ -248,6 +257,8 @@ Der Reihe nach am Gerät durchgehen, nicht am Schreibtisch annehmen:
    „Offline" melden.
 6. Etwas eintippen, währenddessen ein Update ausliefern → es darf **nicht** mitten im Tippen neu
    laden, und die Eingabe darf nicht verloren gehen.
+7. App im Vordergrund liegen lassen und den Netzverkehr mitschreiben → es darf **nichts** fließen,
+   solange niemand etwas tut. Fließt jede Minute etwas, läuft irgendwo noch ein Takt.
 
 ## Was nicht hilft
 
