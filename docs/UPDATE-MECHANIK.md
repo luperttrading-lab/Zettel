@@ -47,6 +47,26 @@ Version da" (mit Knopf), **grau** für eine bloße Auskunft wie „ist geladen".
 .update .btn { width: auto; padding: 8px 14px; font-size: 15px; background: #06240e; color: #fff; }
 ```
 
+### Das Banner muss **überlagern**, nicht schieben
+
+Zwei Zeilen im CSS sind dafür verantwortlich, und beide werden beim Nachbau gern verändert:
+
+- **`position: fixed`** – das Banner liegt *über* der Seite und nimmt im Textfluss keinen Platz ein.
+  Steht es stattdessen im Fluss (`static`, der Vorgabewert) oder auf `sticky`, **schiebt es beim
+  Erscheinen den ganzen Inhalt nach unten** und beim Verschwinden wieder hoch. Genau das darf nicht
+  passieren: Man tippt auf die Versionsnummer, um etwas nachzusehen – und die Seite springt unter dem
+  Finger weg. Aus demselben Grund gehört das Element **direkt in den `<body>`**, nicht in den
+  `<header>` oder eine andere Box mit eigenem Fluss.
+- **`.update[hidden] { display: none; }`** – ohne diese Zeile ist das Banner **immer sichtbar**. Das
+  eingebaute `hidden`-Attribut setzt nur `display: none` mit sehr geringer Spezifität, und das
+  `display: flex` der Klasse gewinnt. Ein Klassiker, der beim Testen sofort auffällt – aber nur, wenn
+  man daran denkt, dass er existiert.
+
+Nachgemessen an Zettel (15.9.2026, iPhone-Maße 393 × 852): Position des Kopfes, des Zettels und der
+Farbreihe sowie die gesamte Scrollhöhe sind **ohne Banner, mit grauer Auskunft und mit grünem
+Banner identisch** – 856 px Scrollhöhe in allen drei Fällen, keine Koordinate weicht um einen Pixel
+ab.
+
 `top: max(env(safe-area-inset-top), 12px)` ist kein Schmuck: Ohne das liegt das Banner auf einem
 iPhone unter der Dynamic Island.
 
@@ -259,6 +279,9 @@ Der Reihe nach am Gerät durchgehen, nicht am Schreibtisch annehmen:
    laden, und die Eingabe darf nicht verloren gehen.
 7. App im Vordergrund liegen lassen und den Netzverkehr mitschreiben → es darf **nichts** fließen,
    solange niemand etwas tut. Fließt jede Minute etwas, läuft irgendwo noch ein Takt.
+8. Auf die Versionsnummer tippen und dabei auf den Inhalt darunter schauen → er darf sich **nicht
+   bewegen**. Messbar: die Position eines Elements und `document.documentElement.scrollHeight` vor
+   und während der Einblendung vergleichen; beides muss gleich bleiben.
 
 ## Was nicht hilft
 
