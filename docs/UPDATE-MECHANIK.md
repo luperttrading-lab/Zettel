@@ -70,36 +70,34 @@ ab.
 `top: max(env(safe-area-inset-top), 12px)` ist kein Schmuck: Ohne das liegt das Banner auf einem
 iPhone unter der Dynamic Island.
 
-### Das Banner gehört an die Kante, die dem Auslöser am nächsten liegt
+### Die Meldung steht immer am Kopf des Bildschirms
 
-Oben ist nur richtig, solange der Auslöser oben sitzt. Steht die Versionsnummer **unten** auf der
-Seite – wie in einer anderen App des Auftraggebers –, tippt man unten und die Antwort erscheint am
-anderen Ende des Bildschirms. Auf einem großen Telefon übersieht man sie schlicht.
+**Ein fester Ort, oben.** Das ist die Entscheidung des Auftraggebers (15.9.2026) und sie hat drei
+Gründe: Eine Meldung, die **die App selbst** auslöst, hat keinen Finger, an dem sie sich orientieren
+könnte – sie braucht einen Platz, den man kennt. iOS setzt seine eigenen Banner ebenfalls an den
+oberen Rand, die Stelle ist also gelernt. Und ein Ort, der sich je nach Anlass verschiebt, zwingt
+zum Suchen.
 
-Die Lösung ist nicht „beim Finger aufgehen": Eine Meldung, die **die App selbst** auslöst (sie hat
-ein Update gefunden), hat keinen Finger, an dem sie sich orientieren könnte, und sie soll immer am
-selben, erwarteten Ort stehen. Richtig ist die Mitte zwischen beidem – **die nähere Bildschirmkante,
-gemessen am Auslöser**:
+Daraus folgt eine Anforderung an den **Auslöser**, nicht an das Banner: Die antippbare
+Versionsnummer gehört ebenfalls nach oben. Steht sie am Fuß der Seite, tippt man unten und die
+Antwort erscheint am anderen Ende des Bildschirms – auf einem großen Telefon übersieht man sie.
+Genau das war der Anlass für diesen Abschnitt.
+
+Geht das nicht, weil der Platz unten gebraucht wird, dreht diese Klasse das Banner an die andere
+Kante – gemessen am Auslöser, nicht am zuletzt berührten Punkt:
 
 ```css
-/* Vorgabe ist oben (siehe CSS weiter oben); diese Klasse dreht es nach unten */
 .update.unten { top: auto; bottom: max(env(safe-area-inset-bottom), 12px); }
 ```
 
 ```js
-// Einmal beim Start und nach jedem Drehen des Geräts aufrufen
-function bannerAnKante(ausloeser) {
+function bannerAnKante(ausloeser) {   // einmal beim Start und nach jedem Drehen aufrufen
   const r = ausloeser.getBoundingClientRect();
   updateEl.classList.toggle('unten', r.top + r.height / 2 > window.innerHeight / 2);
 }
-bannerAnKante(titelElement);
-window.addEventListener('resize', () => bannerAnKante(titelElement));
 ```
 
-Maßgeblich ist der **manuelle** Auslöser (die antippbare Versionsnummer), nicht die Stelle, an der
-zuletzt getippt wurde. So landet die Meldung immer am selben Fleck – und zwar an dem, den man beim
-Tippen ohnehin ansieht. In Zettel ändert das nichts, weil der Auslöser oben im Kopf sitzt; der Code
-steht hier für alle, bei denen er woanders liegt.
+In Zettel wird das nicht gebraucht: Auslöser und Meldung sitzen beide oben.
 
 ```js
 const updateEl = document.getElementById('update');
@@ -313,8 +311,9 @@ Der Reihe nach am Gerät durchgehen, nicht am Schreibtisch annehmen:
 8. Auf die Versionsnummer tippen und dabei auf den Inhalt darunter schauen → er darf sich **nicht
    bewegen**. Messbar: die Position eines Elements und `document.documentElement.scrollHeight` vor
    und während der Einblendung vergleichen; beides muss gleich bleiben.
-9. Sitzt die antippbare Versionsnummer in der unteren Bildschirmhälfte? Dann muss die Meldung
-   **unten** erscheinen, nicht oben – sonst antwortet die App am anderen Ende des Bildschirms.
+9. Steht die antippbare Versionsnummer oben, bei der Meldung? Wenn nicht, sieht man die Antwort
+   auf den eigenen Tipp womöglich gar nicht – dann entweder den Auslöser nach oben holen oder das
+   Banner mit `.unten` an die andere Kante drehen.
 
 ## Was nicht hilft
 
