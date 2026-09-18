@@ -802,7 +802,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.38';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.39';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -1853,6 +1853,11 @@
     // zettelTabs schon beim Start auf, und eine let-Deklaration weiter unten liegt dann noch in der
     // zeitlichen Totzone – der Fehler brach die ganze Anlaufphase ab (vierter Fall dieser Falle).
     let tabsKennung = null;
+
+    // Gemerkte Schirmhoehe (siehe schirmMass). Aus demselben Grund hier oben: targetCanvas laeuft
+    // schon waehrend der Anlaufphase, eine let-Deklaration weiter unten laege dann in der Totzone.
+    let schirmMerk = null, schirmRoh = 0, schirmKorr = false;
+    try { schirmMerk = JSON.parse(localStorage.getItem('zettel.schirm') || 'null'); } catch (e) {}
     function applyColor() {
       const c = COLORS[state.color];
       noteEl.style.setProperty('--paper', c.paper);
@@ -3256,11 +3261,45 @@
       tablet: (w, h) => ({ noteW: w * 0.60, maxNoteH: h * 0.42, cy: h * 0.61 }),
     };
 
+    // **Die Schirmmaße sind nicht verlässlich.** iOS meldet `screen` gelegentlich eine zu kleine Höhe –
+    // am 8.9.2026 gemessen: 632 statt 852, das Bild wurde dadurch 1179 × 1896 statt 1179 × 2556.
+    // Ein zu kurzes Bild bläst iOS formatfüllend auf; dann ragen die Zettel über den Rand und müssen
+    // von Hand zurechtgezogen werden – genau das, was der Auftraggeber „von alleine rausgezoomt“ nennt.
+    // Zwei Absicherungen, beide nötig:
+    // Die Absicherung ist ein **Gedächtnis**: der größte je gesehene Wert steht im localStorage und hebt
+    // eine zu kleine Messung an. Ändert sich die **Breite** (Anzeigezoom in den iOS-Einstellungen),
+    // wird neu gelernt statt hochgerechnet; misst `screen` wieder richtig, wächst der Merkwert von
+    // selbst mit – die Korrektur heilt sich also nach oben.
+    // **Kein Quervergleich mit dem Fenster.** Naheliegend wäre, `innerHeight` oder `outerHeight` als
+    // zweite Meinung zu nehmen. Gemessen (Chromium, Mobilmodus, Viewport 393 × 852): `innerHeight`
+    // meldet 883 und `innerWidth` 407, beides zu groß, während `outerHeight` stimmt – auf iOS kann es
+    // genau umgekehrt sein. Eine Quelle, die zu **groß** misst, macht das Bild zu lang, und das
+    // beschneidet iOS oben und unten: derselbe Schaden andersherum. Keine Fensterquelle ist es wert.
+    // Zwei Schranken: der gemerkte Wert muss die aktuelle Messung um mehr als 2 % schlagen (sonst
+    // friert Messrauschen ein) und darf das Seitenverhältnis 2,4 nicht sprengen – kein iPhone ist
+    // schmaler als 1:2,23.
+    // **Was das nicht kann:** Ist die allererste Messung nach der Installation schon falsch, lernt die
+    // App den falschen Wert. Sie heilt beim nächsten richtigen Start, aber das erste Bild ist zu kurz.
+    const SCHIRM_KEY = 'zettel.schirm', SCHIRM_VERH = 2.4, SCHIRM_SCHWELLE = 1.02;
+    function schirmMass() {
+      const w = Math.min(screen.width, screen.height);
+      const roh = Math.max(screen.width, screen.height);
+      let h = roh;
+      if (schirmMerk && schirmMerk.w === w && schirmMerk.h > roh * SCHIRM_SCHWELLE
+          && schirmMerk.h / w <= SCHIRM_VERH) h = schirmMerk.h;
+      if (!schirmMerk || schirmMerk.w !== w || schirmMerk.h !== h) {
+        schirmMerk = { w, h };
+        try { localStorage.setItem(SCHIRM_KEY, JSON.stringify(schirmMerk)); } catch (e) {}
+      }
+      schirmRoh = roh; schirmKorr = h !== roh;
+      return { w, h };
+    }
+
     // Zielgerät: Telefon (Verhältnis ≥ 1,6) = Hochformat in Display-Auflösung,
     // Tablet = Quadrat mit der langen Kante (passt in beiden Ausrichtungen).
     function targetCanvas() {
       const dpr = Math.min(window.devicePixelRatio || 1, 4);
-      const sw = Math.min(screen.width, screen.height), sh = Math.max(screen.width, screen.height);
+      const { w: sw, h: sh } = schirmMass();
       const isTablet = sh / sw < 1.6;
       return isTablet
         ? { w: Math.round(sh * dpr), h: Math.round(sh * dpr), layout: 'tablet' }
@@ -4066,6 +4105,7 @@
     {
       const t = targetCanvas();
       $('bildmass').textContent = t.w + ' × ' + t.h + ' (' + t.layout + ')'
+        + (schirmKorr ? ' · KORRIGIERT, screen meldete ' + schirmRoh : '')
         + ' · screen ' + screen.width + '×' + screen.height
         + ' · avail ' + screen.availWidth + '×' + screen.availHeight
         + ' · innen ' + window.innerWidth + '×' + window.innerHeight
