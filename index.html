@@ -823,7 +823,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.41';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.42';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -3361,8 +3361,16 @@
         const longest = chunksOf(p.slice(mk.length)).map(c => c.s).reduce((a, b) => (measureCtx.measureText(b).width > measureCtx.measureText(a).width ? b : a), '');
         return { mk, longest };
       });
-      const minFs = noteW / 28;           // absolute Untergrenze
-      const paraFloor = noteW / 16;       // bis hierhin darf die Schrift schrumpfen, damit Absätze einzeilig bleiben
+      // **Die Schriftgröße hängt an der Layoutbreite, nicht an der Zettelbreite** (3.42, Wunsch des
+      // Auftraggebers: „dass sich bei der Zettelgröße die Schriftgröße nicht automatisch mit ändert“).
+      // Bis 3.41 waren Startwert und Grenzen an `noteW` gebunden; ein Zettel auf 70 % bekam damit
+      // zwangsläufig 70 % Schrift (gemessen: 61 → 42 px). Jetzt ist `bezugW` die volle Layoutbreite –
+      // die Schrift bleibt gleich groß, und was nicht mehr in die Zeile passt, **bricht um**. Der Zettel
+      // wird dadurch schmaler und höher statt kleiner. Anders geht es nicht: schmaleres Papier bei
+      // gleicher Schrift heißt mehr Zeilen, das ist keine Einstellungsfrage, sondern Arithmetik.
+      const bezugW = Math.round(layout.noteW);
+      const minFs = bezugW / 28;          // absolute Untergrenze
+      const paraFloor = bezugW / 16;      // bis hierhin darf die Schrift schrumpfen, damit Absätze einzeilig bleiben
       const titleF = state.title ? TITLE_F[state.titleSize] : 1;
       const fontAt = f => `${weight} ${f}px ${family}`;
       const fontOf = (f, pi) => fontAt(Math.round(f * (state.title && pi === 0 ? titleF : 1)));
@@ -3376,7 +3384,10 @@
       // darauf, wird der Zettel unten abgeschnitten statt halb leer zu bleiben (state.noteFit); die
       // Schriftgröße bleibt davon unberührt, sie hängt an der Breite. Wer die alte Form will, schaltet
       // im Fenster *Lage im Bild* auf „quadratisch“ zurück.
-      const noteHMax = Math.round(Math.min(noteW, layout.maxNoteH));
+      // Obergrenze der Höhe seit 3.42 ebenfalls an der **Layoutbreite**: ein schmaler Zettel muss hoch
+      // werden dürfen, sonst liefe der umgebrochene Text über. „Quadratisch wie ein Haftzettel“ gilt
+      // damit für den Zettel in voller Breite; wer ihn schmaler stellt, bekommt Hochformat.
+      const noteHMax = Math.round(Math.min(bezugW, layout.maxNoteH));
       // Nur was oben an der Kante sitzt, drückt den Text nach unten – ein Magnet in der Blattmitte
       // nicht, der Text läuft unter ihm durch. Dieselbe Funktion nutzt der Server (lib/fasteners.js).
       const insetOf = H => Math.round(pad * fastenerInset(befPixel(noteW, H, pad), noteW, H, pad));
@@ -3412,7 +3423,7 @@
                  noteH: noteHMax, inset, textTop: pad + inset, titleGap: 0, titleF: 1, raster: 0,
                  ueber: 0, overflow: false };
       }
-      let fs = Math.round(noteW / 7), lines;
+      let fs = Math.round(bezugW / 7), lines;
       // 1) Kein Wort wird hart getrennt: Schrift so weit verkleinern, bis das längste Wort in eine Zeile passt.
       while (!wordFits(fs) && fs > minFs) fs = Math.round(fs * 0.94);
       // 2) Jeder Absatz möglichst auf einer Zeile, aber nicht unter paraFloor.

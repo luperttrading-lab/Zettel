@@ -18,7 +18,7 @@ await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(500);
 const mass = () => page.evaluate(() => {
   const t = targetCanvas(), f = fitNote(t.w, t.h, t.layout, noteText());
   const n = document.getElementById('note') || document.querySelector('.note');
-  return { noteW: f.noteW, fs: f.fs, zeilen: f.lines.length, vorschau: Math.round(n.getBoundingClientRect().width),
+  return { noteW: f.noteW, fs: f.fs, zeilen: f.lines.length, ueberlauf: f.overflow, vorschau: Math.round(n.getBoundingClientRect().width),
            rZettel: Number(document.getElementById('notesize').value), rSchrift: Number(document.getElementById('fontscale').value),
            rLage: Number((document.getElementById('lage-size') || {}).value || 0) };
 });
@@ -34,6 +34,13 @@ check('Beide Regler stehen auf 100 %', start.rZettel === 100 && start.rSchrift =
 await stelle('notesize', 70); await page.waitForTimeout(350);
 const nurZettel = await mass();
 check('Zettelregler ändert die Breite', nurZettel.noteW < start.noteW * 0.75, `${start.noteW} → ${nurZettel.noteW}`);
+// Seit 3.42 hängt die Schriftgröße an der Layoutbreite, nicht am Zettel. Sie fällt damit **nicht mehr
+// proportional** mit der Breite (das wären hier 75 → 52); gemessen bleibt sie bei 59, weil die Regel
+// „jeder Absatz möglichst einzeilig" sie bis paraFloor = Layoutbreite/16 drückt und dort hält.
+// Ganz konstant ist sie also nicht – wohl aber unabhängig vom Reglerwert nach unten begrenzt.
+check('… und hält die Schrift über dem proportionalen Wert',
+  nurZettel.fs > start.fs * 0.7 * 1.05, `${start.fs} → ${nurZettel.fs}, proportional wären ${Math.round(start.fs * 0.7)}`);
+check('… der Text bricht dafür um', nurZettel.zeilen > start.zeilen, `${start.zeilen} → ${nurZettel.zeilen} Zeilen`);
 check('… und die Vorschau folgt ihm', nurZettel.vorschau < start.vorschau * 0.8, `${start.vorschau} → ${nurZettel.vorschau}`);
 check('… der Schriftregler bleibt stehen', nurZettel.rSchrift === 100, String(nurZettel.rSchrift));
 check('… und beide Größenregler zeigen dasselbe', nurZettel.rZettel === 70 && nurZettel.rLage === 70, `${nurZettel.rZettel} / ${nurZettel.rLage}`);
@@ -52,10 +59,9 @@ check('… und die Vorschau auch', nurSchrift.vorschau === start.vorschau, `${st
 // Beide zusammen: die Wirkungen addieren sich, ohne sich zu stören
 await stelle('notesize', 70); await page.waitForTimeout(350);
 const beide = await mass();
-check('Beide zusammen: schmaler UND kleinere Schrift',
+check('Beide zusammen: die Breite vom einen, die Schrift vom anderen',
   beide.noteW === nurZettel.noteW && beide.fs < nurZettel.fs, `${beide.noteW} px, Schrift ${beide.fs} gegen ${nurZettel.fs}`);
-check('Zeilenzahl bleibt in allen vier Stellungen 3',
-  [start, nurZettel, nurSchrift, beide].every(m => m.zeilen === 3), [start, nurZettel, nurSchrift, beide].map(m => m.zeilen).join(', '));
+check('Nichts läuft über', [start, nurZettel, nurSchrift, beide].every(m => !m.ueberlauf), 'overflow');
 
 // Der Regler im Fenster „Lage im Bild" zieht die Hauptseite nach
 await page.click('#lagebtn'); await page.waitForTimeout(400);
