@@ -107,13 +107,16 @@
     /* --- der Zettel --- */
     .note {
       /* --notez schrumpft die Vorschau so weit, dass die Seite ohne Scrollen auf den Bildschirm passt */
-      /* --notefit macht den **Schriftregler** in der Vorschau sichtbar: seit 3.40 schrumpft er den ganzen
-         Zettel, und ohne diesen Faktor bliebe die Vorschau gleich groß – der Regler sähe kaputt aus.
-         Weil Zettel und Schrift gemeinsam schrumpfen, bleibt `scale` in syncPreview unverändert.
-         `noteScale` bleibt bewusst draußen: die Vorschau zeigt den Zettel zum Tippen in fester Größe,
-         seine Lage im Bild zeigt das Fenster „Lage im Bild“. */
+      /* --notefit macht den **Zettelregler** in der Vorschau sichtbar (3.41). Vor 3.40 zeigte die Vorschau
+         den Zettel immer gleich breit, egal welche Größe er im Bild bekam – der neue Regler auf der
+         Hauptseite sähe damit wirkungslos aus. Der Schriftregler braucht das nicht: er ändert die Schrift
+         auf gleich bleibendem Papier, und das sieht man ohnehin. Weil Papier und Schrift gemeinsam
+         skalieren, bleibt `scale` in syncPreview unverändert. */
       width: calc(min(78vw, 340px) * var(--notez, 1) * var(--notefit, 1));
-      min-height: calc(60vw * var(--notez, 1)); /* muss mitschrumpfen, sonst bringt --notez nichts */
+      /* Muss mit --notez mitschrumpfen, sonst bringt der Faktor nichts – und seit 3.41 auch mit --notefit:
+         sonst bliebe ein auf 70 % geschmälerter Zettel in der Vorschau so hoch wie vorher und stünde
+         hochkant da, während das Bild ihn breit zeichnet. */
+      min-height: calc(60vw * var(--notez, 1) * var(--notefit, 1));
       color: var(--ink);
       transform: rotate(-1.5deg);
       position: relative;
@@ -277,6 +280,9 @@
     .scale .a { font-family: var(--note-font); color: var(--fg); line-height: 1; }
     .scale .a.small { font-size: 18px; }
     .scale .a.big { font-size: 30px; }
+    /* Das Quadrat des Zettelreglers steht nicht in der Handschrift des Zettels – dort ist es je nach
+       Schrift gar nicht enthalten und fiele auf eine Ersatzschrift zurück. */
+    .scale .a.blatt { font-family: inherit; opacity: .75; }
     .scale input { flex: 1; accent-color: var(--fg); height: 44px; touch-action: none; /* Wischen bewegt den Regler, nicht die Seite */ }
     .scale output { font-size: 13px; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
 
@@ -669,6 +675,16 @@
     <output id="fontscale-out">100 %</output>
   </label>
 
+  <!-- Zettelgröße, seit 3.41 neben der Schriftgröße auf der Hauptseite. Derselbe Wert wie der Regler im
+       Fenster „Lage im Bild“ – beide werden gegenseitig nachgezogen. Beim Wasserzettel bleibt er sichtbar
+       (anders als der Schriftregler): die Größe des Papiers gilt dort genauso. -->
+  <label class="scale" id="notesizerow" for="notesize">
+    <span class="a small blatt">▪</span>
+    <input id="notesize" type="range" min="45" max="115" step="5" value="100" aria-label="Zettelgröße">
+    <span class="a big blatt">▪</span>
+    <output id="notesize-out">100 %</output>
+  </label>
+
   <div class="titlerow" id="titlerow">
     <label class="toggle" for="titleon"><input id="titleon" type="checkbox"> Erste Zeile als Überschrift</label>
     <div class="tsizes" id="tsizes" role="radiogroup" aria-label="Größe der Überschrift" hidden>
@@ -807,7 +823,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.40';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.41';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -2950,6 +2966,7 @@
         schirmEl.insertBefore(d, miniEl);
       });
       sizeEl.value = String(Math.round(state.noteScale * 100));
+      if (typeof groesseZeigen === 'function') groesseZeigen();
       sizeOut.textContent = Math.round(state.noteScale * 100) + ' %';
       lageWiderrufBereit();   // „Widerrufen“ nur, wenn es etwas zu widerrufen gibt
       lageZeichnen();
@@ -3322,18 +3339,15 @@
     let widthSlack = 1;
     function fitNote(w, h, layoutName, text, slack = widthSlack) {
       const layout = LAYOUTS[layoutName](w, h);
-      // **Der Schriftregler schrumpft den ganzen Zettel, nicht nur die Schrift** (3.40, Wunsch des
-      // Auftraggebers: „wenn ich die Schrift kleiner mache, soll der Zettel auch schmaler werden“).
-      // Bis 3.39 stauchte er allein `fs`; das Papier blieb in voller Breite stehen und rechts blieb
-      // genau dieser Anteil leer – gemessen füllte der Text bei 100 % 99,6 % der Textbreite, bei 80 %
-      // nur 80,0 %. Auf dem Sperrbildschirm lief der Zettel deshalb neben den anderen aus dem Bild.
-      // **Warum als Faktor auf die Breite und nicht als Schnitt am Text:** hier skaliert *alles* mit –
-      // pad, textW, Schriftgröße (fs hängt an noteW), Zeilenhöhe. Die Umbrüche bleiben Zeichen für
-      // Zeichen dieselben, und rechts vom Text bleibt anteilig genauso viel Papier zum Antippen wie
-      // vorher. Ein Zuschnitt am Text (am 19.9. gebaut und verworfen) brach beides.
-      // Das Produkt wird geklemmt wie noteScale allein, sonst käme 140 % Schrift × 115 % Zettel auf
-      // 161 % der Layoutbreite – das wäre breiter als das Bild.
-      const noteW = Math.round(layout.noteW * klemm((state.noteScale || 1) * ((state.fontScale || 100) / 100), 0.3, 1.15));
+      // **Zwei Regler, zwei Größen** (3.41, Wunsch des Auftraggebers: „Zettelgröße und Schriftgröße
+      // separat unabhängig voneinander einstellen“). `noteScale` bestimmt allein die Breite des Papiers,
+      // `fontScale` allein die Schrift darauf (Schritt 3 weiter unten).
+      // Der Weg dahin steht in UEBERGABE.md: 3.40 hatte beide gekoppelt – Schrift kleiner hieß Zettel
+      // schmaler –, weil sonst genau der Anteil rechts leer bleibt, um den die Schrift gestaucht wird
+      // (gemessen: bei 80 % füllt der Text 80,0 % der Textbreite statt 99,6 %). Das ist der Preis der
+      // Unabhängigkeit und ausdrücklich so gewollt: wer die Schrift kleiner stellt und den Zettel nicht,
+      // bekommt Luft rechts – jetzt als eigene Entscheidung statt als Automatik.
+      const noteW = Math.round(layout.noteW * klemm(state.noteScale || 1, 0.45, 1.15));
       const pad = Math.round(noteW * 0.08);
       const textW = noteW - 2 * pad;
       const wrapW = textW * slack;
@@ -3415,8 +3429,9 @@
         if (ueberzaehlig(l2) > ueberzaehlig(lines)) break;
         fs = p; lines = l2;
       }
-      // 3) Der Nutzer-Regler steckt seit 3.40 schon in noteW (siehe oben) – die Schrift folgt ihm über
-      //    minFs, paraFloor und den Startwert noteW/7 von selbst. Hier bleibt nichts mehr zu tun.
+      // 3) Schriftregler (Prozent der Automatik), danach erneut: kein hartes Trennen.
+      fs = Math.round(fs * ((state.fontScale || 100) / 100));
+      while (!wordFits(fs) && fs > minFs) fs = Math.round(fs * 0.94);
       // 4) Höhe des Layouts einhalten.
       lines = measure(fs);
       while (!fitsHeight(fs, lines) && fs > minFs) { fs = Math.round(fs * 0.92); lines = measure(fs); }
@@ -3579,9 +3594,9 @@
         f = fitNote(t.w, t.h, t.layout, text, s);
         if (domLines(f, scaleOf(f), text) <= f.lines.length) break;
       }
-      // Anteil, den der Schriftregler an der Breite ausmacht (siehe --notefit im CSS). noteScale steckt
-      // in `basis` und fällt damit heraus. clientWidth danach lesen – der Zugriff löst den Reflow aus.
-      const basis = Math.round(f.layout.noteW * (state.noteScale || 1)) || f.noteW;
+      // Anteil, den der Zettelregler an der Breite ausmacht (siehe --notefit im CSS).
+      // clientWidth erst danach lesen – der Zugriff löst den Reflow aus und liefert dann den neuen Wert.
+      const basis = Math.round(f.layout.noteW) || f.noteW;
       noteEl.style.setProperty('--notefit', String(f.noteW / basis));
       const scale = noteEl.clientWidth / f.noteW;
       // Innenabstand exakt wie im Bild (CSS-Prozent-Padding bezöge sich auf die Breite des Elternelements)
@@ -3925,6 +3940,23 @@
       syncPreview(); updatePinBadge();
       clearTimeout(t); t = setTimeout(() => { t = null; persist(); }, 300);
     });
+    // Zettelgröße (3.41). Denselben Wert stellt der Regler im Fenster „Lage im Bild“; `groesseZeigen`
+    // zieht beide nach, damit sie nie auseinanderlaufen – der eine steht auf der Hauptseite, der andere
+    // im Fenster, und wer sie getrennt pflegt, hat irgendwann zwei Wahrheiten.
+    const nsizeEl = $('notesize'), nsizeOut = $('notesize-out');
+    function groesseZeigen() {
+      const p = Math.round((state.noteScale || 1) * 100);
+      nsizeEl.value = String(p); nsizeOut.value = p + ' %';
+      const l = $('lage-size'), lo = $('lage-size-out');
+      if (l) l.value = String(p);
+      if (lo) lo.textContent = p + ' %';
+    }
+    groesseZeigen();
+    nsizeEl.addEventListener('input', () => {
+      state.noteScale = klemm(Number(nsizeEl.value) / 100, 0.45, 1.15);
+      groesseZeigen(); syncPreview(); updatePinBadge();
+      clearTimeout(t); t = setTimeout(() => { t = null; persist(); }, 300);
+    });
     // ---------- Zettel wechseln, hinzufügen, entfernen ----------
     // Erst hier, weil alle Anwendefunktionen (applyColor, applyFont, stripFastener, scaleEl …) vorhanden
     // sein müssen. `zettelAnwenden` ist die Gegenrichtung zu `zettelSichern`: Zustand → Bedienoberfläche.
@@ -3936,6 +3968,7 @@
       $('text').classList.toggle('titled', noteTitleOn);
       $('text').style.setProperty('--titlef', noteTitleF);
       scaleEl.value = state.fontScale; scaleOut.value = state.fontScale + ' %';
+      groesseZeigen();
       stripFastener.set(state.fastener); stripFont.set(state.font);
       // applyList, nicht stripList.set: nur applyList baut auch die Wasserleiste um (und blendet seit 3.13
       // Schriftregler und Überschrift aus). Mit stripList.set blieb beim Wechsel von einem Wasserzettel auf
