@@ -824,7 +824,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.43';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.44';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -920,8 +920,17 @@
       gross:  { label: '0,5 l', liter: 0.5, bo: 9.4, bu: 7.0, y0:  1.5 },
       fl07:   { label: '0,7 l', liter: 0.7, bo: 7.4, bu: 7.4, y0: -2.0, hals: 2.3, schulter:  8.0 },
       fl10:   { label: '1,0 l', liter: 1.0, bo: 8.2, bu: 8.2, y0: -6.0, hals: 2.6, schulter:  5.0 },
+      // **Das Weinglas zählt nicht zur Flüssigkeit** (Auftraggeber, 19.9.2026) – `liter: 0`, und damit
+      // fällt es in `wasserSumme` und `wasserTag` von selbst heraus, ohne Sonderfall in der Rechnung.
+      // Es wird trotzdem gezeichnet und steht in seiner Zeile: es ist eine Notiz, keine Menge.
+      // `y0: -2` ist **kein** Zufall: `GLAS_INK` misst vom höchsten Gefäß, und das ist die 1-l-Flasche
+      // bei -6. Ein höheres Weinglas würde alle anderen Gläser kleiner machen (siehe GLAS_INK).
+      wein:   { label: 'Wein',  liter: 0,   bo: 6.6, bu: 1.2, y0: -2.0, kelch: 14.5, fuss: 5.4 },
     };
     const istFlasche = g => typeof g.hals === 'number';
+    // Kelchglas: Schale, Stiel, Fuß. `kelch` ist die Höhe, auf der die Schale in den Stiel übergeht –
+    // bis dorthin wird gefüllt, darunter ist Stiel und bleibt leer.
+    const istKelch = g => typeof g.kelch === 'number';
     const GLAS_H = 32, GLAS_W = 24, GLAS_BODEN = 30;
     // Ein Glas beginnt bei g.y0 und endet bei GLAS_BODEN – **nicht** bei 0 und GLAS_H. Wer seine Höhe
     // mit GLAS_H rechnet, schiebt eine Reihe aus kleinen Gläsern (y0 = 15) in die untere Hälfte ihres
@@ -944,8 +953,22 @@
     // „eventuell nicht komplett blau" (Auftraggeber, 9.9.2026).
     const WASSER_FARBE = { oben: '#a8dcf7', mitte: '#4aa8e4', unten: '#1668b0', deckkraft: 0.82,
                            glanz: 'rgba(255,255,255,.5)', kante: 'rgba(255,255,255,.75)' };
+    // Rotwein, nach demselben Muster: oben hell, unten kräftig. Er muss sich auf gelbem wie auf rosa
+    // Papier vom Wasser unterscheiden lassen – deshalb deutlich ins Rote, nicht nur dunkler.
+    const WEIN_FARBE = { oben: '#c9607a', mitte: '#9e2547', unten: '#6b0f2a', deckkraft: 0.82,
+                         glanz: 'rgba(255,255,255,.38)', kante: 'rgba(255,255,255,.6)' };
+    const farbeVon = art => (art === 'wein' ? WEIN_FARBE : WASSER_FARBE);
     // Lichtstreifen links in der Füllung – schmal, hochkant, mit dem Trapez leicht schräg
     function glasGlanz(g, fuell = 1) {
+      // Im Kelch endet der Lichtstreifen am Stielansatz – sonst zöge er sich durch den Stiel bis in
+      // den Fuß, wo gar kein Wein steht.
+      if (istKelch(g)) {
+        const m = GLAS_W / 2, o = g.y0 + 1.6, u = g.kelch - 1.6, hoehe = u - o;
+        const yo = u - hoehe * Math.max(0, Math.min(1, fuell)) + 1.0;
+        const t2 = glasBreiteBei(g);
+        const xo = m - t2(yo) * 0.6, xu = m - t2(u) * 0.6, b = g.bo * 0.14;
+        return `M${xo} ${yo} L${xu} ${u} L${xu + b} ${u} L${xo + b} ${yo} Z`;
+      }
       const m = GLAS_W / 2, oben = g.y0 + 1.6, hoehe = (GLAS_BODEN - 1.2) - oben;
       let yo = GLAS_BODEN - 1.2 - hoehe * Math.max(0, Math.min(1, fuell));
       // Im Hals wäre der Streifen breiter als das Glas selbst – er beginnt dort erst an der Schulter
@@ -959,6 +982,16 @@
     // und Hals – auch sie bleibt oben offen (Mündung), damit beide dieselbe Handschrift haben.
     function glasPfad(g) {
       const m = GLAS_W / 2;
+      if (istKelch(g)) {
+        // Schale, Stiel, Fuß – ein durchgehender Umriss, oben offen wie Glas und Flasche. Die Schale
+        // läuft nicht spitz zu, sondern über eine Rundung in den Stiel; spitz sah nach Trichter aus.
+        const k = g.kelch, fu = GLAS_BODEN - 0.6;
+        return `M${m - g.bo} ${g.y0} L${m - g.bo} ${g.y0 + 5.5}`
+             + ` Q${m - g.bo} ${k - 2.5} ${m - g.bu} ${k}`
+             + ` L${m - g.bu} ${fu - 2.6} L${m - g.fuss} ${fu} L${m + g.fuss} ${fu}`
+             + ` L${m + g.bu} ${fu - 2.6} L${m + g.bu} ${k}`
+             + ` Q${m + g.bo} ${k - 2.5} ${m + g.bo} ${g.y0 + 5.5} L${m + g.bo} ${g.y0}`;
+      }
       if (istFlasche(g)) {
         return `M${m - g.hals} ${g.y0} L${m - g.hals} ${g.schulter - 3} Q${m - g.hals} ${g.schulter} ${m - g.bo} ${g.schulter + 2.4}`
              + ` L${m - g.bu} ${GLAS_BODEN} L${m + g.bu} ${GLAS_BODEN} L${m + g.bo} ${g.schulter + 2.4}`
@@ -969,6 +1002,15 @@
     // Füllung: dasselbe Trapez, oben abgeschnitten. Ein Rand von 1,6 bleibt frei, sonst klebt das
     // Wasser am Glasrand und das Glas sieht übergelaufen aus.
     function glasFuellung(g, fuell = 1) {
+      if (istKelch(g)) {
+        // Der Wein steht **nur in der Schale**, nicht im Stiel: gefüllt wird bis `g.kelch`, nicht bis
+        // zum Boden. Ohne diese eigene Rechnung liefe die Farbe den Stiel hinunter bis in den Fuß.
+        const m = GLAS_W / 2, o = g.y0 + 1.6, u = g.kelch - 0.8, hoehe = u - o;
+        const y = u - hoehe * Math.max(0, Math.min(1, fuell));
+        const b = glasBreiteBei(g), bY = b(y) - 0.6;
+        return `M${m - bY} ${y} Q${m - b((y + u) / 2) + 0.6} ${u - 2.2} ${m - g.bu + 0.4} ${u}`
+             + ` L${m + g.bu - 0.4} ${u} Q${m + b((y + u) / 2) - 0.6} ${u - 2.2} ${m + bY} ${y} Z`;
+      }
       const m = GLAS_W / 2, oben = g.y0 + 1.6, hoehe = (GLAS_BODEN - 1.2) - oben;
       const y = GLAS_BODEN - 1.2 - hoehe * Math.max(0, Math.min(1, fuell));
       const t = glasBreiteBei(g), bY = t(y), bU = t(GLAS_BODEN) - 0.6;
@@ -984,6 +1026,9 @@
     // Halbe Innenbreite auf Höhe yy – beim Glas linear vom Boden zur Oberkante, bei der Flasche
     // unterhalb der Schulter der Körper und darüber der Hals.
     function glasBreiteBei(g) {
+      // Die Schale verjüngt sich von der Öffnung bis zum Stielansatz; darunter zählt nur der Stiel.
+      if (istKelch(g)) return yy => (yy >= g.kelch ? g.bu
+        : g.bo - (g.bo - g.bu) * Math.max(0, (yy - g.y0) / (g.kelch - g.y0)) ** 1.7);
       if (istFlasche(g)) return yy => (yy >= g.schulter + 2.4 ? g.bo : g.hals) - 0.6;
       return yy => { const p = (GLAS_BODEN - yy) / (GLAS_BODEN - g.y0); return g.bu + (g.bo - g.bu) * p; };
     }
@@ -1153,11 +1198,12 @@
           // Der Pfad ist um GLAS_W/2 zentriert – hier auf die **linke Glaskante** setzen
           ctx.translate(gx - (GLAS_W / 2 - g.bo) * skala, gy); ctx.scale(skala, skala);
           // Wasser: Verlauf von hell nach kräftig, darüber ein Lichtstreifen und eine helle Oberkante
-          const vf = ctx.createLinearGradient(0, g.y0, 0, GLAS_BODEN);
-          vf.addColorStop(0, WASSER_FARBE.oben); vf.addColorStop(0.45, WASSER_FARBE.mitte); vf.addColorStop(1, WASSER_FARBE.unten);
-          ctx.globalAlpha = WASSER_FARBE.deckkraft;
+          const F = farbeVon(art);                    // Wein ist rot, alles andere Wasser
+          const vf = ctx.createLinearGradient(0, g.y0, 0, istKelch(g) ? g.kelch : GLAS_BODEN);
+          vf.addColorStop(0, F.oben); vf.addColorStop(0.45, F.mitte); vf.addColorStop(1, F.unten);
+          ctx.globalAlpha = F.deckkraft;
           ctx.fillStyle = vf; ctx.fill(new Path2D(glasFuellung(g, 0.88)));
-          ctx.fillStyle = WASSER_FARBE.glanz; ctx.fill(new Path2D(glasGlanz(g, 0.88)));
+          ctx.fillStyle = F.glanz; ctx.fill(new Path2D(glasGlanz(g, 0.88)));
           ctx.globalAlpha = 1;
           ctx.fillStyle = ink;
           ctx.lineWidth = GLAS_STRICH; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -2421,18 +2467,23 @@
     let wasserFenster = wasserFensterJetzt();       // welches Zeitfenster ein Tipp gerade bucht
     // Glas als SVG für die Knöpfe – gleiche Pfade wie im Bild, damit der Knopf zeigt, was entsteht
     function glasSvg(g, farbe) {
-      const id = 'wv' + Math.round(g.liter * 10);
+      // **Die Kennung muss eindeutig sein.** Sie stammte aus den Litern – das Weinglas hat 0 l und
+      // teilte sich damit einen Verlauf mit jedem anderen 0-l-Gefäß; die Knöpfe hätten dieselbe Farbe
+      // gezeigt. Deshalb steckt der Name mit drin.
+      const art = Object.keys(GLAeSER).find(k => GLAeSER[k] === g) || '';
+      const F = farbeVon(art);
+      const id = 'wv' + art + Math.round(g.liter * 10);
       // Der Zeichenraum folgt der Sorte: eine Flasche beginnt oberhalb von y = 0, mit festem viewBox
       // wäre ihr Hals abgeschnitten. Unten immer bis GLAS_H, damit alle Knöpfe auf einer Linie stehen.
       const oy = Math.min(0, g.y0 - 1.4), hoch = GLAS_H - oy;
       return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 ' + oy + ' ' + GLAS_W + ' ' + hoch + '"'
         + ' style="height:' + (34 * hoch / GLAS_H).toFixed(1) + 'px" aria-hidden="true">'
-        + '<defs><linearGradient id="' + id + '" x1="0" y1="' + g.y0 + '" x2="0" y2="' + GLAS_BODEN + '" gradientUnits="userSpaceOnUse">'
-        + '<stop offset="0" stop-color="' + WASSER_FARBE.oben + '"/><stop offset="0.45" stop-color="' + WASSER_FARBE.mitte + '"/>'
-        + '<stop offset="1" stop-color="' + WASSER_FARBE.unten + '"/></linearGradient></defs>'
-        + '<g opacity="' + WASSER_FARBE.deckkraft + '">'
+        + '<defs><linearGradient id="' + id + '" x1="0" y1="' + g.y0 + '" x2="0" y2="' + (istKelch(g) ? g.kelch : GLAS_BODEN) + '" gradientUnits="userSpaceOnUse">'
+        + '<stop offset="0" stop-color="' + F.oben + '"/><stop offset="0.45" stop-color="' + F.mitte + '"/>'
+        + '<stop offset="1" stop-color="' + F.unten + '"/></linearGradient></defs>'
+        + '<g opacity="' + F.deckkraft + '">'
         + '<path d="' + glasFuellung(g, 0.88) + '" fill="url(#' + id + ')"/>'
-        + '<path d="' + glasGlanz(g, 0.88) + '" fill="' + WASSER_FARBE.glanz + '"/></g>'
+        + '<path d="' + glasGlanz(g, 0.88) + '" fill="' + F.glanz + '"/></g>'
         + '<path d="' + glasPfad(g) + '" fill="none" stroke="' + farbe + '" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     }
     function wasserLeisteBauen() {
@@ -3505,7 +3556,9 @@
     // aktiver Zettel neben einem beschriebenen zweiten blockierte das Kleben ebenfalls zu Unrecht.
     function zettelInhalt(q) {
       const z = q || state;
-      if (z.list === 'wasser') return wasserTag(wasserStand(z)) > 0;
+      // **Nicht über die Liter prüfen.** Das Weinglas zählt 0 l (3.44); ein Zettel mit nur einem
+      // Weinglas wäre sonst „leer“ und das Kleben mit „Erst ein Glas eintragen“ gesperrt.
+      if (z.list === 'wasser') { const w = wasserStand(z); return WASSER_ZEITEN.some(q => (w[q.key] || []).length > 0); }
       return !!String(z.text || '').trim();
     }
     const irgendeinInhalt = () => alleZettel().some(zettelInhalt);
