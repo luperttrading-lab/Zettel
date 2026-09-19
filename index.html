@@ -666,8 +666,9 @@
     </div>
   </div>
 
-  <!-- Schriftregler und Überschrift bewirken beim Wasserzettel nichts (Schrift aus der Fläche, kein Text)
-       und sind dort ausgeblendet – wasserLeisteBauen schaltet sie mit der Listenart. -->
+  <!-- Die Überschrift bewirkt beim Wasserzettel nichts (kein Text) und ist dort ausgeblendet –
+       wasserLeisteBauen schaltet sie mit der Listenart. Der Schriftregler bleibt seit 3.43 sichtbar:
+       er stellt dort die Größe der Uhrzeiten und Literangaben. -->
   <label class="scale" id="fontrow" for="fontscale">
     <span class="a small">A</span>
     <input id="fontscale" type="range" min="60" max="140" step="5" value="100" aria-label="Schriftgröße">
@@ -823,7 +824,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.42';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.43';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -1051,8 +1052,13 @@
     // Den Wasserzettel zeichnen – **eine** Funktion für Vorschau und Bild, wie bei allem anderen auch.
     // Der Ursprung liegt in der linken oberen Ecke der Textfläche, `bw`/`bh` sind deren Maße.
     // Rückgabe: die Trefferfelder der gezeichneten Gläser, damit die Vorschau ein Antippen zuordnen kann.
+    // fsk: Faktor des Schriftreglers (3.43). Er greift **nur an der Schrift**, nicht am Layout – die
+    // Zeitfenster behalten ihre Höhe, die Gläser ihren Platz, nur die Beschriftung wird kleiner oder
+    // größer. Geklemmt auf 0,7 … 1,15: darunter sind die Uhrzeiten am Sperrbildschirm nicht mehr zu
+    // lesen (derselbe Befund wie am 10.9.2026), darüber frisst `klein` den Gläsern die Höhe weg.
+    const wasserFsk = () => klemm(((state.fontScale || 100) / 100), 0.7, 1.15);
     function zeichneWasser(ctx, bw, bh, opt) {
-      const { w, ink, family, weight } = opt;
+      const { w, ink, family, weight, fsk = 1 } = opt;
       const treffer = [];
       const ziel = zielVon(w);       // steckt in w, damit es die await-Falle nicht sehen kann
       // Das Layout hängt an der **Fläche**, nicht an der Schriftgröße: sonst genügt ein großer Zettel
@@ -1065,7 +1071,7 @@
       const fussH = bh * (balken ? 0.24 : 0.15);     // Tagesmenge unten, daneben klein der Vortag
       const zeilH = (bh - fussH) / 3;                // drei Zeitfenster
       const saeuleB = balken ? 0 : bw * (state.wasserZiel === 'krug' ? 0.14 : 0.105);
-      const gross = Math.max(fussH * 0.62, 10);      // Schrift der Tagesmenge
+      const gross = Math.max(fussH * 0.62 * fsk, 10);  // Schrift der Tagesmenge, mal dem Schriftregler
       // **Eine** Schriftgröße für alles: Zeilenbeschriftung und Skalenzahlen so groß wie „Heute …“ –
       // auf einem klein gestellten Zettel war die Beschriftung mit 0,22 der Zeilenhöhe nicht mehr zu
       // lesen (Auftraggeber, 10.9.2026, am Sperrbildschirm). Kostet den Gläsern Höhe, gemessen unten.
@@ -2432,11 +2438,11 @@
     function wasserLeisteBauen() {
       const an = istWasser();
       wasserLeisteEl.hidden = !an;
-      // Nur zeigen, was hier etwas bewirkt: der Schriftregler greift beim Wasserzettel nicht (die Schrift
-      // kommt aus der Fläche, siehe zeichneWasser), und ohne Text gibt es keine erste Zeile als Überschrift.
+      // Nur zeigen, was hier etwas bewirkt: ohne Text gibt es keine erste Zeile als Überschrift.
       // „Beim Wasser brauchen wir vielleicht auch nicht alles“ (Auftraggeber, 10.9.2026). Farbe, Schriftart,
       // Befestigung und Papier bleiben – die wirken auch dort.
-      $('fontrow').hidden = an;
+      // **Der Schriftregler bleibt seit 3.43 sichtbar**: er war ausgeblendet, weil die Schrift „aus der
+      // Fläche kommt“, aber genau die war dem Auftraggeber zu groß und er hatte keinen Hebel dafür.
       $('titlerow').hidden = an;
       if (!an) return;
       const w = wasserStand();
@@ -3418,9 +3424,21 @@
       // die Größe aus dem Platzhaltertext und machte die Schrift so groß, dass sich die Zeilen
       // überlappten und für die Gläser keine Höhe übrig blieb (beim ersten Anlauf gemessen).
       if (state.list === 'wasser') {
-        const wfs = Math.round(noteW / 13);
+        // **Höhe an der eigenen Breite, nicht an bezugW** (3.43). Der Wasserzettel füllt seine Fläche
+        // selbst – drei Zeitfenster, Gläser, Säule –, seine Höhe ist also nicht das Ergebnis einer
+        // Textrechnung, sondern gesetzt. Mit der Suchgrenze aus 3.42 wurde ein auf 70 % gestellter
+        // Wasserzettel 660 breit und **943 hoch**: Schrift und Gläser passten nicht mehr auf das Blatt
+        // und das Blatt nicht mehr ins Bild (Auftraggeber, 19.9.2026).
+        const wH = Math.round(Math.min(noteW, layout.maxNoteH));
+        const wInset = insetOf(wH);
+        // Der Schriftregler wirkt seit 3.43 auch hier (Auftraggeber: „die Schrift ist zu groß, es passt
+        // nicht auf den Zettel“). Bis dahin war er auf dem Wasserzettel ausgeblendet, weil die Schrift
+        // „aus der Fläche kommt“ – sie tut es weiterhin, ist aber eben doch eine Größe, die man stellen
+        // will. Geklemmt auf noteW/20 … noteW/10: darunter sind die Uhrzeiten nicht mehr zu lesen,
+        // darüber überlappen sie die Gläser.
+        const wfs = Math.round(klemm(noteW / 13 * ((state.fontScale || 100) / 100), noteW / 20, noteW / 10));
         return { layout, noteW, pad, textW, family, weight, LH, fs: wfs, lh: wfs * LH, lines: [],
-                 noteH: noteHMax, inset, textTop: pad + inset, titleGap: 0, titleF: 1, raster: 0,
+                 noteH: wH, inset: wInset, textTop: pad + wInset, titleGap: 0, titleF: 1, raster: 0,
                  ueber: 0, overflow: false };
       }
       let fs = Math.round(bezugW / 7), lines;
@@ -3463,7 +3481,10 @@
       // Der zweite Durchgang fängt den Fall, dass der kürzere Zettel eine andere Befestigung oben hat
       // (fastenerInset hängt an der Höhe); mehr als eine Nachbesserung braucht es nicht, die Werte sind
       // diskret. Gleiche Rechnung in lib/render.js.
-      let noteH = noteHMax;
+      // **Quadratisch heißt so hoch wie breit** – also an `noteW`, nicht an der Suchgrenze `noteHMax`
+      // (die seit 3.42 an der Layoutbreite hängt, damit umgebrochener Text Platz findet). Ohne diese
+      // Trennung wäre ein schmaler Zettel im Modus „quadratisch“ so hoch wie ein voller (3.43).
+      let noteH = Math.round(Math.min(noteW, layout.maxNoteH));
       if (state.noteFit !== false) {
         const hoehe = () => Math.max(Math.round(noteW * NOTE_MIN_H), Math.min(noteHMax, Math.ceil(brauchtH(fs, lines))));
         noteH = hoehe();
@@ -3563,7 +3584,7 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, bw, bh);
       wasserTreffer = zeichneWasser(ctx, bw, bh, { w: wasserStand(), ink: inkColor(),
-        family: f.family, weight: f.weight, fs: f.fs * scale });
+        family: f.family, weight: f.weight, fs: f.fs * scale, fsk: wasserFsk() });
       wasserMass = { bw, bh };
     }
     // Tipp auf ein Glas im Zettel nimmt es wieder weg – ohne diesen Weg gäbe es keine Korrektur
@@ -3781,7 +3802,7 @@
       if (wasserHier) {
         ctx.save();
         ctx.translate(-noteW / 2 + pad, -noteH / 2 + textTop);
-        zeichneWasser(ctx, noteW - 2 * pad, noteH - textTop - pad, { w: wStand, ink, family, weight, fs });
+        zeichneWasser(ctx, noteW - 2 * pad, noteH - textTop - pad, { w: wStand, ink, family, weight, fs, fsk: wasserFsk() });
         ctx.restore();
         if (fastener) ctx.drawImage(fastener, -noteW / 2 - m, -noteH / 2 - m, noteW + 2 * m, noteH + 2 * m);
         ctx.restore();

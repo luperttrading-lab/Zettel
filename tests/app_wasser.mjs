@@ -46,8 +46,10 @@ const sicht = () => page.evaluate(() => ({
   schrift: getComputedStyle(document.getElementById('strip-font')).display !== 'none',
 }));
 const beiWasser = await sicht();
-check('bei Wasser: Schriftregler und Überschrift ausgeblendet, Farbe und Schriftart bleiben',
-  !beiWasser.regler && !beiWasser.titel && beiWasser.farben && beiWasser.schrift, JSON.stringify(beiWasser));
+// Seit 3.43 bleibt der Schriftregler auch hier stehen – er stellt die Uhrzeiten und Literangaben.
+// Ausgeblendet wird nur die Überschrift: ohne Text gibt es keine erste Zeile, die man auszeichnen könnte.
+check('bei Wasser: Überschrift ausgeblendet, Schriftregler, Farbe und Schriftart bleiben',
+  beiWasser.regler && !beiWasser.titel && beiWasser.farben && beiWasser.schrift, JSON.stringify(beiWasser));
 
 // 2) Eintragen: jedes Glas landet im gewählten Zeitfenster, die Summen stimmen
 await fenster(0); await glas(0); await glas(2);          // 0,2 + 0,5
@@ -394,8 +396,14 @@ const regler = await page.evaluate(async () => {
   const diff = (a, b2) => { let n = 0; for (let i = 0; i < a.length; i += 4) if (a[i] !== b2[i] || a[i + 1] !== b2[i + 1] || a[i + 2] !== b2[i + 2]) n++; return n; };
   return { d60: diff(px[60], px[100]), d140: diff(px[140], px[100]), masse };
 });
-check('der Schriftregler ändert am Wasserzettel nichts – Bild und Maße identisch bei 60/100/140 %',
-  regler.d60 === 0 && regler.d140 === 0 && regler.masse[60] === regler.masse[140], JSON.stringify(regler));
+// **Seit 3.43 umgedreht.** Vorher war der Schriftregler auf dem Wasserzettel ausgeblendet und ohne
+// Wirkung – genau deshalb hatte der Auftraggeber keinen Hebel gegen die zu große Schrift („die Schrift
+// ist zu groß, es passt nicht auf den Zettel“, 19.9.2026). Er greift jetzt an der Beschriftung, aber
+// **nicht am Layout**: die Zettelmaße müssen über alle Reglerstellungen gleich bleiben.
+check('der Schriftregler ändert die Schrift des Wasserzettels, nicht seine Maße',
+  regler.d60 > 0 && regler.d140 > 0
+  && regler.masse[60] === regler.masse[100] && regler.masse[140] === regler.masse[100],
+  JSON.stringify(regler));
 
 // 13) 3.16: Der **Zettelwechsel** muss die Wasserleiste mitnehmen. zettelAnwenden setzte die Listenleiste
 //     direkt (stripList.set) statt über applyList – beim Wechsel vom Wasserzettel auf einen Textzettel
@@ -414,14 +422,17 @@ const bedienung = () => page.evaluate(() => ({
   titel: getComputedStyle(document.getElementById('titlerow')).display !== 'none',
 }));
 const aufWasser = await bedienung();
-check('Wasserzettel aktiv: Leiste da, Regler weg', aufWasser.liste === 'wasser' && aufWasser.wasser && !aufWasser.regler, JSON.stringify(aufWasser));
+// Der Schriftregler bleibt seit 3.43 auch auf dem Wasserzettel stehen (er stellt dort die Uhrzeiten
+// und Literangaben); nur die Überschrift verschwindet, weil es dort keinen Text gibt.
+check('Wasserzettel aktiv: Leiste da, Schriftregler bleibt, Überschrift weg',
+  aufWasser.liste === 'wasser' && aufWasser.wasser && aufWasser.regler && !aufWasser.titel, JSON.stringify(aufWasser));
 await page.evaluate(() => zettelWechseln(0)); await page.waitForTimeout(300);
 const aufText = await bedienung();
 check('Wechsel auf den Textzettel: Wasserleiste weg, Regler und Überschrift wieder da',
   aufText.aktiv === 0 && aufText.liste === 'dash' && !aufText.wasser && aufText.regler && aufText.titel, JSON.stringify(aufText));
 await page.evaluate(() => zettelWechseln(1)); await page.waitForTimeout(300);
 const zurueck = await bedienung();
-check('Wechsel zurück: Wasserleiste wieder da, Regler weg', zurueck.wasser && !zurueck.regler && !zurueck.titel, JSON.stringify(zurueck));
+check('Wechsel zurück: Wasserleiste wieder da, Überschrift weg', zurueck.wasser && zurueck.regler && !zurueck.titel, JSON.stringify(zurueck));
 
 await page.screenshot({ path: out + '/wasser.png' });
 check('keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));
