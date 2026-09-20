@@ -107,16 +107,14 @@
     /* --- der Zettel --- */
     .note {
       /* --notez schrumpft die Vorschau so weit, dass die Seite ohne Scrollen auf den Bildschirm passt */
-      /* --notefit macht den **Zettelregler** in der Vorschau sichtbar (3.41). Vor 3.40 zeigte die Vorschau
-         den Zettel immer gleich breit, egal welche Größe er im Bild bekam – der neue Regler auf der
-         Hauptseite sähe damit wirkungslos aus. Der Schriftregler braucht das nicht: er ändert die Schrift
-         auf gleich bleibendem Papier, und das sieht man ohnehin. Weil Papier und Schrift gemeinsam
-         skalieren, bleibt `scale` in syncPreview unverändert. */
-      width: calc(min(78vw, 340px) * var(--notez, 1) * var(--notefit, 1));
-      /* Muss mit --notez mitschrumpfen, sonst bringt der Faktor nichts – und seit 3.41 auch mit --notefit:
-         sonst bliebe ein auf 70 % geschmälerter Zettel in der Vorschau so hoch wie vorher und stünde
-         hochkant da, während das Bild ihn breit zeichnet. */
-      min-height: calc(60vw * var(--notez, 1) * var(--notefit, 1));
+      /* **Die Vorschau zeigt den Zettel immer gleich breit** – sie ist Arbeitsfläche, kein Maßstab.
+         3.41 hatte sie an den Zettelregler gekoppelt (--notefit), damit man ihn wirken sieht; bei 63 %
+         war das Sichtfenster dann zu klein zum Tippen („viel zu kleine Sichtfenster“, Auftraggeber,
+         20.9.2026). Wie groß der Zettel im Bild wird, steht als Zahl am Regler und ist im Fenster
+         „Lage im Bild“ zu sehen – dort gehört der Maßstab hin. */
+      width: calc(min(78vw, 340px) * var(--notez, 1));
+      /* Muss mit --notez mitschrumpfen, sonst bringt der Faktor nichts. */
+      min-height: calc(60vw * var(--notez, 1));
       color: var(--ink);
       transform: rotate(-1.5deg);
       position: relative;
@@ -824,7 +822,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.44';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.45';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -1625,6 +1623,13 @@
       noteScale: 1, noteX: 0.5, noteY: 0.585, noteFit: true, noteRot: NOTE_ROT_STD,
       wasser: null,          // nur bei der Listenart „Wasser" belegt, siehe wasserStand()
       wasserZiel: 'saeule',  // Form der Tagesanzeige, siehe ZIEL_ARTEN
+      // **Der Umbruch-Sicherheitsfaktor gehört zum Zettel, nicht zur App** (3.45). `widthSlack` war eine
+      // einzige globale Zahl; `syncPreview` bestimmt sie aber nur für den **aktiven** Zettel, und beim
+      // Bild bekamen alle drei denselben Wert. Wer vom Wasserzettel aus klebte, erzeugte den Terminzettel
+      // mit dem Faktor des Wasserzettels – dort läuft die Suche mangels Text gar nicht, also blieb 1,
+      // und die Termine brachen im Bild anders um als in der Vorschau (Auftraggeber, 20.9.2026, mit zwei
+      // Sperrbildschirm-Fotos belegt). Jetzt merkt sich jeder Zettel seinen eigenen.
+      slack: 1,
     };
     const ZETTEL_FELDER = Object.keys(ZETTEL_STD);
     const zettelStd = () => JSON.parse(JSON.stringify(ZETTEL_STD));   // frische Kopie, nie die Vorlage teilen
@@ -1646,7 +1651,9 @@
     // Kennung für den Vergleich mit dem übertragenen Stand. Die Überschriftgröße zählt nur mit Überschrift –
     // dieselbe Ausnahme wie in gleicherStand, sonst gälte ein Zettel als geändert, obwohl das Bild gleich bleibt.
     function zettelKennung() {
-      return JSON.stringify(alleZettel().map(z => { const k = { ...z }; if (!k.title) delete k.titleSize; return k; }));
+      // `slack` ist ein Rechenergebnis, keine Einstellung – es gehört **nicht** in den Vergleich, sonst
+      // gälte ein Zettel als geändert, nur weil die Umbruchsuche einen anderen Faktor gefunden hat.
+      return JSON.stringify(alleZettel().map(z => { const k = { ...z }; delete k.slack; if (!k.title) delete k.titleSize; return k; }));
     }
     // Einen anderen Zettel kurz einsetzen, rechnen, zurücktauschen. Alles, was `state` liest (fitNote,
     // inkColor, hakenForm …), arbeitet dadurch unverändert weiter.
@@ -3393,8 +3400,10 @@
     // slack: Sicherheitsfaktor für die Umbruchbreite. Das Textfeld setzt dieselbe Schrift auf iOS minimal
     // breiter als die Zeichenfläche misst; syncPreview prüft den Umbruch im echten Textfeld nach und
     // senkt den Faktor, bis Vorschau und Bild dieselben Zeilen haben.
+    // widthSlack bleibt der Wert der **laufenden Suche** in syncPreview; sobald sie fertig ist, steht das
+    // Ergebnis in `state.slack` und gilt auch dann, wenn mitZettel gerade einen anderen Zettel setzt.
     let widthSlack = 1;
-    function fitNote(w, h, layoutName, text, slack = widthSlack) {
+    function fitNote(w, h, layoutName, text, slack = (state.slack || widthSlack)) {
       const layout = LAYOUTS[layoutName](w, h);
       // **Zwei Regler, zwei Größen** (3.41, Wunsch des Auftraggebers: „Zettelgröße und Schriftgröße
       // separat unabhängig voneinander einstellen“). `noteScale` bestimmt allein die Breite des Papiers,
@@ -3679,10 +3688,9 @@
         f = fitNote(t.w, t.h, t.layout, text, s);
         if (domLines(f, scaleOf(f), text) <= f.lines.length) break;
       }
-      // Anteil, den der Zettelregler an der Breite ausmacht (siehe --notefit im CSS).
-      // clientWidth erst danach lesen – der Zugriff löst den Reflow aus und liefert dann den neuen Wert.
-      const basis = Math.round(f.layout.noteW) || f.noteW;
-      noteEl.style.setProperty('--notefit', String(f.noteW / basis));
+      // **Am Zettel merken**, nicht nur global: beim Bild werden alle drei Zettel gezeichnet, und jeder
+      // braucht den Faktor, der zu seinem eigenen Text gehört (siehe `slack` in ZETTEL_STD).
+      state.slack = widthSlack;
       const scale = noteEl.clientWidth / f.noteW;
       // Innenabstand exakt wie im Bild (CSS-Prozent-Padding bezöge sich auf die Breite des Elternelements)
       noteEl.style.padding = (f.pad * scale) + 'px';

@@ -110,6 +110,9 @@ const ABWEICHEND = {           // ein vom Standard verschiedener Wert je Feld
   fastenerLook: { clip: { color: 'red' } }, noteScale: 0.7, noteX: 0.3, noteY: 0.8,
   noteFit: false, noteRot: 11,
   wasser: { tag: '2026-09-09', v12: ['gross'], v18: [], n18: [], gestern: 1.4 }, wasserZiel: 'ring',
+  // Seit 3.45: der Umbruchfaktor gehört zum Zettel. Er ist ein Rechenergebnis, aber er muss dieselbe
+  // Trennung einhalten wie jede Einstellung – sonst brächte ein Zettelwechsel den Faktor des anderen mit.
+  slack: 0.92,
 };
 const felder = await page.evaluate(() => ZETTEL_FELDER);
 check('jedes Zettelfeld hat einen Prüfwert', felder.every(k => k in ABWEICHEND),

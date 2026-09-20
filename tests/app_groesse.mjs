@@ -41,7 +41,11 @@ check('Zettelregler ändert die Breite', nurZettel.noteW < start.noteW * 0.75, `
 check('… und hält die Schrift über dem proportionalen Wert',
   nurZettel.fs > start.fs * 0.7 * 1.05, `${start.fs} → ${nurZettel.fs}, proportional wären ${Math.round(start.fs * 0.7)}`);
 check('… der Text bricht dafür um', nurZettel.zeilen > start.zeilen, `${start.zeilen} → ${nurZettel.zeilen} Zeilen`);
-check('… und die Vorschau folgt ihm', nurZettel.vorschau < start.vorschau * 0.8, `${start.vorschau} → ${nurZettel.vorschau}`);
+// **Seit 3.45 wieder umgedreht.** 3.41 hatte die Vorschau an den Zettelregler gekoppelt, damit man ihn
+// wirken sieht; bei 63 % war das Sichtfenster dann zu klein zum Tippen („viel zu kleine Sichtfenster“,
+// Auftraggeber, 20.9.2026). Die Vorschau ist Arbeitsfläche, kein Maßstab – sie bleibt konstant, und die
+// Größe im Bild steht als Zahl am Regler und im Fenster „Lage im Bild“.
+check('… die Vorschau bleibt als Arbeitsfläche gleich groß', nurZettel.vorschau === start.vorschau, `${start.vorschau} → ${nurZettel.vorschau}`);
 check('… der Schriftregler bleibt stehen', nurZettel.rSchrift === 100, String(nurZettel.rSchrift));
 check('… und beide Größenregler zeigen dasselbe', nurZettel.rZettel === 70 && nurZettel.rLage === 70, `${nurZettel.rZettel} / ${nurZettel.rLage}`);
 
