@@ -1,4 +1,4 @@
-// Test 3.44: Das Weinglas steht auf dem Wasserzettel, zählt aber nicht zur Flüssigkeit.
+// Test 3.44 / 3.46: Weinglas und Kaffeetasse stehen auf dem Wasserzettel, zählen aber nicht zur Flüssigkeit.
 // Auftraggeber: „Kannst du mir ein Weinglas zusätzlich dazu machen – das zählt dann aber nicht zur
 // Flüssigkeit." Es ist eine Notiz, keine Menge: es wird gezeichnet, erscheint in seiner Zeile, geht
 // aber weder in die Zeilensumme noch in „Heute" noch in die Säule ein.
@@ -69,6 +69,28 @@ check('Das Weinglas wird auch wirklich gezeichnet', diff > 500, `${diff} verschi
 // Die Höhe der übrigen Gläser darf sich durch das Weinglas nicht geändert haben (GLAS_INK)
 const ink = await page.evaluate(() => ({ ink: Math.round(GLAS_INK * 100) / 100, hoechstes: Math.min(...Object.keys(GLAeSER).map(k => GLAeSER[k].y0)) }));
 check('Das Weinglas verkleinert die anderen Gläser nicht', ink.hoechstes === -6, JSON.stringify(ink));
+
+// ── 3.46: dieselbe Zusage für die Kaffeetasse ───────────────────────────────────────────────────
+await page.evaluate(() => {
+  state.wasser = { tag: heuteKennung(), v12: ['klein', 'kaffee', 'kaffee'], v18: [], n18: ['wein', 'kaffee'], gestern: 0, soll: 3 };
+  persist();
+});
+const mitKaffee = await stand();
+check('Drei Tassen und ein Weinglas lassen die Menge bei 0,2 l', mitKaffee.heute === 0.2, JSON.stringify(mitKaffee));
+check('Auch ein Zettel mit nur Tassen gilt als beschrieben', mitKaffee.inhalt);
+
+// Die Leiste muss **einzeilig** bleiben, und alle Knöpfe gleich breit (Auftraggeber: „sollte aber
+// jetzt immer noch irgendwie in die eine Zeile passen"). Geprüft wird über die Unterkante: die Knöpfe
+// sind verschieden hoch (die Flasche ragt höher), gleiche Zeile heißt gleiche Grundlinie.
+const leiste = await page.evaluate(() => {
+  const l = document.getElementById('wasser-glaeser');
+  const kn = [...l.querySelectorAll('button')].map(x => x.getBoundingClientRect());
+  return { anzahl: kn.length, zeilen: new Set(kn.map(r => Math.round(r.bottom))).size,
+           breiten: kn.map(r => Math.round(r.width)),
+           ueberlauf: Math.round(kn[kn.length - 1].right) > Math.round(l.getBoundingClientRect().right) + 1 };
+});
+check('Sieben Gefäße in einer Zeile', leiste.anzahl === 7 && leiste.zeilen === 1 && !leiste.ueberlauf, JSON.stringify(leiste));
+check('… und alle gleich breit', new Set(leiste.breiten).size === 1, leiste.breiten.join(', '));
 
 check('Keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));
 await b.close();

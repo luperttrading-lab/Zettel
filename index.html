@@ -415,10 +415,18 @@
     }
     .wasserleiste .zeiten button b { font: 600 14px/1.2 inherit; }
     .wasserleiste .zeiten button[aria-checked="true"] { background: var(--gewaehlt); color: var(--fg); font-weight: 600; }
-    .wasserleiste .glaeser { display: flex; gap: 8px; align-items: flex-end; }
+    /* **Sieben Gefäße in einer Zeile, alle gleich breit** (Auftraggeber, 21.9.2026, beim Hinzufügen der
+       Kaffeetasse: „sollte aber jetzt immer noch irgendwie in die eine Zeile passen“). Umgebrochen wäre
+       die Reihe auch mit den alten Werten nicht – gemessen bis hinunter zu 320 px Bildschirmbreite.
+       Aber „Kaffee“ ist die längste Beschriftung, und ein Flex-Element schrumpft nicht unter die Breite
+       seines Inhalts: der Kaffeeknopf wurde 45 px breit, während die übrigen auf 33 px zusammengedrückt
+       wurden. `min-width: 0` hebt diese Sperre auf, die kleineren Werte für Lücke, Innenabstand und
+       Schrift schaffen den nötigen Platz. Ergebnis bei 320 px: sieben Knöpfe zu je 35 px statt
+       33/33/33/33/33/45/37. */
+    .wasserleiste .glaeser { display: flex; gap: 5px; align-items: flex-end; }
     .wasserleiste .glaeser button {
-      flex: 1; appearance: none; border: 0; border-radius: 13px; padding: 10px 4px 8px; cursor: pointer;
-      background: var(--flaeche); color: var(--fg); font: 600 13px/1.2 inherit;
+      flex: 1; min-width: 0; appearance: none; border: 0; border-radius: 13px; padding: 10px 2px 8px; cursor: pointer;
+      background: var(--flaeche); color: var(--fg); font: 600 12px/1.2 inherit;
       display: flex; flex-direction: column; align-items: center; gap: 4px;
     }
     .wasserleiste .glaeser button:active { background: var(--gewaehlt); }
@@ -822,7 +830,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.45';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.46';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -923,12 +931,21 @@
       // Es wird trotzdem gezeichnet und steht in seiner Zeile: es ist eine Notiz, keine Menge.
       // `y0: -2` ist **kein** Zufall: `GLAS_INK` misst vom höchsten Gefäß, und das ist die 1-l-Flasche
       // bei -6. Ein höheres Weinglas würde alle anderen Gläser kleiner machen (siehe GLAS_INK).
+      // Die Tasse zählt wie das Weinglas nicht zur Flüssigkeit (Auftraggeber, 21.9.2026). Sie steht
+      // **vor** dem Wein, wie gewünscht. `extra` ist der Platz für den Henkel rechts: `eigenB` rechnet
+      // sonst nur mit 2·bo, und der Henkel ragte in das nächste Gefäß.
+      // Breiter als hoch und mit deutlichem Henkel – im ersten Anlauf (bo 6,2 / y0 14) las sie sich als
+      // braunes Glas mit Anhängsel. Eine Tasse ist etwa so breit wie hoch.
+      kaffee: { label: 'Kaffee', liter: 0, bo: 7.0, bu: 5.9, y0: 16.0, henkel: 5.6, extra: 5.2 },
       wein:   { label: 'Wein',  liter: 0,   bo: 6.6, bu: 1.2, y0: -2.0, kelch: 14.5, fuss: 5.4 },
     };
     const istFlasche = g => typeof g.hals === 'number';
     // Kelchglas: Schale, Stiel, Fuß. `kelch` ist die Höhe, auf der die Schale in den Stiel übergeht –
     // bis dorthin wird gefüllt, darunter ist Stiel und bleibt leer.
     const istKelch = g => typeof g.kelch === 'number';
+    // Tasse: Trapezkörper wie ein Glas, dazu ein Henkel rechts. Füllung, Glanz und Breitenverlauf
+    // kommen deshalb aus dem Standardzweig – nur der Umriss bekommt den Henkel dazu.
+    const istTasse = g => typeof g.henkel === 'number';
     const GLAS_H = 32, GLAS_W = 24, GLAS_BODEN = 30;
     // Ein Glas beginnt bei g.y0 und endet bei GLAS_BODEN – **nicht** bei 0 und GLAS_H. Wer seine Höhe
     // mit GLAS_H rechnet, schiebt eine Reihe aus kleinen Gläsern (y0 = 15) in die untere Hälfte ihres
@@ -955,7 +972,11 @@
     // Papier vom Wasser unterscheiden lassen – deshalb deutlich ins Rote, nicht nur dunkler.
     const WEIN_FARBE = { oben: '#c9607a', mitte: '#9e2547', unten: '#6b0f2a', deckkraft: 0.82,
                          glanz: 'rgba(255,255,255,.38)', kante: 'rgba(255,255,255,.6)' };
-    const farbeVon = art => (art === 'wein' ? WEIN_FARBE : WASSER_FARBE);
+    // Kaffee: dunkles Braun, damit er sich auf jedem Papier sowohl vom Wasser als auch vom Wein abhebt.
+    const KAFFEE_FARBE = { oben: '#a9784f', mitte: '#7a4c27', unten: '#432612', deckkraft: 0.85,
+                           glanz: 'rgba(255,255,255,.34)', kante: 'rgba(255,255,255,.55)' };
+    const SONDERFARBEN = { wein: WEIN_FARBE, kaffee: KAFFEE_FARBE };
+    const farbeVon = art => SONDERFARBEN[art] || WASSER_FARBE;
     // Lichtstreifen links in der Füllung – schmal, hochkant, mit dem Trapez leicht schräg
     function glasGlanz(g, fuell = 1) {
       // Im Kelch endet der Lichtstreifen am Stielansatz – sonst zöge er sich durch den Stiel bis in
@@ -995,7 +1016,13 @@
              + ` L${m - g.bu} ${GLAS_BODEN} L${m + g.bu} ${GLAS_BODEN} L${m + g.bo} ${g.schulter + 2.4}`
              + ` Q${m + g.hals} ${g.schulter} ${m + g.hals} ${g.schulter - 3} L${m + g.hals} ${g.y0}`;
       }
-      return `M${m - g.bo} ${g.y0} L${m - g.bu} ${GLAS_BODEN} L${m + g.bu} ${GLAS_BODEN} L${m + g.bo} ${g.y0}`;
+      const koerper = `M${m - g.bo} ${g.y0} L${m - g.bu} ${GLAS_BODEN} L${m + g.bu} ${GLAS_BODEN} L${m + g.bo} ${g.y0}`;
+      if (!istTasse(g)) return koerper;
+      // Henkel rechts: zwei Bögen, oben am Rand angesetzt, unten wieder an der Wand. Er sitzt auf der
+      // oberen Hälfte – tiefer angesetzt sähe die Tasse aus wie ein Krug.
+      const ho = g.y0 + 2.4, hu = g.y0 + 9.6, aus = g.henkel;
+      return koerper
+        + ` M${m + g.bo - 0.4} ${ho} C${m + g.bo + aus} ${ho} ${m + g.bo + aus} ${hu} ${m + g.bo - 1.4} ${hu}`;
     }
     // Füllung: dasselbe Trapez, oben abgeschnitten. Ein Rand von 1,6 bleibt frei, sonst klebt das
     // Wasser am Glasrand und das Glas sieht übergelaufen aus.
@@ -1137,7 +1164,7 @@
       // Glas mit viel Luft neben einem großen ohne („der Freiraum zwischen den Gläsern identisch",
       // Auftraggeber). Jedes Glas bringt darum seine eigene Breite mit (2 · bo, die Oberkante).
       const LUFT = GLAS_W * 0.30;
-      const eigenB = art => 2 * GLAeSER[art].bo;
+      const eigenB = art => 2 * GLAeSER[art].bo + (GLAeSER[art].extra || 0);   // extra: Platz für den Henkel
       const bedarfVon = l => l.reduce((a, k) => a + (GLAeSER[k] ? eigenB(k) : 0), 0) + Math.max(0, l.length - 1) * LUFT;
       // **Platz für sechs Gläser einplanen**, auch wenn weniger dastehen: so bleibt die Größe gleich,
       // bis wirklich mehr als sechs zusammenkommen – sonst schrumpfte alles bei jedem neuen Glas.
