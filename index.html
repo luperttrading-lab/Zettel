@@ -423,10 +423,10 @@
        wurden. `min-width: 0` hebt diese Sperre auf, die kleineren Werte für Lücke, Innenabstand und
        Schrift schaffen den nötigen Platz. Ergebnis bei 320 px: sieben Knöpfe zu je 35 px statt
        33/33/33/33/33/45/37. */
-    .wasserleiste .glaeser { display: flex; gap: 5px; align-items: flex-end; }
+    .wasserleiste .glaeser { display: flex; gap: 4px; align-items: flex-end; }
     .wasserleiste .glaeser button {
-      flex: 1; min-width: 0; appearance: none; border: 0; border-radius: 13px; padding: 10px 2px 8px; cursor: pointer;
-      background: var(--flaeche); color: var(--fg); font: 600 12px/1.2 inherit;
+      flex: 1; min-width: 0; appearance: none; border: 0; border-radius: 11px; padding: 8px 1px 6px; cursor: pointer;
+      background: var(--flaeche); color: var(--fg); font: 600 11px/1.2 inherit;
       display: flex; flex-direction: column; align-items: center; gap: 4px;
     }
     .wasserleiste .glaeser button:active { background: var(--gewaehlt); }
@@ -830,7 +830,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.46';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.47';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -931,6 +931,15 @@
       // Es wird trotzdem gezeichnet und steht in seiner Zeile: es ist eine Notiz, keine Menge.
       // `y0: -2` ist **kein** Zufall: `GLAS_INK` misst vom höchsten Gefäß, und das ist die 1-l-Flasche
       // bei -6. Ein höheres Weinglas würde alle anderen Gläser kleiner machen (siehe GLAS_INK).
+      // **Bierglas im Pokal**, nach dem Foto des Auftraggebers (Licher-Tulpe, 23.9.2026). Es **zählt zur
+      // Flüssigkeit**, steht deshalb bei den zählenden Gefäßen – Kaffee und Wein kommen danach.
+      // 0,3 l ist die übliche Füllmenge eines solchen Pokals; `y0: -6` hält es auf der Höhe der
+      // 1-l-Flasche, damit GLAS_INK und mit ihm alle anderen Gefäße unverändert bleiben.
+      // `schaum` ist der Anteil der Füllhöhe, der oben als Krone weiß gezeichnet wird – ohne sie sähe
+      // der Pokal aus wie ein Weinglas mit hellem Inhalt.
+      // Beschriftung **„Bier“**, nicht „0,3 l“: sonst stünden zwei Knöpfe mit derselben Zahl nebeneinander
+      // (das 0,3-l-Glas) und wären nur am Symbol zu unterscheiden. Die Menge steht im `titel`.
+      bier:   { label: 'Bier', titel: 'Bier 0,3 l', liter: 0.3, bo: 6.0, bu: 1.3, y0: -6.0, kelch: 16.0, fuss: 5.2, schaum: 0.16 },
       // Die Tasse zählt wie das Weinglas nicht zur Flüssigkeit (Auftraggeber, 21.9.2026). Sie steht
       // **vor** dem Wein, wie gewünscht. `extra` ist der Platz für den Henkel rechts: `eigenB` rechnet
       // sonst nur mit 2·bo, und der Henkel ragte in das nächste Gefäß.
@@ -975,7 +984,12 @@
     // Kaffee: dunkles Braun, damit er sich auf jedem Papier sowohl vom Wasser als auch vom Wein abhebt.
     const KAFFEE_FARBE = { oben: '#a9784f', mitte: '#7a4c27', unten: '#432612', deckkraft: 0.85,
                            glanz: 'rgba(255,255,255,.34)', kante: 'rgba(255,255,255,.55)' };
-    const SONDERFARBEN = { wein: WEIN_FARBE, kaffee: KAFFEE_FARBE };
+    // Bier: helles Gold. Die Krone ist kein Farbverlauf, sondern ein voller Ton – Schaum hat kein Licht
+    // von unten.
+    const BIER_FARBE = { oben: '#f6d97a', mitte: '#e8b73c', unten: '#c88a10', deckkraft: 0.85,
+                         glanz: 'rgba(255,255,255,.42)', kante: 'rgba(255,255,255,.7)' };
+    const SCHAUM_FARBE = 'rgba(255,252,244,.94)';
+    const SONDERFARBEN = { wein: WEIN_FARBE, kaffee: KAFFEE_FARBE, bier: BIER_FARBE };
     const farbeVon = art => SONDERFARBEN[art] || WASSER_FARBE;
     // Lichtstreifen links in der Füllung – schmal, hochkant, mit dem Trapez leicht schräg
     function glasGlanz(g, fuell = 1) {
@@ -996,6 +1010,15 @@
       const yu = GLAS_BODEN - 2.2;
       const xo = m - t(yo) * 0.62, xu = m - t(yu) * 0.62, b = g.bu * 0.26;
       return `M${xo} ${yo + 1.1} L${xu} ${yu} L${xu + b} ${yu} L${xo + b} ${yo + 1.1} Z`;
+    }
+    // Schaumkrone: der Kelch zwischen zwei Füllständen. Gebaut wie glasFuellung, nur unten nicht am
+    // Kelchboden, sondern am unteren Pegel abgeschnitten – daraus wird das weiße Band über dem Bier.
+    function kelchBand(g, oben, unten) {
+      const m = GLAS_W / 2, o = g.y0 + 1.6, u = g.kelch - 0.8, hoehe = u - o;
+      const yo = u - hoehe * Math.max(0, Math.min(1, oben));
+      const yu = u - hoehe * Math.max(0, Math.min(1, unten));
+      const b = glasBreiteBei(g), bO = b(yo) - 0.6, bU = b(yu) - 0.6;
+      return `M${m - bO} ${yo} L${m - bU} ${yu} L${m + bU} ${yu} L${m + bO} ${yo} Z`;
     }
     // Umriss als Pfadangabe. Das Glas ist ein oben offenes Trapez, die Flasche ein Körper mit Schulter
     // und Hals – auch sie bleibt oben offen (Mündung), damit beide dieselbe Handschrift haben.
@@ -1229,6 +1252,9 @@
           ctx.globalAlpha = F.deckkraft;
           ctx.fillStyle = vf; ctx.fill(new Path2D(glasFuellung(g, 0.88)));
           ctx.fillStyle = F.glanz; ctx.fill(new Path2D(glasGlanz(g, 0.88)));
+          // Schaumkrone über dem Bier – zuletzt, damit sie über Füllung und Glanz liegt
+          if (g.schaum) { ctx.globalAlpha = 1; ctx.fillStyle = SCHAUM_FARBE;
+            ctx.fill(new Path2D(kelchBand(g, 0.88, 0.88 - g.schaum))); }
           ctx.globalAlpha = 1;
           ctx.fillStyle = ink;
           ctx.lineWidth = GLAS_STRICH; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -2511,13 +2537,14 @@
       // wäre ihr Hals abgeschnitten. Unten immer bis GLAS_H, damit alle Knöpfe auf einer Linie stehen.
       const oy = Math.min(0, g.y0 - 1.4), hoch = GLAS_H - oy;
       return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 ' + oy + ' ' + GLAS_W + ' ' + hoch + '"'
-        + ' style="height:' + (34 * hoch / GLAS_H).toFixed(1) + 'px" aria-hidden="true">'
+        + ' style="height:' + (29 * hoch / GLAS_H).toFixed(1) + 'px" aria-hidden="true">'   // 29 statt 34 seit 3.47: acht Gefäße in einer Zeile
         + '<defs><linearGradient id="' + id + '" x1="0" y1="' + g.y0 + '" x2="0" y2="' + (istKelch(g) ? g.kelch : GLAS_BODEN) + '" gradientUnits="userSpaceOnUse">'
         + '<stop offset="0" stop-color="' + F.oben + '"/><stop offset="0.45" stop-color="' + F.mitte + '"/>'
         + '<stop offset="1" stop-color="' + F.unten + '"/></linearGradient></defs>'
         + '<g opacity="' + F.deckkraft + '">'
         + '<path d="' + glasFuellung(g, 0.88) + '" fill="url(#' + id + ')"/>'
         + '<path d="' + glasGlanz(g, 0.88) + '" fill="' + F.glanz + '"/></g>'
+        + (g.schaum ? '<path d="' + kelchBand(g, 0.88, 0.88 - g.schaum) + '" fill="' + SCHAUM_FARBE + '"/>' : '')
         + '<path d="' + glasPfad(g) + '" fill="none" stroke="' + farbe + '" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     }
     function wasserLeisteBauen() {
@@ -2543,7 +2570,7 @@
       wasserGlaeserEl.innerHTML = '';
       for (const [art, g] of Object.entries(GLAeSER)) {
         const b = document.createElement('button');
-        b.type = 'button'; b.title = g.label + ' eintragen';
+        b.type = 'button'; b.title = (g.titel || g.label) + ' eintragen';
         b.innerHTML = glasSvg(g, 'currentColor') + '<span>' + g.label + '</span>';
         b.addEventListener('click', () => wasserDazu(art));
         wasserGlaeserEl.appendChild(b);

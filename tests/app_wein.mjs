@@ -89,8 +89,27 @@ const leiste = await page.evaluate(() => {
            breiten: kn.map(r => Math.round(r.width)),
            ueberlauf: Math.round(kn[kn.length - 1].right) > Math.round(l.getBoundingClientRect().right) + 1 };
 });
-check('Sieben Gefäße in einer Zeile', leiste.anzahl === 7 && leiste.zeilen === 1 && !leiste.ueberlauf, JSON.stringify(leiste));
+check('Acht Gefäße in einer Zeile', leiste.anzahl === 8 && leiste.zeilen === 1 && !leiste.ueberlauf, JSON.stringify(leiste));
 check('… und alle gleich breit', new Set(leiste.breiten).size === 1, leiste.breiten.join(', '));
+
+// ── 3.47: Das Bier ist der Gegenfall – es **zählt** mit ─────────────────────────────────────────
+await page.evaluate(() => {
+  state.wasser = { tag: heuteKennung(), v12: ['klein'], v18: ['bier'], n18: ['bier', 'wein', 'kaffee'], gestern: 0, soll: 3 };
+  persist();
+});
+const mitBier = await page.evaluate(() => {
+  const w = wasserStand();
+  return { heute: Math.round(wasserTag(w) * 100) / 100, v18: Math.round(wasserSumme(w, 'v18') * 100) / 100,
+           n18: Math.round(wasserSumme(w, 'n18') * 100) / 100 };
+});
+check('Bier zählt zur Flüssigkeit, Wein und Kaffee daneben nicht',
+  mitBier.heute === 0.8 && mitBier.v18 === 0.3 && mitBier.n18 === 0.3, JSON.stringify(mitBier));
+// Die Schaumkrone ist das, was den Pokal vom Weinglas unterscheidet – ohne sie wären beide nur zwei
+// Kelche in verschiedenen Farben.
+const schaum = await page.evaluate(() => ({ hat: !!GLAeSER.bier.schaum, band: kelchBand(GLAeSER.bier, 0.88, 0.72).length > 20,
+  hoechstes: Math.min(...Object.keys(GLAeSER).map(k => GLAeSER[k].y0)) }));
+check('Der Pokal hat eine Schaumkrone und verkleinert die anderen Gläser nicht',
+  schaum.hat && schaum.band && schaum.hoechstes === -6, JSON.stringify(schaum));
 
 check('Keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));
 await b.close();
