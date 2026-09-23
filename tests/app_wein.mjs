@@ -106,10 +106,18 @@ check('Bier zählt zur Flüssigkeit, Wein und Kaffee daneben nicht',
   mitBier.heute === 0.8 && mitBier.v18 === 0.3 && mitBier.n18 === 0.3, JSON.stringify(mitBier));
 // Die Schaumkrone ist das, was den Pokal vom Weinglas unterscheidet – ohne sie wären beide nur zwei
 // Kelche in verschiedenen Farben.
-const schaum = await page.evaluate(() => ({ hat: !!GLAeSER.bier.schaum, band: kelchBand(GLAeSER.bier, 0.88, 0.72).length > 20,
-  hoechstes: Math.min(...Object.keys(GLAeSER).map(k => GLAeSER[k].y0)) }));
-check('Der Pokal hat eine Schaumkrone und verkleinert die anderen Gläser nicht',
-  schaum.hat && schaum.band && schaum.hoechstes === -6, JSON.stringify(schaum));
+// Seit 3.48 beginnt die Krone **am Glasrand**, nicht beim Flüssigkeitsstand: „den Rest, der oben fehlt,
+// bitte weiß machen, das ist der Schaum". Geprüft an der obersten y-Koordinate des Bandes – sie muss
+// dieselbe sein wie bei einer bis zum Rand gefüllten Kelchfüllung (g.y0 + 1,6, der Innenrand).
+const schaum = await page.evaluate(() => {
+  const g = GLAeSER.bier;
+  const yVon = d => Number(d.match(/^M[-\d.]+ ([-\d.]+)/)[1]);
+  return { hat: !!g.schaum, oben: yVon(kelchBand(g, 1, 1 - g.schaum)), rand: Math.round((g.y0 + 1.6) * 100) / 100,
+           hoechstes: Math.min(...Object.keys(GLAeSER).map(k => GLAeSER[k].y0)) };
+});
+check('Die Schaumkrone beginnt am Glasrand, nicht beim Flüssigkeitsstand',
+  schaum.hat && Math.abs(schaum.oben - schaum.rand) < 0.01, JSON.stringify(schaum));
+check('Der Pokal verkleinert die anderen Gläser nicht', schaum.hoechstes === -6, String(schaum.hoechstes));
 
 check('Keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));
 await b.close();

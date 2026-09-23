@@ -830,7 +830,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.47';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.48';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -935,11 +935,13 @@
       // Flüssigkeit**, steht deshalb bei den zählenden Gefäßen – Kaffee und Wein kommen danach.
       // 0,3 l ist die übliche Füllmenge eines solchen Pokals; `y0: -6` hält es auf der Höhe der
       // 1-l-Flasche, damit GLAS_INK und mit ihm alle anderen Gefäße unverändert bleiben.
-      // `schaum` ist der Anteil der Füllhöhe, der oben als Krone weiß gezeichnet wird – ohne sie sähe
-      // der Pokal aus wie ein Weinglas mit hellem Inhalt.
+      // `schaum` ist der Anteil der Kelchhöhe, der **vom Glasrand abwärts** weiß gezeichnet wird. Seit
+      // 3.48 beginnt die Krone ganz oben statt beim Flüssigkeitsstand: „den Rest, der oben fehlt, bitte
+      // weiß machen, das ist der Schaum“ (Auftraggeber, 23.9.2026). Vorher blieben die oberen 12 % leer –
+      // der Pokal sah halb voll aus, obwohl ein frisch gezapftes Bier oben Schaum hat, nicht Luft.
       // Beschriftung **„Bier“**, nicht „0,3 l“: sonst stünden zwei Knöpfe mit derselben Zahl nebeneinander
       // (das 0,3-l-Glas) und wären nur am Symbol zu unterscheiden. Die Menge steht im `titel`.
-      bier:   { label: 'Bier', titel: 'Bier 0,3 l', liter: 0.3, bo: 6.0, bu: 1.3, y0: -6.0, kelch: 16.0, fuss: 5.2, schaum: 0.16 },
+      bier:   { label: 'Bier', titel: 'Bier 0,3 l', liter: 0.3, bo: 6.0, bu: 1.3, y0: -6.0, kelch: 16.0, fuss: 5.2, schaum: 0.30 },
       // Die Tasse zählt wie das Weinglas nicht zur Flüssigkeit (Auftraggeber, 21.9.2026). Sie steht
       // **vor** dem Wein, wie gewünscht. `extra` ist der Platz für den Henkel rechts: `eigenB` rechnet
       // sonst nur mit 2·bo, und der Henkel ragte in das nächste Gefäß.
@@ -1253,8 +1255,9 @@
           ctx.fillStyle = vf; ctx.fill(new Path2D(glasFuellung(g, 0.88)));
           ctx.fillStyle = F.glanz; ctx.fill(new Path2D(glasGlanz(g, 0.88)));
           // Schaumkrone über dem Bier – zuletzt, damit sie über Füllung und Glanz liegt
+          // Vom Glasrand (1) abwärts, nicht vom Flüssigkeitsstand – der Rest oben ist Schaum, nicht Luft.
           if (g.schaum) { ctx.globalAlpha = 1; ctx.fillStyle = SCHAUM_FARBE;
-            ctx.fill(new Path2D(kelchBand(g, 0.88, 0.88 - g.schaum))); }
+            ctx.fill(new Path2D(kelchBand(g, 1, 1 - g.schaum))); }
           ctx.globalAlpha = 1;
           ctx.fillStyle = ink;
           ctx.lineWidth = GLAS_STRICH; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -2544,7 +2547,7 @@
         + '<g opacity="' + F.deckkraft + '">'
         + '<path d="' + glasFuellung(g, 0.88) + '" fill="url(#' + id + ')"/>'
         + '<path d="' + glasGlanz(g, 0.88) + '" fill="' + F.glanz + '"/></g>'
-        + (g.schaum ? '<path d="' + kelchBand(g, 0.88, 0.88 - g.schaum) + '" fill="' + SCHAUM_FARBE + '"/>' : '')
+        + (g.schaum ? '<path d="' + kelchBand(g, 1, 1 - g.schaum) + '" fill="' + SCHAUM_FARBE + '"/>' : '')
         + '<path d="' + glasPfad(g) + '" fill="none" stroke="' + farbe + '" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     }
     function wasserLeisteBauen() {
