@@ -830,7 +830,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.51';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.52';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -950,7 +950,7 @@
       // der Pokal sah halb voll aus, obwohl ein frisch gezapftes Bier oben Schaum hat, nicht Luft.
       // Beschriftung **„Bier“**, nicht „0,3 l“: sonst stünden zwei Knöpfe mit derselben Zahl nebeneinander
       // (das 0,3-l-Glas) und wären nur am Symbol zu unterscheiden. Die Menge steht im `titel`.
-      bier:   { label: 'Bier', titel: 'Bier 0,3 l', liter: 0.3, bo: 6.0, bu: 1.3, y0: -6.0, kelch: 16.0, fuss: 5.2, schaum: 0.34, schaumUeber: 0 },
+      bier:   { label: 'Bier', titel: 'Bier 0,3 l', liter: 0.3, bo: 6.0, bu: 1.3, y0: -6.0, kelch: 16.0, fuss: 5.2, schaum: 0.34, schaumUeber: 2.4 },   // 2,4 = Variante B, vom Auftraggeber gewählt (24.9.2026)
     };
     const istFlasche = g => typeof g.hals === 'number';
     // Kelchglas: Schale, Stiel, Fuß. `kelch` ist die Höhe, auf der die Schale in den Stiel übergeht –
@@ -992,7 +992,13 @@
     // von unten.
     const BIER_FARBE = { oben: '#f6d97a', mitte: '#e8b73c', unten: '#c88a10', deckkraft: 0.85,
                          glanz: 'rgba(255,255,255,.42)', kante: 'rgba(255,255,255,.7)' };
-    const SCHAUM_FARBE = 'rgba(255,252,244,.94)';
+    // **Voll deckend, nicht durchscheinend** (3.52). Vorher stand hier `rgba(255,252,244,.94)`, und die
+    // fehlenden 6 % ließen durch, was darunter lag: über der goldenen Füllung wirkte der Schaum warm und
+    // hell, über dem dunklen Hintergrund grau – **ein Schaum in zwei Tönen**, sichtbar genau dort, wo die
+    // Kuppe über den Glasrand ragt (Auftraggeber, 24.9.2026, am vergrößerten Bild erkannt). Ein voller
+    // Ton sieht überall gleich aus, egal was dahinter liegt. Gewählt ist der etwas grauere der beiden –
+    // es ist der Wert, den die alte Farbe über dunklem Grund ergab.
+    const SCHAUM_FARBE = '#eeece5';
     const SONDERFARBEN = { wein: WEIN_FARBE, kaffee: KAFFEE_FARBE, bier: BIER_FARBE };
     const farbeVon = art => SONDERFARBEN[art] || WASSER_FARBE;
     // Lichtstreifen links in der Füllung – schmal, hochkant, mit dem Trapez leicht schräg
