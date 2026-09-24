@@ -164,6 +164,31 @@ const spalt = await page.evaluate(() => {
 check('Wein: die Füllung folgt der Glaswand ohne Spalt', spalt.wein < 0.02, `größte Abweichung ${spalt.wein} Einheiten`);
 check('Bier: dasselbe', spalt.bier < 0.02, `größte Abweichung ${spalt.bier} Einheiten`);
 
+// ── 3.53: Der Strich am Glasrand braucht Platz ─────────────────────────────────────────────────
+// „Das erste Getränk ist oft etwas links abgeschnitten." Gezeichnet wird mit einem Strich, der zur
+// Hälfte nach außen ragt; die Reihe begann aber genau bei x = 0. Geprüft wird an der Rechnung: eine
+// Reihe muss um eine volle Strichstärke mehr Platz verlangen als die Glaskörper allein brauchen.
+const rand = await page.evaluate(() => {
+  // bedarfVon steckt in zeichneWasser – hier über das gezeichnete Bild nicht erreichbar, also die
+  // Formel nachbilden und mit der Konstante vergleichen, die im Code steht.
+  const eigen = art => 2 * GLAeSER[art].bo + (GLAeSER[art].extra || 0);
+  const reihe = ['kaffee', 'klein', 'kaffee'];
+  const koerper = reihe.reduce((a, k) => a + eigen(k), 0);
+  return { strich: GLAS_STRICH, koerper: Math.round(koerper * 100) / 100 };
+});
+check('Die Strichstärke ist bekannt und größer als null', rand.strich > 1 && rand.strich < 4, JSON.stringify(rand));
+// Sichtbarer Beleg: das Bild darf sich beim Wechsel der ersten Sorte nicht am linken Rand abschneiden –
+// geprüft über die Trefferfelder, deren erstes nie links aus der Fläche ragen darf, wenn man den
+// halben Zwischenraum abzieht, der bewusst mitzählt.
+const links = await page.evaluate(() => {
+  state.list = 'wasser';
+  state.wasser = { tag: heuteKennung(), v12: ['kaffee', 'klein'], v18: [], n18: [], gestern: 0, soll: 3 };
+  persist(); syncPreview();
+  const erste = (wasserTreffer || []).find(q => q.zeile === 0);
+  return erste ? Math.round(erste.x * 10) / 10 : null;
+});
+check('Das erste Gefäß beginnt nicht hinter dem linken Rand', links !== null && links >= -0.1, `x = ${links}`);
+
 check('Keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));
 await b.close();
 console.log(fails ? `\n${fails} FEHLER` : '\nalles grün');

@@ -830,7 +830,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.52';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.53';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -1230,7 +1230,13 @@
       // Auftraggeber). Jedes Glas bringt darum seine eigene Breite mit (2 · bo, die Oberkante).
       const LUFT = GLAS_W * 0.30;
       const eigenB = art => 2 * GLAeSER[art].bo + (GLAeSER[art].extra || 0);   // extra: Platz für den Henkel
-      const bedarfVon = l => l.reduce((a, k) => a + (GLAeSER[k] ? eigenB(k) : 0), 0) + Math.max(0, l.length - 1) * LUFT;
+      // **Die Strichstärke gehört in den Bedarf** (3.53). `eigenB` misst nur den Glaskörper, gezeichnet wird
+      // aber mit einem Strich von GLAS_STRICH Breite, der zur Hälfte nach außen ragt. Das erste Glas begann
+      // genau bei x = 0, also lag seine halbe Außenlinie neben der Textfläche und wurde abgeschnitten –
+      // „das erste Getränk ist oft etwas links abgeschnitten“ (Auftraggeber, 24.9.2026). Ein Strich Breite
+      // auf die Reihe, davon je eine Hälfte links und rechts, und beides hat Platz.
+      const bedarfVon = l => l.reduce((a, k) => a + (GLAeSER[k] ? eigenB(k) : 0), 0)
+        + Math.max(0, l.length - 1) * LUFT + (l.length ? GLAS_STRICH : 0);
       // **Platz für sechs Gläser einplanen**, auch wenn weniger dastehen: so bleibt die Größe gleich,
       // bis wirklich mehr als sechs zusammenkommen – sonst schrumpfte alles bei jedem neuen Glas.
       // Fünf, nicht sechs: „es müssen keine 7 0,5-Gläser in eine Reihe passen" (Auftraggeber). Jedes Glas
@@ -1280,7 +1286,8 @@
         const glasH = GLAS_INK * skala;
         const kasten = eineZeile ? { y, h: zeilH } : { y: freiOben, h: freiH };
         const gy = kasten.y + (kasten.h - glasH) / 2 - oben * skala;   // gy ist der Ursprung, nicht die Oberkante
-        let gx = eineZeile ? kopfB : 0;
+        // Um die halbe Strichstärke eingerückt – die andere Hälfte des Randes bleibt rechts (siehe bedarfVon)
+        let gx = (eineZeile ? kopfB : 0) + GLAS_STRICH / 2 * skala;
         glaeser.forEach((art, n) => {
           const g = GLAeSER[art]; if (!g) return;
           const bGlas = eigenB(art) * skala;
