@@ -830,7 +830,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.48';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.49';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -931,8 +931,17 @@
       // Es wird trotzdem gezeichnet und steht in seiner Zeile: es ist eine Notiz, keine Menge.
       // `y0: -2` ist **kein** Zufall: `GLAS_INK` misst vom höchsten Gefäß, und das ist die 1-l-Flasche
       // bei -6. Ein höheres Weinglas würde alle anderen Gläser kleiner machen (siehe GLAS_INK).
+      // Die Tasse zählt wie das Weinglas nicht zur Flüssigkeit (Auftraggeber, 21.9.2026). Sie steht
+      // **vor** dem Wein, wie gewünscht. `extra` ist der Platz für den Henkel rechts: `eigenB` rechnet
+      // sonst nur mit 2·bo, und der Henkel ragte in das nächste Gefäß.
+      // Breiter als hoch und mit deutlichem Henkel – im ersten Anlauf (bo 6,2 / y0 14) las sie sich als
+      // braunes Glas mit Anhängsel. Eine Tasse ist etwa so breit wie hoch.
+      kaffee: { label: 'Kaffee', liter: 0, bo: 7.0, bu: 5.9, y0: 16.0, henkel: 5.6, extra: 5.2 },
+      wein:   { label: 'Wein',  liter: 0,   bo: 6.6, bu: 1.2, y0: -2.0, kelch: 14.5, fuss: 5.4 },
       // **Bierglas im Pokal**, nach dem Foto des Auftraggebers (Licher-Tulpe, 23.9.2026). Es **zählt zur
-      // Flüssigkeit**, steht deshalb bei den zählenden Gefäßen – Kaffee und Wein kommen danach.
+      // Flüssigkeit**, steht aber seit 3.49 **am Ende** der Reihe: „hinter dem Wasser den Kaffee, Rotwein,
+      // Bier – in der Reihenfolge“ (24.9.2026). Die Reihenfolge in dieser Tabelle ist die Reihenfolge der
+      // Knöpfe; ob ein Gefäß zählt, hängt allein an `liter`, nicht an seinem Platz.
       // 0,3 l ist die übliche Füllmenge eines solchen Pokals; `y0: -6` hält es auf der Höhe der
       // 1-l-Flasche, damit GLAS_INK und mit ihm alle anderen Gefäße unverändert bleiben.
       // `schaum` ist der Anteil der Kelchhöhe, der **vom Glasrand abwärts** weiß gezeichnet wird. Seit
@@ -942,13 +951,6 @@
       // Beschriftung **„Bier“**, nicht „0,3 l“: sonst stünden zwei Knöpfe mit derselben Zahl nebeneinander
       // (das 0,3-l-Glas) und wären nur am Symbol zu unterscheiden. Die Menge steht im `titel`.
       bier:   { label: 'Bier', titel: 'Bier 0,3 l', liter: 0.3, bo: 6.0, bu: 1.3, y0: -6.0, kelch: 16.0, fuss: 5.2, schaum: 0.30 },
-      // Die Tasse zählt wie das Weinglas nicht zur Flüssigkeit (Auftraggeber, 21.9.2026). Sie steht
-      // **vor** dem Wein, wie gewünscht. `extra` ist der Platz für den Henkel rechts: `eigenB` rechnet
-      // sonst nur mit 2·bo, und der Henkel ragte in das nächste Gefäß.
-      // Breiter als hoch und mit deutlichem Henkel – im ersten Anlauf (bo 6,2 / y0 14) las sie sich als
-      // braunes Glas mit Anhängsel. Eine Tasse ist etwa so breit wie hoch.
-      kaffee: { label: 'Kaffee', liter: 0, bo: 7.0, bu: 5.9, y0: 16.0, henkel: 5.6, extra: 5.2 },
-      wein:   { label: 'Wein',  liter: 0,   bo: 6.6, bu: 1.2, y0: -2.0, kelch: 14.5, fuss: 5.4 },
     };
     const istFlasche = g => typeof g.hals === 'number';
     // Kelchglas: Schale, Stiel, Fuß. `kelch` ist die Höhe, auf der die Schale in den Stiel übergeht –
@@ -1016,10 +1018,12 @@
     // Schaumkrone: der Kelch zwischen zwei Füllständen. Gebaut wie glasFuellung, nur unten nicht am
     // Kelchboden, sondern am unteren Pegel abgeschnitten – daraus wird das weiße Band über dem Bier.
     function kelchBand(g, oben, unten) {
-      const m = GLAS_W / 2, o = g.y0 + 1.6, u = g.kelch - 0.8, hoehe = u - o;
+      // Oberer Bezug ist die **Glaskante** (0,3 Abstand für die Strichstärke), nicht der Innenrand von
+      // 1,6 wie bei der Flüssigkeit: „das Weiß oben bis zum Glasrand“ (Auftraggeber, 24.9.2026).
+      const m = GLAS_W / 2, o = g.y0 + 0.3, u = g.kelch - 0.6, hoehe = u - o;
       const yo = u - hoehe * Math.max(0, Math.min(1, oben));
       const yu = u - hoehe * Math.max(0, Math.min(1, unten));
-      const b = glasBreiteBei(g), bO = b(yo) - 0.6, bU = b(yu) - 0.6;
+      const b = glasBreiteBei(g), bO = b(yo) - 0.25, bU = b(yu) - 0.25;
       return `M${m - bO} ${yo} L${m - bU} ${yu} L${m + bU} ${yu} L${m + bO} ${yo} Z`;
     }
     // Umriss als Pfadangabe. Das Glas ist ein oben offenes Trapez, die Flasche ein Körper mit Schulter
@@ -1055,11 +1059,14 @@
       if (istKelch(g)) {
         // Der Wein steht **nur in der Schale**, nicht im Stiel: gefüllt wird bis `g.kelch`, nicht bis
         // zum Boden. Ohne diese eigene Rechnung liefe die Farbe den Stiel hinunter bis in den Fuß.
-        const m = GLAS_W / 2, o = g.y0 + 1.6, u = g.kelch - 0.8, hoehe = u - o;
+        // Ränder seit 3.49 enger (0,25 statt 0,6 zur Wand, 0,15 statt 0,4 am Boden): „das Gelb vom Bier
+        // etwas genauer ausgefüllt im Glas“. Vorher stand links und rechts ein heller Streifen, der den
+        // Pokal halb leer wirken ließ. Gilt für beide Kelche – beim Wein war es derselbe Effekt.
+        const m = GLAS_W / 2, o = g.y0 + 1.6, u = g.kelch - 0.6, hoehe = u - o;
         const y = u - hoehe * Math.max(0, Math.min(1, fuell));
-        const b = glasBreiteBei(g), bY = b(y) - 0.6;
-        return `M${m - bY} ${y} Q${m - b((y + u) / 2) + 0.6} ${u - 2.2} ${m - g.bu + 0.4} ${u}`
-             + ` L${m + g.bu - 0.4} ${u} Q${m + b((y + u) / 2) - 0.6} ${u - 2.2} ${m + bY} ${y} Z`;
+        const b = glasBreiteBei(g), bY = b(y) - 0.25;
+        return `M${m - bY} ${y} Q${m - b((y + u) / 2) + 0.25} ${u - 2.2} ${m - g.bu + 0.15} ${u}`
+             + ` L${m + g.bu - 0.15} ${u} Q${m + b((y + u) / 2) - 0.25} ${u - 2.2} ${m + bY} ${y} Z`;
       }
       const m = GLAS_W / 2, oben = g.y0 + 1.6, hoehe = (GLAS_BODEN - 1.2) - oben;
       const y = GLAS_BODEN - 1.2 - hoehe * Math.max(0, Math.min(1, fuell));

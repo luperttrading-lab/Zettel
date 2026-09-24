@@ -35,7 +35,7 @@ const start = await page.evaluate(() => ({
   zeiten: document.querySelectorAll('#wasser-zeiten button').length,
   text: state.text,
 }));
-// Acht seit 3.47: fünf Wassergefäße, der Bierpokal (zählt mit), dazu Kaffeetasse und Weinglas (zählen nicht).
+// Acht seit 3.47, Reihenfolge seit 3.49: fünf Wassergefäße, dann Kaffee, Wein, Bier – so gewünscht.
 check('Wasser gewählt: acht Gefäße und drei Zeitfenster erscheinen', start.leiste && start.knoepfe === 8 && start.zeiten === 3, JSON.stringify(start));
 check('Wasser gewählt: gezeichneter Zettel statt Textfeld', start.canvas && start.editorVersteckt, JSON.stringify(start));
 check('Wasser setzt keine Listenmarkierung in den Text', start.text === '', JSON.stringify(start.text));
@@ -285,13 +285,14 @@ await page.reload(); await page.waitForTimeout(900);
 await page.evaluate(() => document.querySelector('#strip-list .item[data-value="wasser"]').click());
 await page.waitForTimeout(400);
 const sorten = await page.evaluate(() => Object.entries(GLAeSER).map(([k, g]) => ({ k, l: g.liter, fl: istFlasche(g) })));
-// Seit 3.47 acht: drei Gläser, zwei Flaschen, Bierpokal, Kaffeetasse und Weinglas. Kaffee und Wein sind
-// mit 0 l eingetragen – daran hängt, dass sie aus jeder Summe herausfallen, ohne dass die Rechnung sie
-// kennt; das Bier hat dagegen echte 0,3 l und zählt wie ein Wasserglas.
-check('acht Gefäße: drei Gläser, zwei Flaschen, Bier, Kaffee und Wein',
+// Seit 3.47 acht, seit 3.49 in der Reihenfolge Wasser / Kaffee / Wein / Bier. Kaffee und Wein sind mit
+// 0 l eingetragen – daran hängt, dass sie aus jeder Summe herausfallen, ohne dass die Rechnung sie kennt.
+// Das Bier hat dagegen echte 0,3 l und zählt wie ein Wasserglas, **obwohl es hinten steht**: der Platz
+// in der Reihe sagt nichts darüber aus, ob ein Gefäß zählt.
+check('acht Gefäße in der Reihenfolge Wasser, Kaffee, Wein, Bier',
   sorten.length === 8 && sorten.filter(s => s.fl).length === 2
   && sorten.filter(s => s.l === 0).length === 2
-  && sorten[5].k === 'bier' && sorten[5].l === 0.3 && sorten[6].k === 'kaffee' && sorten[7].k === 'wein', JSON.stringify(sorten));
+  && sorten[5].k === 'kaffee' && sorten[6].k === 'wein' && sorten[7].k === 'bier' && sorten[7].l === 0.3, JSON.stringify(sorten));
 // Flaschen tragen sich wie Gläser ein und zählen mit ihrem Liter
 await fenster(0); await glas(4); await glas(3);          // 1,0 + 0,7
 const s5 = await stand();

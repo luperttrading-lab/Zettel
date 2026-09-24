@@ -107,12 +107,12 @@ check('Bier zählt zur Flüssigkeit, Wein und Kaffee daneben nicht',
 // Die Schaumkrone ist das, was den Pokal vom Weinglas unterscheidet – ohne sie wären beide nur zwei
 // Kelche in verschiedenen Farben.
 // Seit 3.48 beginnt die Krone **am Glasrand**, nicht beim Flüssigkeitsstand: „den Rest, der oben fehlt,
-// bitte weiß machen, das ist der Schaum". Geprüft an der obersten y-Koordinate des Bandes – sie muss
-// dieselbe sein wie bei einer bis zum Rand gefüllten Kelchfüllung (g.y0 + 1,6, der Innenrand).
+// bitte weiß machen, das ist der Schaum". Seit 3.49 reicht sie bis an die Kante selbst (0,3 Abstand für
+// die Strichstärke) statt bis zum Innenrand von 1,6: „das Weiß oben bis zum Glasrand".
 const schaum = await page.evaluate(() => {
   const g = GLAeSER.bier;
   const yVon = d => Number(d.match(/^M[-\d.]+ ([-\d.]+)/)[1]);
-  return { hat: !!g.schaum, oben: yVon(kelchBand(g, 1, 1 - g.schaum)), rand: Math.round((g.y0 + 1.6) * 100) / 100,
+  return { hat: !!g.schaum, oben: yVon(kelchBand(g, 1, 1 - g.schaum)), rand: Math.round((g.y0 + 0.3) * 100) / 100,
            hoechstes: Math.min(...Object.keys(GLAeSER).map(k => GLAeSER[k].y0)) };
 });
 check('Die Schaumkrone beginnt am Glasrand, nicht beim Flüssigkeitsstand',
