@@ -112,12 +112,24 @@ check('Bier zählt zur Flüssigkeit, Wein und Kaffee daneben nicht',
 const schaum = await page.evaluate(() => {
   const g = GLAeSER.bier;
   const yVon = d => Number(d.match(/^M[-\d.]+ ([-\d.]+)/)[1]);
-  return { hat: !!g.schaum, oben: yVon(kelchBand(g, 1, 1 - g.schaum)), rand: Math.round((g.y0 + 0.3) * 100) / 100,
+  return { hat: !!g.schaum, oben: yVon(kelchBand(g, 1, 1 - g.schaum, g.schaumUeber || 0)), rand: Math.round(g.y0 * 100) / 100,
            hoechstes: Math.min(...Object.keys(GLAeSER).map(k => GLAeSER[k].y0)) };
 });
 check('Die Schaumkrone beginnt am Glasrand, nicht beim Flüssigkeitsstand',
   schaum.hat && Math.abs(schaum.oben - schaum.rand) < 0.01, JSON.stringify(schaum));
 check('Der Pokal verkleinert die anderen Gläser nicht', schaum.hoechstes === -6, String(schaum.hoechstes));
+
+// `schaumUeber` wölbt die Krone über den Rand: der Pfad bekommt dann eine Kurve (Q) und ragt höher
+// als die Glaskante. Bei 0 ist er gerade. Beide Varianten müssen zeichenbar bleiben.
+const woelbung = await page.evaluate(() => {
+  const g = GLAeSER.bier;
+  const buendig = kelchBand(g, 1, 1 - g.schaum, 0);
+  const ueber = kelchBand(g, 1, 1 - g.schaum, 2.4);
+  return { buendigGerade: !buendig.includes('Q'), ueberGewoelbt: ueber.includes('Q'),
+           kuppe: Number((ueber.match(/Q[\d.-]+ ([\d.-]+)/) || [])[1]), kante: g.y0 };
+});
+check('Die Wölbung ist ein Schalter: 0 bündig, sonst eine Kuppe über der Kante',
+  woelbung.buendigGerade && woelbung.ueberGewoelbt && woelbung.kuppe < woelbung.kante, JSON.stringify(woelbung));
 
 // ── 3.50: Die Füllung muss an der Glaswand sitzen, ohne Spalt ───────────────────────────────────
 // „Da fehlt im Glas ein bisschen Rot, was nicht ganz von innen bis ans Glas geht." Ursache war eine
