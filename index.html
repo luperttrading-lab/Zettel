@@ -830,7 +830,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.49';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.50';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -1083,9 +1083,32 @@
     // Halbe Innenbreite auf Höhe yy – beim Glas linear vom Boden zur Oberkante, bei der Flasche
     // unterhalb der Schulter der Körper und darüber der Hals.
     function glasBreiteBei(g) {
-      // Die Schale verjüngt sich von der Öffnung bis zum Stielansatz; darunter zählt nur der Stiel.
-      if (istKelch(g)) return yy => (yy >= g.kelch ? g.bu
-        : g.bo - (g.bo - g.bu) * Math.max(0, (yy - g.y0) / (g.kelch - g.y0)) ** 1.7);
+      // **Die Schale folgt genau der Bézierkurve des Umrisses** (3.50). Vorher stand hier eine
+      // Potenzkurve (Exponent 1,7) – eine Näherung, die an der breitesten Stelle um **1,8 Einheiten**
+      // von der echten Wand abwich, bei 24 Einheiten Glasbreite also fast 8 % je Seite. Genau das war
+      // der Spalt zwischen Wein und Glaswand („da fehlt im Glas ein bisschen Rot“, Auftraggeber,
+      // 24.9.2026); die engeren Ränder aus 3.49 hatten ihn nur verkleinert, nicht beseitigt.
+      // Der Umriss ist `Q(bo, k−2,5) (bu, k)` ab (bo, y0+5,5). Für eine quadratische Bézier gilt
+      //   y(t) = a + 2(b−a)t + (a−2b+c)t²   mit a = y0+5,5, b = k−2,5, c = k
+      //   x(t) = bo + (bu−bo)t²             (P0 und P1 haben dieselbe x-Koordinate)
+      // Also: t aus der quadratischen Gleichung, dann x einsetzen – exakt statt genähert.
+      if (istKelch(g)) {
+        const a = g.y0 + 5.5, b2 = g.kelch - 2.5, c = g.kelch;
+        const A = a - 2 * b2 + c, B = 2 * (b2 - a);
+        return yy => {
+          if (yy <= a) return g.bo;                    // oben ist die Wand gerade
+          if (yy >= c) return g.bu;                    // unterhalb des Stielansatzes
+          let t;
+          if (Math.abs(A) < 1e-9) t = (yy - a) / B;    // Sonderfall: die Bézier ist hier linear
+          else {
+            const w = Math.sqrt(Math.max(0, B * B - 4 * A * (a - yy)));
+            t = (-B + w) / (2 * A);
+            if (t < 0 || t > 1) t = (-B - w) / (2 * A);
+          }
+          t = Math.max(0, Math.min(1, t));
+          return g.bo + (g.bu - g.bo) * t * t;
+        };
+      }
       if (istFlasche(g)) return yy => (yy >= g.schulter + 2.4 ? g.bo : g.hals) - 0.6;
       return yy => { const p = (GLAS_BODEN - yy) / (GLAS_BODEN - g.y0); return g.bu + (g.bo - g.bu) * p; };
     }

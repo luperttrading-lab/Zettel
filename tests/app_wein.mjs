@@ -119,6 +119,39 @@ check('Die Schaumkrone beginnt am Glasrand, nicht beim Flüssigkeitsstand',
   schaum.hat && Math.abs(schaum.oben - schaum.rand) < 0.01, JSON.stringify(schaum));
 check('Der Pokal verkleinert die anderen Gläser nicht', schaum.hoechstes === -6, String(schaum.hoechstes));
 
+// ── 3.50: Die Füllung muss an der Glaswand sitzen, ohne Spalt ───────────────────────────────────
+// „Da fehlt im Glas ein bisschen Rot, was nicht ganz von innen bis ans Glas geht." Ursache war eine
+// genäherte Breitenkurve (Potenz 1,7), während der Umriss eine Bézier ist. Hier wird die Bézier
+// **unabhängig abgetastet** und mit glasBreiteBei verglichen – eine Näherung fiele sofort auf.
+const spalt = await page.evaluate(() => {
+  const umriss = (g, yy) => {
+    const a = g.y0 + 5.5, b = g.kelch - 2.5, c = g.kelch;
+    if (yy <= a) return g.bo;
+    if (yy >= c) return g.bu;
+    let best = null, bestD = 1e9;
+    for (let i = 0; i <= 4000; i++) {
+      const t = i / 4000;
+      const y = a * (1 - t) ** 2 + 2 * b * t * (1 - t) + c * t * t;
+      const d = Math.abs(y - yy);
+      if (d < bestD) { bestD = d; best = g.bo * (1 - t * t) + g.bu * t * t; }
+    }
+    return best;
+  };
+  const aus = {};
+  for (const art of ['wein', 'bier']) {
+    const g = GLAeSER[art], f = glasBreiteBei(g);
+    let groesster = 0;
+    for (let s = 0.05; s <= 0.95; s += 0.05) {
+      const yy = g.y0 + (g.kelch - g.y0) * s;
+      groesster = Math.max(groesster, Math.abs(umriss(g, yy) - f(yy)));
+    }
+    aus[art] = Math.round(groesster * 1000) / 1000;
+  }
+  return aus;
+});
+check('Wein: die Füllung folgt der Glaswand ohne Spalt', spalt.wein < 0.02, `größte Abweichung ${spalt.wein} Einheiten`);
+check('Bier: dasselbe', spalt.bier < 0.02, `größte Abweichung ${spalt.bier} Einheiten`);
+
 check('Keine Fehler in der Konsole', errors.length === 0, errors.join(' | '));
 await b.close();
 console.log(fails ? `\n${fails} FEHLER` : '\nalles grün');
