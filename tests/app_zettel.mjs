@@ -28,8 +28,23 @@ check('zweiter Zettel: klein, Terminliste, andere Farbe',
 
 await plus(); await page.waitForTimeout(400);
 await page.evaluate(() => { textEl.value = 'Sa 18:00 Kino'; onTextChanged(); flush(); }); await page.waitForTimeout(300);
-check('dritter Zettel, danach kein Plus mehr',
-  await page.evaluate(() => state.zettel.length === 3 && !document.querySelector('#zettelwahl button.plus')));
+// Seit 3.54 sind vier erlaubt: der vierte ist der frei verschiebbare, für den keine Anordnung greift.
+check('dritter Zettel, das Plus ist noch da',
+  await page.evaluate(() => state.zettel.length === 3 && !!document.querySelector('#zettelwahl button.plus')));
+await page.evaluate(() => zettelDazu()); await page.waitForTimeout(400);
+check('vierter Zettel, danach kein Plus mehr',
+  await page.evaluate(() => state.zettel.length === 4 && !document.querySelector('#zettelwahl button.plus')));
+// Das Paar steht bei 0,25 und 0,75 – `nebeneinander` klemmt die Werte an die Zettelbreite, daher die
+// Toleranz. Entscheidend ist, dass der vierte die beiden **nicht verschiebt**.
+check('der vierte startet klein und mittig, ohne das Paar umzuordnen',
+  await page.evaluate(() => state.zettel[3].noteScale === 0.45 && state.zettel[3].noteX === 0.5
+    && Math.abs(state.zettel[1].noteX - 0.25) < 0.02 && Math.abs(state.zettel[2].noteX - 0.75) < 0.02),
+  await page.evaluate(() => JSON.stringify(state.zettel.map(z => ({ s: z.noteScale, x: Math.round(z.noteX * 1000) / 1000 })))));
+// **Zustand wiederherstellen**: alles Folgende in dieser Datei prüft den Dreierstand. Ohne das Entfernen
+// zählt jede spätere Prüfung einen Zettel zu viel.
+await page.evaluate(() => zettelWeg(3)); await page.waitForTimeout(400);
+check('nach dem Entfernen sind wieder drei da und das Plus ist zurück',
+  await page.evaluate(() => state.zettel.length === 3 && !!document.querySelector('#zettelwahl button.plus')));
 
 // Beim dritten Zettel legt die App 2 und 3 nebeneinander unter den ersten (1.62.0)
 const drei = await page.evaluate(() => alleZettel().map(z => ({ x: +z.noteX.toFixed(2), y: +z.noteY.toFixed(2), s: z.noteScale })));

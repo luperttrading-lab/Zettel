@@ -830,7 +830,7 @@
   <script src="lib/paper.js" charset="utf-8"></script>
   <script>
     'use strict';
-    const APP_VERSION = '3.53';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
+    const APP_VERSION = '3.54';   // zwei Stellen ab 3.3 (Wunsch des Auftraggebers): vorn die große Sache,
                                  // hinten jede Änderung. Die Update-Prüfung vergleicht nur Zeichenketten,
                                  // das Format ist ihr gleich. Die App meldet sich selbst, wenn sich etwas ändert
     const KEY = 'zettel.v1';
@@ -1736,7 +1736,12 @@
     };
     const ZETTEL_FELDER = Object.keys(ZETTEL_STD);
     const zettelStd = () => JSON.parse(JSON.stringify(ZETTEL_STD));   // frische Kopie, nie die Vorlage teilen
-    const ZETTEL_MAX = 3;
+    // **Vier seit 3.54.** Der vierte ist ausdrücklich der frei platzierbare: „Vielleicht noch einen, den
+    // ich frei verschieben kann, dann sehe ich selber, wo Platz ist für einen kleinen Zettel“
+    // (Auftraggeber, 9.10.2026). Für ihn greift deshalb **keine** automatische Anordnung – anders als
+    // beim dritten, der das Paar auslöst. Er startet klein und sucht sich über zettelDazu nur eine freie
+    // Höhe; wohin er wirklich gehört, entscheidet der Auftraggeber im Fenster „Lage im Bild“.
+    const ZETTEL_MAX = 4;
     function zettelFelder(q) {
       const aus = {}, quelle = q || state;
       for (const k of ZETTEL_FELDER) aus[k] = quelle[k];
@@ -4188,7 +4193,15 @@
       const t = targetCanvas();
       const neu = zettelFelder();
       // Zweiter und dritter Zettel starten klein und als Terminliste – so waren sie gedacht.
-      neu.text = ''; neu.title = false; neu.list = 'termin'; neu.noteScale = 0.6;
+      // Der **vierte** startet noch kleiner: neben dem Paar ist wenig Platz, und er ist als Merkzettel
+      // gedacht, nicht als vierte Terminliste.
+      neu.text = ''; neu.title = false; neu.list = 'termin';
+      neu.noteScale = state.zettel.length >= 3 ? 0.45 : 0.6;
+      // Der vierte startet **mittig**, nicht auf der x-Lage des gerade aktiven Zettels: das Paar liegt bei
+      // 0,25 und 0,75, und wer dessen Lage erbt, landet genau auf einem der beiden. Mittig überlappt er
+      // allenfalls beide ein wenig und ist in jede Richtung gleich weit zu schieben. Bei vier Zetteln ist
+      // kein Platz mehr wirklich frei – deshalb ist er ja der frei verschiebbare.
+      if (state.zettel.length >= 3) neu.noteX = 0.5;
       const farben = Object.keys(COLORS);
       neu.color = farben[(farben.indexOf(state.color) + state.zettel.length) % farben.length];
       // Freie Fläche suchen: unter den tiefsten Zettel, sonst über den höchsten. Ein Platz „unter dem
@@ -4207,6 +4220,8 @@
       if (state.zettel.length === 3) {
         nebeneinander();
         showInfo('Zettel 2 und 3 nebeneinander unter den ersten gelegt');
+      } else if (state.zettel.length === 4) {
+        showInfo('Zettel 4 angelegt – frei verschiebbar, Lage im Bild');
       } else showInfo('Zettel ' + state.zettel.length + ' angelegt – Lage im Bild prüfen');
     }
     // Drei Zettel untereinander werden zu klein. Deshalb liegen der zweite und dritte **nebeneinander**
@@ -4224,6 +4239,8 @@
     // senkrecht h·cos θ + b·sin θ. Die alte Rechnung nahm die ungedrehte Breite und ließ den geneigten
     // Zettel über die selbst gesetzte Grenze ragen – am stärksten bei hohen Zetteln, und die Höhe
     // wächst mit jeder Textzeile. Deshalb reicht es nicht, nur die Breite zu prüfen.
+    // Ordnet **Zettel 2 und 3** nebeneinander – bei vier Zetteln bleibt der vierte unberührt, er ist der
+    // frei platzierbare (siehe ZETTEL_MAX). Deshalb hier kein `=== 3`, sondern `< 3`.
     function nebeneinander() {
       if (state.zettel.length < 3) return;
       zettelSichern();
